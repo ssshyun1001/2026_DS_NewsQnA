@@ -3,6 +3,11 @@
 
 지정된 기간 필터링은 API 응답의 pubDate를 기준으로 후처리한다.
 (Naver 검색 API는 기간 파라미터를 직접 지원하지 않으므로 결과를 받은 뒤 필터링한다.)
+
+수집 개수 정책:
+  키워드별로 개수를 나눠 배분하지 않는다. 1순위(원문) 키워드부터 순서대로 검색하며,
+  전체 누적 기사 수가 TOTAL_ARTICLE_CAP(기본 100)에 도달하면 더 이상 검색하지 않는다.
+  원문 키워드가 먼저 처리되므로 자연히 우선순위를 갖는다.
 """
 from __future__ import annotations
 
@@ -17,6 +22,9 @@ from app.schemas import NewsMeta, SearchQuery
 
 _NAVER_NEWS_URL = "https://naverapihub.apigw.ntruss.com/search/v1/news"
 _TAG_RE = re.compile(r"<.*?>")
+
+_NAVER_MAX_DISPLAY = 100  # Naver 뉴스 검색 API의 display 파라미터 최대 허용값
+_TOTAL_ARTICLE_CAP_DEFAULT = 100  # 전체 파이프라인에서 수집할 기사 수 상한
 
 
 def _strip_html(text: str) -> str:
@@ -54,8 +62,12 @@ async def _fetch_one_keyword(
 
 
 async def search_news(query: SearchQuery) -> list[NewsMeta]:
-    """SearchQuery의 최적화된 키워드들로 뉴스를 검색하고 기간 내 결과만 반환한다."""
-    display_per_keyword = max(5, settings.max_crawl_articles // max(len(query.optimized_keywords), 1))
+    """SearchQuery의 최적화된 키워드들로 뉴스를 검색하고 기간 내 결과만 반환한다.
+
+    키워드별 개수 배분 없이, 1순위(원문) 키워드부터 순서대로 검색하다가
+    전체 누적 기사 수가 total_cap에 도달하면 나머지 키워드 검색을 중단한다.
+    """
+    total_cap = getattr(settings, "max_total_articles", _TOTAL_ARTICLE_CAP_DEFAULT)
     cutoff = datetime.now(timezone.utc) - timedelta(days=query.period_days)
 
     results: list[NewsMeta] = []
@@ -63,8 +75,16 @@ async def search_news(query: SearchQuery) -> list[NewsMeta]:
 
     async with aiohttp.ClientSession() as session:
         for keyword in query.optimized_keywords:
-            items = await _fetch_one_keyword(session, keyword, display_per_keyword)
+            if len(results) >= total_cap:
+                break
+
+            display = min(_NAVER_MAX_DISPLAY, total_cap)
+            items = await _fetch_one_keyword(session, keyword, display)
+
             for item in items:
+                if len(results) >= total_cap:
+                    break
+
                 link = item.get("originallink") or item.get("link")
                 if not link or link in seen_links:
                     continue
@@ -83,4 +103,4 @@ async def search_news(query: SearchQuery) -> list[NewsMeta]:
                     )
                 )
 
-    return results[: settings.max_crawl_articles]
+    return results[:total_cap]

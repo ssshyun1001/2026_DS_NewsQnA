@@ -1,12 +1,18 @@
 """
-1. 주제 분석 (Topic Analysis)
+1. 검색 키워드 생성 (Search Keyword Generation)
 
-사용자가 입력한 '관심 분야'에서 핵심 개체(Entity)와 의도(Intent)를 파악하고,
-News Search API에 최적화된 검색 키워드(optimized_keywords)와
-동음이의어 검증용 정식 명칭(filter_terms)을 함께 생성한다.
+이 모듈은 원래 entities(개체 인식)/intent(의도 요약)/filter_terms(관련성 검증어)까지
+함께 생성했지만, 실제 파이프라인에서 쓰이는 건 optimized_keywords(검색 키워드)뿐이었다.
+- entities, intent: 어디서도 소비되지 않는 값이라 제거했다.
+- filter_terms: main.py에서 사용자가 직접 입력한 검증어로 항상 덮어써지므로
+  (관련성 검증 기준은 사용자가 통제해야 한다는 설계 결정) 여기서 생성할 이유가 없어 제거했다.
+
+지금 이 모듈이 하는 일은 하나다: 사용자가 입력한 '관심 분야' 원문을 그대로 쓰면
+표기 차이(약어/영문/정식명) 때문에 검색이 새는 경우가 있으므로, 뉴스 검색 API에
+넣을 키워드 후보(원문 + 알려진 표기 변형 + 동음이의어 보정용 맥락어)를 생성한다.
 
 기간(조회할 최근 일수)은 LLM이 추측하지 않는다. 사용자가 숫자로 직접 입력하며,
-main.py에서 이 모듈의 결과(키워드/필터어)와 결합해 최종 SearchQuery를 만든다.
+main.py에서 이 모듈의 결과(키워드)와 결합해 최종 SearchQuery를 만든다.
 """
 from __future__ import annotations
 
@@ -20,33 +26,32 @@ from config import settings
 from app.schemas import SearchQuery
 
 _SYSTEM_PROMPT = """\
-당신은 뉴스 검색 쿼리 최적화 전문가입니다.
-사용자가 입력한 '관심 분야'를 분석하여 아래 JSON 스키마로만 응답하세요. 다른 설명은 절대 추가하지 마세요.
+당신은 뉴스 검색 키워드를 만드는 도우미입니다.
+사용자가 입력한 '관심 분야'를 보고 아래 JSON 스키마로만 응답하세요. 다른 설명은 절대 추가하지 마세요.
 
 관심 분야는 완결된 질문이 아니라 주제어/키워드 형태로 입력될 수 있습니다.
 (예: "AI 기업 제논", "반도체 업계", "서울여대")
 
 스키마:
 {{
-  "entities": ["핵심 개체명 목록"],
-  "intent": "이 관심 분야로 어떤 뉴스를 모으고 싶은지 한 문장 요약",
-  "optimized_keywords": ["뉴스 검색 API에 넣기 좋은 키워드 1~2개"],
-  "filter_terms": ["크롤링된 기사 본문에 실제로 등장해야 하는 정식 명칭/핵심어 목록 (관련성 검증용)"]
+  "optimized_keywords": ["뉴스 검색 API에 넣기 좋은 키워드 목록"]
 }}
 
-optimized_keywords 작성 규칙 (매우 중요):
+작성 규칙 (매우 중요):
 1. 입력에 등장하는 고유명사(회사명/인명/제품명 등)는 반드시 원문 그대로, 단독 키워드로 1순위에 포함하세요.
    예: "AI 기업 제논" → 1순위 키워드는 "제논" (o), "AI 기업" (x, 너무 광범위함)
-2. 키워드는 최대 2개까지만 생성하세요. 대부분의 입력은 1개 키워드로 충분합니다.
-3. "이슈", "동향", "소식", "최근" 같은 단어만으로 이루어진 키워드나, 이런 단어를 광범위한 카테고리
+2. 같은 대상을 가리키지만 표기가 다를 수 있는 이름(공식 명칭, 흔히 쓰는 약어, 영문 표기)을
+   확실히 알고 있는 경우에만 추가 키워드로 포함하세요. 뉴스 기사는 매체나 시점에 따라
+   다른 표기를 쓸 수 있어서, 원문 표기 하나만으로 검색하면 다른 표기로 쓰인 기사를 놓칩니다.
+   예: "서울여대" → ["서울여대", "서울여자대학교", "SWU"]
+   예: "제논" (AI 기업) → ["제논", "GenOn"] (영문 사명을 알고 있는 경우)
+   불확실하면 지어내지 말고 원문 표기만 사용하세요.
+3. 동음이의어가 의심되는 짧은 고유명사(예: 원소명, 흔한 단어와 겹치는 이름)는
+   "고유명사 + 업종/맥락어" 조합(예: "제논 AI")을 추가 키워드로 넣어 보정하되,
+   1순위 키워드는 원문 그대로 유지하세요.
+4. 키워드는 최대 4개까지 생성하세요.
+5. "이슈", "동향", "소식", "최근" 같은 단어만으로 이루어진 키워드나, 이런 단어를 광범위한 카테고리
    명사와 조합한 키워드("AI 기업", "최근 이슈" 등)는 생성하지 마세요.
-4. 동음이의어가 의심되는 짧은 고유명사(예: 원소명, 흔한 단어와 겹치는 이름)는 2순위 키워드로
-   "고유명사 + 업종/맥락어" 조합(예: "제논 AI")을 추가해 보정하되, 1순위 키워드는 원문 그대로 유지하세요.
-
-filter_terms 작성 규칙:
-- entities에 등장한 정식 명칭(약어의 풀네임 등)을 그대로 넣으세요.
-- 예: "제논" → filter_terms = ["제논"] (기사 본문에 실제로 "제논"이 3번 이상 언급돼야 통과)
-- 확신이 없으면 optimized_keywords의 1순위 키워드와 동일하게 채우세요.
 """
 
 _prompt = ChatPromptTemplate.from_messages(
@@ -69,8 +74,8 @@ def _get_chain():
 
 def analyze_topic(topic: str, period_days: int) -> SearchQuery:
     """
-    관심 분야(주제어)를 분석해 검색 키워드/관련성 검증어를 뽑고, 사용자가 입력한
-    period_days와 결합해 최종 SearchQuery를 생성한다.
+    관심 분야(주제어)로부터 검색 키워드 후보를 생성하고, 사용자가 입력한
+    period_days와 결합해 SearchQuery를 만든다.
 
     Args:
         topic: 사용자가 입력한 관심 분야 원문 (예: "AI 기업 제논")
@@ -81,23 +86,13 @@ def analyze_topic(topic: str, period_days: int) -> SearchQuery:
 
     try:
         parsed = json.loads(cleaned)
+        optimized_keywords = parsed.get("optimized_keywords") or [topic]
     except json.JSONDecodeError:
-        # LLM이 형식을 어겼을 때의 안전한 폴백: 원문 주제를 그대로 키워드/필터어로 사용
-        parsed = {
-            "entities": [],
-            "intent": topic,
-            "optimized_keywords": [topic],
-            "filter_terms": [topic],
-        }
-
-    optimized_keywords = parsed.get("optimized_keywords") or [topic]
-    filter_terms = parsed.get("filter_terms") or [optimized_keywords[0]]
+        # LLM이 형식을 어겼을 때의 안전한 폴백: 원문 주제를 그대로 키워드로 사용
+        optimized_keywords = [topic]
 
     return SearchQuery(
         raw_question=topic,
-        entities=parsed.get("entities", []),
-        intent=parsed.get("intent", ""),
         optimized_keywords=optimized_keywords,
-        filter_terms=filter_terms,
         period_days=period_days,
     )

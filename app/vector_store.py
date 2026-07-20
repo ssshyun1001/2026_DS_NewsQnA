@@ -3,19 +3,19 @@
 
 디스크에 영구 저장하지 않고, 요청마다 FAISS 인메모리 인덱스를
 새로 구축한 뒤 질문과 가장 관련도 높은 기사만 골라 컨텍스트로 사용한다.
+
+임베딩 클라이언트는 app.embeddings의 공유 인스턴스를 사용한다
+(relevance_filter.py / deduplication.py와 동일한 클라이언트를 재사용해
+매번 새로 생성하지 않는다).
 """
 from __future__ import annotations
 
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
 
+from app.embeddings import get_embeddings
 from config import settings
 from app.schemas import Article
-
-
-def _get_embeddings() -> OpenAIEmbeddings:
-    return OpenAIEmbeddings(model=settings.embedding_model, api_key=settings.openai_api_key)
 
 
 def build_in_memory_store(articles: list[Article]) -> FAISS:
@@ -38,11 +38,11 @@ def build_in_memory_store(articles: list[Article]) -> FAISS:
         ]
         store = FAISS.from_embeddings(
             text_embeddings=text_embedding_pairs,
-            embedding=_get_embeddings(),
+            embedding=get_embeddings(),
             metadatas=[doc.metadata for doc in documents],
         )
     else:
-        store = FAISS.from_documents(documents, _get_embeddings())
+        store = FAISS.from_documents(documents, get_embeddings())
 
     return store
 
