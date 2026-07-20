@@ -168,7 +168,7 @@ async def collect_news(
 
 
 def ask_once(session: NewsSession, question: str) -> Answer:
-    relevant = retrieve_relevant_articles(session.store, session.articles, question)
+    relevant = retrieve_relevant_articles(session.store, session.articles, question, topic=session.topic)
     return generate_answer(question, relevant)
 
 
