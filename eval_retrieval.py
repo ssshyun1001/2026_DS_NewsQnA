@@ -29,21 +29,162 @@ from app.vector_store import retrieve_relevant_articles
 
 # 실제 대화에서 나왔던 질문들 + 각 질문에 맞는 기사라면 반드시 포함할 키워드
 GOLDEN_QUESTIONS = [
-    {"question": "제논의 대표는 누구야?", "expected_keyword": "고석태"},
-    {"question": "고석태에 대해 알려줘", "expected_keyword": "제논 대표"},
-    {"question": "제논의 최근 참여하거나 진행한 거 알려줘", "expected_keyword": "AIXperience"},
-    {"question": "원에이전트에 대해 자세히 알려줘", "expected_keyword": "액셔너블 AI"},
-    {"question": "GEN 2.0에 대해 설명해봐", "expected_keyword": "액셔너블 AI"}
+    # ===== 인물 =====
+    {
+        "question": "제논의 대표는 누구야?",
+        "expected_keywords": ["고석태"]
+    },
+    {
+        "question": "고석태 대표는 어떤 이야기를 했어?",
+        "expected_keywords": ["Gen AI 2.0", "생성형 AI 2.0"]
+    },
+
+    # ===== 행사 =====
+    {
+        "question": "제논이 최근 개최한 행사는 뭐야?",
+        "expected_keywords": ["AIXperience Day", "AI 익스피리언스 데이"]
+    },
+    {
+        "question": "AI 익스피리언스 데이에서 발표한 핵심 내용은 뭐야?",
+        "expected_keywords": ["Gen AI 2.0", "생성형 AI 2.0"]
+    },
+
+    # ===== 생성형 AI 2.0 =====
+    {
+        "question": "Gen AI 2.0이 뭐야?",
+        "expected_keywords": ["업무를 완결", "기업 데이터"]
+    },
+    {
+        "question": "기존 생성형 AI와 Gen AI 2.0은 무엇이 달라?",
+        "expected_keywords": [
+            "업무를 완결",
+            "기업 데이터",
+            "기업 업무 시스템"
+        ]
+    },
+    {
+        "question": "제논이 앞으로 집중하려는 AI 방향은 뭐야?",
+        "expected_keywords": [
+            "Gen AI 2.0",
+            "액셔너블 AI",
+            "피지컬 AI"
+        ]
+    },
+
+    # ===== 플랫폼 =====
+    {
+        "question": "GenOS 2.0은 어떤 플랫폼이야?",
+        "expected_keywords": ["GenOS", "AX 플랫폼"]
+    },
+    {
+        "question": "GenD는 어떤 기능이야?",
+        "expected_keywords": [
+            "기업 데이터",
+            "데이터 분석"
+        ]
+    },
+    {
+        "question": "GenBuilder는 어떤 기능을 제공해?",
+        "expected_keywords": [
+            "업무 앱",
+            "코드 생성",
+            "배포"
+        ]
+    },
+    {
+        "question": "GenA는 어떤 서비스야?",
+        "expected_keywords": [
+            "AI 에이전트 포털",
+            "개인",
+            "업무 생산성"
+        ]
+    },
+
+    # ===== Actionable AI =====
+    {
+        "question": "원에이전트는 무엇을 하는 AI야?",
+        "expected_keywords": [
+            "OneAgent",
+            "액셔너블 AI",
+            "업무를 완결"
+        ]
+    },
+    {
+        "question": "액셔너블 AI가 왜 중요한 거야?",
+        "expected_keywords": [
+            "업무를 완결",
+            "상용화"
+        ]
+    },
+
+    # ===== Physical AI =====
+    {
+        "question": "피지컬 AI는 어떤 의미야?",
+        "expected_keywords": [
+            "물리 세계",
+            "휴머노이드"
+        ]
+    },
+    {
+        "question": "제논은 피지컬 AI를 어디에 활용하려고 해?",
+        "expected_keywords": [
+            "KB금융",
+            "시니어 케어",
+            "휴머노이드"
+        ]
+    },
+
+    # ===== 상용화 =====
+    {
+        "question": "생성형 AI 시장은 올해 어떻게 변한다고 전망했어?",
+        "expected_keywords": [
+            "40%",
+            "상용화",
+            "프로덕션"
+        ]
+    },
+    {
+        "question": "왜 생성형 AI가 상용화되기 어려웠다고 했어?",
+        "expected_keywords": [
+            "PoC",
+            "파일럿",
+            "업무 프로세스"
+        ]
+    },
+    {
+        "question": "기업들이 생성형 AI를 실제로 도입하면서 달라진 점은 뭐야?",
+        "expected_keywords": [
+            "IT 예산",
+            "프로덕션",
+            "업무 자동화"
+        ]
+    },
+
+    # ===== 추론형 (HyDE 검증용) =====
+    {
+        "question": "제논이 해결하려는 가장 큰 문제는 뭐야?",
+        "expected_keywords": [
+            "업무를 완결",
+            "상용화",
+            "업무 프로세스"
+        ]
+    },
+    {
+        "question": "제논의 핵심 기술을 한 문장으로 설명해줘.",
+        "expected_keywords": [
+            "Gen AI 2.0",
+            "액셔너블 AI",
+            "기업 데이터"
+        ]
+    }
 ]
 
 
-def _is_hit(articles, expected_keyword: str) -> bool:
+def _is_hit(articles, expected_keywords: list[str]) -> bool:
     if not articles:
         return False
-    keyword = expected_keyword.lower()
-    return any(
-        keyword in f"{a.title} {a.content}".lower() for a in articles
-    )
+    text = " ".join(f"{a.title} {a.content}" for a in articles).lower()
+    return any(keyword.lower() in text for keyword in expected_keywords)
 
 
 async def run_eval(topic: str, validation_terms: list[str], period_days: int) -> None:
@@ -60,7 +201,7 @@ async def run_eval(topic: str, validation_terms: list[str], period_days: int) ->
 
     for item in GOLDEN_QUESTIONS:
         question = item["question"]
-        expected = item["expected_keyword"]
+        expected = item["expected_keywords"]
 
         result_v0 = retrieve_relevant_articles(
             session.store, session.articles, question, topic=session.topic, use_hyde=False
