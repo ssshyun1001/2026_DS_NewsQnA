@@ -32,11 +32,11 @@ class Settings:
     # Pipeline tuning
     dedup_similarity_threshold: float = _get_float("DEDUP_SIMILARITY_THRESHOLD", 0.90)
     top_k_articles: int = _get_int("TOP_K_ARTICLES", 5)
-    max_crawl_articles: int = _get_int("MAX_CRAWL_ARTICLES", 100)
+    max_crawl_articles: int = _get_int("MAX_CRAWL_ARTICLES", 150)
     crawl_timeout_seconds: int = _get_int("CRAWL_TIMEOUT_SECONDS", 8)
     # 질문-기사 간 코사인 유사도가 이 값 미만이면 출처로 채택하지 않는다.
     # top_k_articles는 이제 "최대 개수(cap)"일 뿐, 이 threshold를 통과한 기사만 실제로 반환된다.
-    relevance_similarity_threshold: float = _get_float("RELEVANCE_SIMILARITY_THRESHOLD", 0.30)
+    relevance_similarity_threshold: float = _get_float("RELEVANCE_SIMILARITY_THRESHOLD", 0.20)
 
 
 settings = Settings()

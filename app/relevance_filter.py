@@ -7,12 +7,16 @@ LLM 전수 판정의 문제: 기사 수만큼 LLM 호출이 필요해 느리고 
 이 모듈은 2단계로 판정한다:
   1단계 (임베딩 유사도, 빠름/저비용):
     - Article.embedding은 embed_articles()에서 이미 채워졌다고 가정 (재계산 없음)
-    - "topic + validation_terms"를 하나의 쿼리 텍스트로 임베딩
+    - "validation_terms"만으로 쿼리 텍스트를 임베딩한다 (topic은 포함하지 않음).
+      topic까지 쿼리에 섞으면 "강남"처럼 동음이의어인 주제어 자체가 임베딩
+      유사도를 끌어올려서, 검증 기준과 무관한 동음이의어 기사(예: 강남구
+      행정 기사)까지 애매한 구간으로 밀어 넣는 문제가 있었다.
     - 코사인 유사도가 high_threshold 이상이면 명확히 관련 있음 -> 통과
     - low_threshold 미만이면 명확히 무관함 -> 제거
   2단계 (LLM 정밀 판정, 느림/고비용이지만 정확):
     - low_threshold ~ high_threshold 사이(애매한 경계)의 기사만 LLM에게 재질문
     - 동음이의어처럼 표면 유사도로는 구분 안 되는 케이스를 여기서 걸러낸다
+      (topic은 이 단계의 프롬프트에서 계속 사용된다)
 
 주의: high/low threshold는 임베딩 모델·도메인마다 다르므로, eval_filter.py로
 라벨링된 데이터에 대해 실제로 sweep 해보고 튜닝해야 한다. 아래 기본값은 잠정치다.
@@ -110,9 +114,9 @@ async def _llm_judge_borderline(
             for j in result.judgments:
                 results[j.index] = j.is_relevant
         except Exception:
-            # 판정 실패 시 recall을 지키기 위해 통과시킨다.
-            for idx in batch_indices:
-                results[idx] = True
+                # 판정 실패 시 recall을 지키기 위해 통과시킨다.
+                for idx in batch_indices:
+                    results[idx] = True
 
     return results
 
@@ -149,7 +153,10 @@ async def filter_by_relevance(
         # embed_articles()가 먼저 실행되지 않은 경우: 안전하게 필터를 건너뛴다.
         return articles
 
-    query_text = f"{topic} {' '.join(normalized_terms)}"
+    # NOTE: topic은 여기서 의도적으로 제외한다. topic까지 쿼리에 섞으면
+    # "강남"처럼 동음이의어인 주제어 자체가 임베딩 유사도를 끌어올려서,
+    # 검증 기준과 무관한 동음이의어 기사가 애매한 구간으로 밀려 들어온다.
+    query_text = " ".join(normalized_terms)
     query_vec = np.array(await get_embeddings().aembed_query(query_text))
 
     clearly_relevant: list[Article] = []
