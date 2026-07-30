@@ -33,10 +33,15 @@ class Settings:
     dedup_similarity_threshold: float = _get_float("DEDUP_SIMILARITY_THRESHOLD", 0.90)
     top_k_articles: int = _get_int("TOP_K_ARTICLES", 5)
     max_crawl_articles: int = _get_int("MAX_CRAWL_ARTICLES", 150)
-    crawl_timeout_seconds: int = _get_int("CRAWL_TIMEOUT_SECONDS", 8)
+    crawl_timeout_seconds: int = _get_int("CRAWL_TIMEOUT_SECONDS", 10)
     # 질문-기사 간 코사인 유사도가 이 값 미만이면 출처로 채택하지 않는다.
-    # top_k_articles는 이제 "최대 개수(cap)"일 뿐, 이 threshold를 통과한 기사만 실제로 반환된다.
     relevance_similarity_threshold: float = _get_float("RELEVANCE_SIMILARITY_THRESHOLD", 0.20)
+
+    # 제외 키워드(LLM 자동 생성, topic 기준 혼동 개체) 임베딩 경계값.
+    # high 이상이면 명확히 혼동 개체(동음이의어/유사 명칭) -> LLM 호출 없이 즉시 제외.
+    # low 미만이면 명확히 무관한 혼동 -> 통과. 그 사이(경계)만 LLM 재확인.
+    exclusion_low_threshold: float = _get_float("EXCLUSION_LOW_THRESHOLD", 0.20)
+    exclusion_high_threshold: float = _get_float("EXCLUSION_HIGH_THRESHOLD", 0.35)
 
 
 settings = Settings()
