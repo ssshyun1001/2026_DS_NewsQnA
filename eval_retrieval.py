@@ -1,18 +1,24 @@
 """
-eval_retrieval.py — HyDE 검색 개선 효과 측정 스크립트
+eval_retrieval.py — HyDE / Multi-Query Retriever 개선 효과 측정 스크립트
 
 목적:
-  질문을 그대로 임베딩해 검색하던 방식(V0)과, HyDE로 가상의 기사 문장을 만들어
-  검색하는 방식(V1)의 검색 성공률을 비교한다.
+  검색 텍스트 확장 방식 4가지를 비교한다.
+    Base         : 질문 원문만 그대로 검색 (use_hyde=False, use_multi_query=False)
+    HyDE only    : HyDE 가상 문장만 추가 (use_hyde=True,  use_multi_query=False)
+    MultiQ only  : 표현이 다른 변형 질문만 추가 (use_hyde=False, use_multi_query=True)
+    Both         : HyDE + Multi-Query 모두 적용 (use_hyde=True,  use_multi_query=True)
+
+  HyDE와 Multi-Query는 서로 다른 축의 개선(가상 문서 생성 vs 질문 재구성)이라,
+  각각의 단독 효과와 함께 사용했을 때의 상호작용(시너지 또는 상쇄)을 같이 확인한다.
 
 골든셋:
   eval_filter.py에서 사용한 것과 동일한 3개 주제(제논, 서울여대, 강남)에 대해
-  각각 별도의 골든 질문셋을 둔다. 주제별로 실제 대화에서 V0가 검색에 실패했던
-  질문들과, 원래도 성공했던 키워드성 질문을 함께 포함해 HyDE가 실패 케이스를
-  개선하면서 기존 성공 케이스를 해치지는 않는지도 같이 본다.
+  각각 별도의 골든 질문셋을 둔다. 주제별로 실제 대화에서 검색에 실패했던
+  질문들과, 원래도 성공했던 키워드성 질문을 함께 포함한다.
 
   서울여대 골든셋은 2026-07-27/07-23에 실제로 크롤링된 기사(정의학원 제12대
-  이사장 이/취임, 2027수시박람회 관련 기사)를 확인하고 만든 것이다.
+  이사장 이/취임, 2027수시박람회, 노원구 대학연합회 MOU 관련 기사)를 확인하고
+  만든 것이다.
 
   강남 골든셋은 2026-07-29에 실제로 크롤링된 기사(방송인 강남의 '라디오스타'
   출연 관련 기사)를 확인하고 만든 것이다.
@@ -43,79 +49,140 @@ from app.vector_store import retrieve_relevant_articles
 
 
 # ============================================================
+# 비교할 4가지 검색 조건: (라벨, use_hyde, use_multi_query)
+# ============================================================
+CONDITIONS: list[tuple[str, bool, bool]] = [
+    ("Base", False, False),
+    ("HyDE only", True, False),
+    ("MultiQ only", False, True),
+    ("Both", True, True),
+]
+
+
+# ============================================================
 # 주제별 골든셋
 # 각 주제는 {topic, validation_terms, period_days, questions} 를 가진다.
 # ============================================================
 
 GOLDEN_SETS: dict[str, dict] = {
     # ------------------------------------------------------------------
-    # 제논 — 실제 대화에서 나왔던 질문들을 바탕으로 구성 (검증 완료)
+    # 당근 — 2026-06~07월 당근 공식 보도자료에 공개된 회사·서비스 관련
+    # 기사 기준으로 구성한 골든셋.
+    # 채소 당근 관련 기사는 정답 기사로 인정하지 않는다.
     # ------------------------------------------------------------------
-    "제논": {
-        "topic": "제논",
-        "validation_terms": ["AI기업"],
-        "period_days": 30,
+        # ------------------------------------------------------------------
+
+    # 당근 — 당근마켓 알바의 운수종사자 전자서류 제출 서비스와
+
+    # 당근 커뮤니티 T&S팀의 AI 기반 안전 관리 기사 기준으로 구성.
+
+    # 채소 당근 관련 기사는 정답 기사로 인정하지 않는다.
+
+    # ------------------------------------------------------------------
+
+    "당근": {
+
+        "topic": "당근",
+
+        "validation_terms": ["회사", "플랫폼"],
+
+        "period_days": 50,
+
         "questions": [
-            # ===== 인물 =====
-            {"question": "제논의 대표는 누구야?", "expected_keywords": ["고석태"]},
-            {"question": "고석태 대표는 어떤 이야기를 했어?",
-             "expected_keywords": ["Gen AI 2.0", "생성형 AI 2.0"]},
 
-            # ===== 행사 =====
-            {"question": "제논이 최근 개최한 행사는 뭐야?",
-             "expected_keywords": ["AIXperience Day", "AI 익스피리언스 데이"]},
-            {"question": "AI 익스피리언스 데이에서 발표한 핵심 내용은 뭐야?",
-             "expected_keywords": ["Gen AI 2.0", "생성형 AI 2.0"]},
+            # ===== 당근마켓 알바 × 한국교통안전공단 =====
 
-            # ===== 생성형 AI 2.0 =====
-            {"question": "Gen AI 2.0이 뭐야?",
-             "expected_keywords": ["업무를 완결", "기업 데이터"]},
-            {"question": "기존 생성형 AI와 Gen AI 2.0은 무엇이 달라?",
-             "expected_keywords": ["업무를 완결", "기업 데이터", "기업 업무 시스템"]},
-            {"question": "제논이 앞으로 집중하려는 AI 방향은 뭐야?",
-             "expected_keywords": ["Gen AI 2.0", "액셔너블 AI", "피지컬 AI"]},
+            {
 
-            # ===== 플랫폼 =====
-            {"question": "GenOS 2.0은 어떤 플랫폼이야?",
-             "expected_keywords": ["GenOS", "AX 플랫폼"]},
-            {"question": "GenD는 어떤 기능이야?",
-             "expected_keywords": ["기업 데이터", "데이터 분석"]},
-            {"question": "GenBuilder는 어떤 기능을 제공해?",
-             "expected_keywords": ["업무 앱", "코드 생성", "배포"]},
-            {"question": "GenA는 어떤 서비스야?",
-             "expected_keywords": ["AI 에이전트 포털", "개인", "업무 생산성"]},
+                "question": "당근마켓은 어떤 기관과 운수종사자 채용 서비스를 시작했어?",
 
-            # ===== Actionable AI =====
-            {"question": "원에이전트는 무엇을 하는 AI야?",
-             "expected_keywords": ["OneAgent", "액셔너블 AI", "업무를 완결"]},
-            {"question": "액셔너블 AI가 왜 중요한 거야?",
-             "expected_keywords": ["업무를 완결", "상용화"]},
+                "expected_keywords": ["한국교통안전공단", "TS"],
 
-            # ===== Physical AI =====
-            {"question": "피지컬 AI는 어떤 의미야?",
-             "expected_keywords": ["물리 세계", "휴머노이드"]},
-            {"question": "제논은 피지컬 AI를 어디에 활용하려고 해?",
-             "expected_keywords": ["KB금융", "시니어 케어", "휴머노이드"]},
+            },
 
-            # ===== 상용화 =====
-            {"question": "생성형 AI 시장은 올해 어떻게 변한다고 전망했어?",
-             "expected_keywords": ["40%", "상용화", "프로덕션"]},
-            {"question": "왜 생성형 AI가 상용화되기 어려웠다고 했어?",
-             "expected_keywords": ["PoC", "파일럿", "업무 프로세스"]},
-            {"question": "기업들이 생성형 AI를 실제로 도입하면서 달라진 점은 뭐야?",
-             "expected_keywords": ["IT 예산", "프로덕션", "업무 자동화"]},
+            {
 
-            # ===== 추론형 (HyDE 검증용) =====
-            {"question": "제논이 해결하려는 가장 큰 문제는 뭐야?",
-             "expected_keywords": ["업무를 완결", "상용화", "업무 프로세스"]},
-            {"question": "제논의 핵심 기술을 한 문장으로 설명해줘.",
-             "expected_keywords": ["Gen AI 2.0", "액셔너블 AI", "기업 데이터"]},
+                "question": "당근마켓 알바에서 전자적으로 제출할 수 있게 된 서류는 뭐야?",
+
+                "expected_keywords": ["운수종사자 경력 및 자격 등에 관한 내역서", "경력내역서"],
+
+            },
+
+            {
+
+                "question": "운수회사 구직자가 기존에 겪었던 불편은 뭐였어?",
+
+                "expected_keywords": ["직접 방문", "서류 발급", "출력"],
+
+            },
+
+            {
+
+                "question": "운수회사는 당근마켓 알바를 통해 어떤 정보를 확인할 수 있어?",
+
+                "expected_keywords": ["경력과 자격 정보", "경력", "자격"],
+
+            },
+
+            {
+
+                "question": "운수종사자 전자서류 제출 서비스는 어떤 사업의 하나로 마련됐어?",
+
+                "expected_keywords": ["디지털서비스 개방", "행정안전부"],
+
+            },
+
+
+
+            # ===== 당근 커뮤니티 T&S팀 =====
+
+            {
+
+                "question": "당근이 커뮤니티 안전 관리를 위해 만든 팀은 뭐야?",
+
+                "expected_keywords": ["커뮤니티 T&S팀", "트러스트&세이프티"],
+
+            },
+
+            {
+
+                "question": "당근 커뮤니티 T&S팀은 AI를 어디에 활용해?",
+
+                "expected_keywords": ["욕설", "피싱 링크", "자동 분류", "이상 징후"],
+
+            },
+
+            {
+
+                "question": "당근에서 AI가 판단한 뒤 최종 결정을 내리는 주체는 누구야?",
+
+                "expected_keywords": ["사람", "상담사"],
+
+            },
+
+            {
+
+                "question": "당근모임의 월간 활성 이용자 수는 몇 명을 넘었어?",
+
+                "expected_keywords": ["1000만", "1천만"],
+
+            },
+
+            {
+
+                "question": "당근 커뮤니티 T&S팀이 정책을 설계할 때 중요하게 보는 기준은 뭐야?",
+
+                "expected_keywords": ["이용자 안전", "법률 준수", "서비스 품질"],
+
+            },
+
         ],
+
     },
 
     # ------------------------------------------------------------------
     # 서울여대 — 2026-07-27/23 크롤링된 실제 기사(제12대 이사장 이/취임,
-    # 2027수시박람회) 기준으로 검증한 골든셋.
+    # 2027수시박람회, 노원구 대학연합회 MOU) 기준으로 검증한 골든셋.
     # ------------------------------------------------------------------
     "서울여대": {
         "topic": "서울여대",
@@ -148,12 +215,10 @@ GOLDEN_SETS: dict[str, dict] = {
     # ------------------------------------------------------------------
     # 강남 — 2026-07-29 크롤링된 실제 기사("강남, 아내 이상화 위해 스포츠
     # 마사지 자격증까지 땄다(라스)") 기준으로 검증한 골든셋.
-    # 자녀 관련 질문처럼 이 기사에서 확인되지 않는 내용은 제외했다.
-    # 이후 다른 기간/다른 기사가 섞이면 새로 확인된 사실을 추가할 것.
     # ------------------------------------------------------------------
     "강남": {
         "topic": "강남",
-        "validation_terms": ["방송인","연예인"],
+        "validation_terms": ["방송인", "연예인"],
         "period_days": 50,
         "questions": [
             {"question": "강남의 아내는 누구야?",
@@ -182,22 +247,27 @@ def _is_hit(articles, expected_keywords: list[str]) -> bool:
     return any(keyword.lower() in text for keyword in expected_keywords)
 
 
-async def run_eval(golden_set_name: str, golden_set: dict) -> tuple[int, int]:
-    """골든셋 하나를 평가하고 (hits_v0, hits_v1, n)이 아니라 (hits_v0, hits_v1)을 반환한다.
-    실패 시 (0, 0)을 반환하며, 이 경우 n=0이므로 run_all에서 합산에서 제외한다.
+async def run_eval(golden_set_name: str, golden_set: dict) -> dict[str, tuple[int, int]]:
+    """골든셋 하나를 4가지 조건으로 평가한다.
+
+    반환값: {condition_label: (hits, n)}. 세션 구축 실패 시 빈 dict를 반환한다.
     """
     topic = golden_set["topic"]
     validation_terms = golden_set["validation_terms"]
     period_days = golden_set["period_days"]
     questions = golden_set["questions"]
 
-    session = await collect_news(topic, validation_terms, period_days)
+    session = await collect_news(
+        topic=topic,
+        period_days=period_days,
+        validation_terms=validation_terms,
+    )
+
     if session is None:
         print(f"[{golden_set_name}] 세션 구축에 실패했습니다. topic/검증어/기간을 확인해주세요.")
-        return 0, 0, 0
+        return {}
 
     # 디버그: 골든셋 관련 기사가 최종 세션(필터+중복제거 통과)에 남아있는지 확인.
-    # 기사 제목을 전부 나열하지 않고, 개수 + 미리보기 몇 건만 보여준다.
     debug_keywords = {kw for item in questions for kw in item["expected_keywords"]}
     found_titles = [
         a.title for a in session.articles
@@ -215,74 +285,78 @@ async def run_eval(golden_set_name: str, golden_set: dict) -> tuple[int, int]:
               f"→ 관련성 필터 또는 크롤링 단계에서 탈락했을 가능성이 높음")
 
     print(f"\n=== 골든셋: {golden_set_name} (topic='{topic}', 검증어={validation_terms}) ===")
-    print(f"{'질문':<40} {'V0 (HyDE 없음)':<18} {'V1 (HyDE)':<10}")
-    print("-" * 70)
+    header = f"{'질문':<40}" + "".join(f"{label:<14}" for label, _, _ in CONDITIONS)
+    print(header)
+    print("-" * len(header))
 
-    hits_v0 = 0
-    hits_v1 = 0
+    hits: dict[str, int] = {label: 0 for label, _, _ in CONDITIONS}
 
     for item in questions:
         question = item["question"]
         expected = item["expected_keywords"]
 
-        result_v0 = retrieve_relevant_articles(
-            session.store, session.articles, question, topic=session.topic, use_hyde=False
-        )
-        result_v1 = retrieve_relevant_articles(
-            session.store, session.articles, question, topic=session.topic, use_hyde=True
-        )
-
-        hit_v0 = _is_hit(result_v0, expected)
-        hit_v1 = _is_hit(result_v1, expected)
-        hits_v0 += hit_v0
-        hits_v1 += hit_v1
-
-        print(f"{question:<40} {'O' if hit_v0 else 'X':<18} {'O' if hit_v1 else 'X':<10}")
+        row = f"{question:<40}"
+        for label, use_hyde, use_multi_query in CONDITIONS:
+            result = retrieve_relevant_articles(
+                session.store, session.articles, question,
+                topic=session.topic, use_hyde=use_hyde, use_multi_query=use_multi_query,
+            )
+            hit = _is_hit(result, expected)
+            hits[label] += hit
+            row += f"{'O' if hit else 'X':<14}"
+        print(row)
 
     n = len(questions)
-    print("-" * 70)
-    print(
-        f"[{golden_set_name}] 검색 성공률(Hit Rate): "
-        f"V0 = {hits_v0}/{n} ({hits_v0/n:.1%})  →  V1 = {hits_v1}/{n} ({hits_v1/n:.1%})\n"
-    )
-    return hits_v0, hits_v1, n
+    print("-" * len(header))
+    summary = "  ".join(f"{label} = {hits[label]}/{n} ({hits[label]/n:.1%})" for label, _, _ in CONDITIONS)
+    print(f"[{golden_set_name}] 검색 성공률(Hit Rate): {summary}\n")
+
+    return {label: (hits[label], n) for label, _, _ in CONDITIONS}
 
 
 async def run_all() -> None:
-    per_topic: list[tuple[str, int, int, int]] = []  # (name, hits_v0, hits_v1, n)
+    # per_topic[topic_name] = {label: (hits, n)}
+    per_topic: dict[str, dict[str, tuple[int, int]]] = {}
 
     for name, golden_set in GOLDEN_SETS.items():
-        hits_v0, hits_v1, n = await run_eval(name, golden_set)
-        if n > 0:
-            per_topic.append((name, hits_v0, hits_v1, n))
+        result = await run_eval(name, golden_set)
+        if result:
+            per_topic[name] = result
 
     if not per_topic:
         print("평가된 골든셋이 없습니다.")
         return
 
-    print("=" * 70)
+    labels = [label for label, _, _ in CONDITIONS]
+
+    print("=" * 90)
     print("전체 요약")
-    print("=" * 70)
-    print(f"{'주제':<10} {'문항 수':<8} {'V0 Hit Rate':<14} {'V1 Hit Rate':<14}")
-    print("-" * 70)
-    for name, hits_v0, hits_v1, n in per_topic:
-        print(f"{name:<10} {n:<8} {hits_v0}/{n} ({hits_v0/n:.1%})    {hits_v1}/{n} ({hits_v1/n:.1%})")
-    print("-" * 70)
+    print("=" * 90)
+    header = f"{'주제':<10} {'문항 수':<8}" + "".join(f"{label:<20}" for label in labels)
+    print(header)
+    print("-" * len(header))
+    for name, result in per_topic.items():
+        n = next(iter(result.values()))[1]
+        row = f"{name:<10} {n:<8}"
+        for label in labels:
+            hits, _ = result[label]
+            row += f"{f'{hits}/{n} ({hits/n:.1%})':<20}"
+        print(row)
+    print("-" * len(header))
 
     # macro-average: 주제별 hit rate를 동일 가중치로 평균 (주제 수로 나눔)
-    macro_v0 = sum(h0 / n for _, h0, _, n in per_topic) / len(per_topic)
-    macro_v1 = sum(h1 / n for _, _, h1, n in per_topic) / len(per_topic)
+    print("Macro 평균 (주제별 동일 가중치):")
+    for label in labels:
+        macro = sum(result[label][0] / result[label][1] for result in per_topic.values()) / len(per_topic)
+        print(f"  {label:<12}: {macro:.1%}")
 
     # micro-average: 전체 문항을 다 합쳐서 계산 (문항 수가 많은 주제에 더 큰 가중치)
-    total_n = sum(n for _, _, _, n in per_topic)
-    total_v0 = sum(h0 for _, h0, _, _ in per_topic)
-    total_v1 = sum(h1 for _, _, h1, _ in per_topic)
-    micro_v0 = total_v0 / total_n
-    micro_v1 = total_v1 / total_n
-
-    print(f"Macro 평균 (주제별 동일 가중치): V0 = {macro_v0:.1%}  →  V1 = {macro_v1:.1%}")
-    print(f"Micro 평균 (전체 {total_n}문항 기준):   V0 = {total_v0}/{total_n} ({micro_v0:.1%})  "
-          f"→  V1 = {total_v1}/{total_n} ({micro_v1:.1%})")
+    print("\nMicro 평균 (전체 문항 기준):")
+    total_n = next(iter(per_topic.values()))
+    total_n = sum(result[labels[0]][1] for result in per_topic.values())
+    for label in labels:
+        total_hits = sum(result[label][0] for result in per_topic.values())
+        print(f"  {label:<12}: {total_hits}/{total_n} ({total_hits/total_n:.1%})")
 
 
 def main() -> None:

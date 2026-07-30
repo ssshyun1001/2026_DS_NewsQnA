@@ -6,7 +6,7 @@
 
 임베딩 클라이언트는 app.embeddings의 공유 인스턴스를 사용한다.
 
-검색 방식 (HyDE, Hypothetical Document Embeddings):
+검색 방식 1 (HyDE, Hypothetical Document Embeddings):
   "제논의 대표는 누구야?" 같은 자연스러운 질문 문장은, 실제 뉴스 기사 본문
   스타일("제논의 고석태 대표는...")과 임베딩 공간에서 꽤 떨어져 있어서,
   질문 텍스트를 그대로 임베딩해 검색하면 관련 기사가 있어도 유사도 threshold를
@@ -17,6 +17,14 @@
   가상의 뉴스 문장"을 먼저 생성한 뒤 그 문장으로 검색한다. 가상의 문장은
   사실 여부와 무관하게 뉴스 기사와 문체가 비슷해서, 실제 관련 기사와의
   임베딩 유사도가 훨씬 높게 나온다.
+
+검색 방식 2 (Multi-Query Retriever):
+  HyDE 하나만으로는 LLM이 생성한 가상 문장 하나의 표현/관점에 검색 품질이
+  좌우될 수 있다. 이를 보완하기 위해 LLM으로 같은 질문을 표현이 다른 여러
+  버전으로 바꿔 쓴 뒤, 각 버전으로 독립적으로 검색하고 결과를 병합한다.
+  기사별로 여러 쿼리 중 가장 높은 유사도(max-pooling)를 채택하므로, 어떤
+  질문 표현이든 하나라도 그 기사와 잘 맞으면 채택될 수 있어 재현율이 높아진다.
+  LLM 호출이 실패하면 원 질문/HyDE 검색만으로 안전하게 폴백한다.
 """
 from __future__ import annotations
 
@@ -81,6 +89,55 @@ def _build_search_text(question: str, topic: str = "", use_hyde: bool = True) ->
         return question
 
 
+_MULTI_QUERY_SYSTEM_PROMPT = """\
+당신은 검색 재현율(recall)을 높이기 위한 보조 도구입니다.
+주어진 질문과 의미는 같지만 표현(단어, 문장 구조, 관점)이 다른 질문 2개를 작성하세요.
+
+규칙:
+- 같은 정보를 묻는 질문이어야 하지만, 원래 질문과 표현이 겹치지 않게 다르게 쓰세요.
+- 주제 맥락이 주어지면 그 맥락에서 벗어나지 않게 작성하세요 (다른 동명이인이나
+  다른 대상으로 빗나가지 않도록 주의).
+- 각 질문을 한 줄에 하나씩, 번호나 다른 설명 없이 질문 문장만 출력하세요.
+"""
+
+_multi_query_prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", _MULTI_QUERY_SYSTEM_PROMPT),
+        ("human", "주제 맥락: {topic}\n질문: {question}"),
+    ]
+)
+
+_multi_query_chain = None
+
+_MULTI_QUERY_VARIANT_COUNT = 2
+
+
+def _get_multi_query_chain():
+    global _multi_query_chain
+    if _multi_query_chain is None:
+        llm = ChatOpenAI(
+            model=getattr(settings, "relevance_llm_model", None) or settings.chat_model,
+            api_key=settings.openai_api_key,
+            temperature=0.5,
+        )
+        _multi_query_chain = _multi_query_prompt | llm | StrOutputParser()
+    return _multi_query_chain
+
+
+def _generate_query_variants(question: str, topic: str = "") -> list[str]:
+    """Multi-Query: 같은 질문을 다른 표현으로 바꿔 쓴 변형 질문들을 생성한다.
+
+    LLM 호출이 실패하면 빈 리스트를 반환한다 (원 질문/HyDE 검색만으로 계속 진행,
+    변형 질문 생성 실패가 전체 검색을 막지 않도록 안전하게 폴백한다).
+    """
+    try:
+        raw = _get_multi_query_chain().invoke({"question": question, "topic": topic or "(없음)"})
+        variants = [line.strip() for line in raw.splitlines() if line.strip()]
+        return variants[:_MULTI_QUERY_VARIANT_COUNT]
+    except Exception:
+        return []
+
+
 def build_in_memory_store(articles: list[Article]) -> FAISS:
     """중복 제거된 기사들로 임시 FAISS 인메모리 인덱스를 만든다."""
     documents = [
@@ -118,6 +175,7 @@ def retrieve_relevant_articles(
     top_k: int | None = None,
     similarity_threshold: float | None = None,
     use_hyde: bool = True,
+    use_multi_query: bool = True,
 ) -> list[Article]:
     """
     질문과 코사인 유사도가 similarity_threshold 이상인 기사만, 최대 top_k개까지 반환한다.
@@ -125,7 +183,13 @@ def retrieve_relevant_articles(
     top_k는 "정확히 이 개수를 채운다"가 아니라 상한(cap)이다. threshold를 통과한
     기사가 top_k보다 적으면 그만큼만, 하나도 없으면 빈 리스트를 반환한다.
 
-    질문은 그대로 검색하지 않고, HyDE로 확장한 텍스트로 검색한다 (모듈 docstring 참고).
+    검색 텍스트는 다음을 모두 포함한다 (use_multi_query=True일 때):
+      1. 원 질문 + HyDE 가상 문장 (_build_search_text 결과, use_hyde로 on/off)
+      2. LLM이 생성한 표현이 다른 변형 질문들 (_generate_query_variants)
+    각 검색 텍스트로 독립적으로 FAISS 검색을 수행한 뒤, 기사별로 여러 쿼리 중
+    가장 높은 코사인 유사도(max-pooling)를 채택해 병합한다. 이렇게 하면 어떤
+    질문 표현이든 하나라도 특정 기사와 잘 맞으면 그 기사가 채택될 수 있어
+    재현율이 높아진다.
 
     FAISS의 기본 인덱스(IndexFlatL2)는 유클리드 거리의 제곱을 점수로 반환한다.
     text-embedding-3-small은 단위 벡터(norm=1)를 반환하므로 다음 항등식이 성립한다:
@@ -139,21 +203,32 @@ def retrieve_relevant_articles(
         else settings.relevance_similarity_threshold
     )
 
-    search_text = _build_search_text(question, topic, use_hyde=use_hyde)
+    search_texts = [_build_search_text(question, topic, use_hyde=use_hyde)]
+
+    if use_multi_query:
+        search_texts.extend(_generate_query_variants(question, topic))
 
     # threshold 필터링 후에도 top_k를 채울 수 있도록, 넉넉하게 더 넓은 범위를 우선 검색한다.
     search_k = min(len(articles), max(top_k * 3, 10))
-    docs_with_scores = store.similarity_search_with_score(search_text, k=search_k)
 
     link_to_article = {a.link: a for a in articles}
-    scored: list[tuple[float, Article]] = []
+    # 기사(link)별로 여러 검색 쿼리 중 가장 높은 코사인 유사도를 채택한다 (max-pooling).
+    best_scores: dict[str, float] = {}
 
-    for doc, l2_score in docs_with_scores:
-        cosine_sim = 1.0 - (l2_score / 2.0)
+    for search_text in search_texts:
+        docs_with_scores = store.similarity_search_with_score(search_text, k=search_k)
+        for doc, l2_score in docs_with_scores:
+            cosine_sim = 1.0 - (l2_score / 2.0)
+            link = doc.metadata.get("link")
+            if link is None:
+                continue
+            if link not in best_scores or cosine_sim > best_scores[link]:
+                best_scores[link] = cosine_sim
+
+    scored: list[tuple[float, Article]] = []
+    for link, cosine_sim in best_scores.items():
         if cosine_sim < similarity_threshold:
             continue
-
-        link = doc.metadata.get("link")
         article = link_to_article.get(link)
         if article is not None:
             scored.append((cosine_sim, article))
