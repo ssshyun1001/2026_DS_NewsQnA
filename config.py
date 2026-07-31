@@ -31,7 +31,7 @@ class Settings:
 
     # Pipeline tuning
     dedup_similarity_threshold: float = _get_float("DEDUP_SIMILARITY_THRESHOLD", 0.90)
-    top_k_articles: int = _get_int("TOP_K_ARTICLES", 5)
+    top_k_articles: int = _get_int("TOP_K_ARTICLES", 10)
     max_crawl_articles: int = _get_int("MAX_CRAWL_ARTICLES", 150)
     crawl_timeout_seconds: int = _get_int("CRAWL_TIMEOUT_SECONDS", 10)
     # 질문-기사 간 코사인 유사도가 이 값 미만이면 출처로 채택하지 않는다.
