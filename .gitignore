@@ -1,0 +1,21 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python virtual environments
+venv/
+.venv/
+llm_env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# PyCharm
+.idea/
+
+# Local data and vector databases
+chroma_db/
+*.faiss
+*.index
