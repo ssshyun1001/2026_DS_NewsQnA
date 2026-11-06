@@ -62,32 +62,34 @@ def unique_terms(items: list[str]) -> list[str]:
     return out
 
 
-class SearchQuery(BaseModel):
-    """Query Understanding 단계의 출력."""
-    raw_question: str
-    entities: list[str] = Field(default_factory=list)
-    intent: str = ""
-    optimized_keywords: list[str] = Field(default_factory=list)
-    filter_terms: list[str] = Field(default_factory=list)
-    period_days: int = 7
-
-
 class NewsMeta(BaseModel):
-    """News Search API가 반환하는 메타데이터 (본문 크롤링 전)."""
+    """[1단계] 네이버 뉴스 검색 API가 돌려준 기사 정보 (본문 크롤링 전)."""
     title: str
-    link: str
+    link: str                          # 언론사 원문 주소 (출처 표시·중복 확인 기준)
+    naver_link: Optional[str] = None   # 네이버 뉴스 주소 (있으면 본문을 여기서 가져온다)
     press: Optional[str] = None
     pub_date: Optional[datetime] = None
-    description: str = ""
+    description: str = ""              # API가 주는 요약문
+    search_term: str = ""              # 이 기사를 찾은 검색어 (예: "눈 안과")
+
+
+class ArticleImage(BaseModel):
+    """[1단계] 기사 본문 속 이미지. 이미지 → 텍스트 설명은 4단계에서 만든다."""
+    url: str
+    caption: str = ""                  # 기사에 원래 달린 사진 설명
 
 
 class Article(BaseModel):
-    """크롤링까지 완료된 기사 본문."""
+    """[1단계 결과] 본문까지 가져온 기사."""
     title: str
     link: str
     press: Optional[str] = None
     pub_date: Optional[datetime] = None
     content: str = ""
+    description: str = ""
+    search_term: str = ""
+    images: list[ArticleImage] = Field(default_factory=list)
+    collected_at: Optional[datetime] = None  # 수집 시각 (검색 결과는 날짜마다 달라지므로 기록)
     embedding: Optional[list[float]] = None
 
     def to_context_block(self, idx: int) -> str:

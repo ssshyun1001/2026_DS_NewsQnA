@@ -33,13 +33,11 @@ import json
 import re
 import sys
 
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
 from qupict.config import settings
 from qupict.llm import get_chat_model
-from qupict.schemas import SearchQuery, SelectedSense, Sense, SenseCandidates, unique_terms
+from qupict.schemas import SelectedSense, Sense, SenseCandidates, unique_terms
 
 MAX_CANDIDATES = 3
 MAX_RELATED_TERMS = 8
@@ -302,87 +300,11 @@ def select_for_target(candidates: SenseCandidates, target: dict) -> SelectedSens
 
 
 # ---------------------------------------------------------------------------
-# 기존 검색 키워드 생성 (run.py가 아직 사용 중 — collect.py 개편 후 삭제 예정)
-# ---------------------------------------------------------------------------
-
-_SYSTEM_PROMPT = """\
-당신은 뉴스 검색 키워드를 만드는 도우미입니다.
-사용자가 입력한 '관심 분야'를 보고 아래 JSON 스키마로만 응답하세요. 다른 설명은 절대 추가하지 마세요.
-
-관심 분야는 완결된 질문이 아니라 주제어/키워드 형태로 입력될 수 있습니다.
-(예: "AI 기업 제논", "반도체 업계", "서울여대")
-
-스키마:
-{{
-  "optimized_keywords": ["뉴스 검색 API에 넣기 좋은 키워드 목록"]
-}}
-
-작성 규칙 (매우 중요):
-1. 입력에 등장하는 고유명사(회사명/인명/제품명 등)는 반드시 원문 그대로, 단독 키워드로 1순위에 포함하세요.
-   예: "AI 기업 제논" → 1순위 키워드는 "제논" (o), "AI 기업" (x, 너무 광범위함)
-2. 같은 대상을 가리키지만 표기가 다를 수 있는 이름(공식 명칭, 흔히 쓰는 약어, 영문 표기)을
-   확실히 알고 있는 경우에만 추가 키워드로 포함하세요. 뉴스 기사는 매체나 시점에 따라
-   다른 표기를 쓸 수 있어서, 원문 표기 하나만으로 검색하면 다른 표기로 쓰인 기사를 놓칩니다.
-   예: "서울여대" → ["서울여대", "서울여자대학교", "SWU"]
-   예: "제논" (AI 기업) → ["제논", "GenOn"] (영문 사명을 알고 있는 경우)
-   불확실하면 지어내지 말고 원문 표기만 사용하세요.
-3. 동음이의어가 의심되는 짧은 고유명사(예: 원소명, 흔한 단어와 겹치는 이름)는
-   "고유명사 + 업종/맥락어" 조합(예: "제논 AI")을 추가 키워드로 넣어 보정하되,
-   1순위 키워드는 원문 그대로 유지하세요.
-4. 키워드는 최대 4개까지 생성하세요.
-5. "이슈", "동향", "소식", "최근" 같은 단어만으로 이루어진 키워드나, 이런 단어를 광범위한 카테고리
-   명사와 조합한 키워드("AI 기업", "최근 이슈" 등)는 생성하지 마세요.
-"""
-
-_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", _SYSTEM_PROMPT),
-        ("human", "관심 분야: {topic}"),
-    ]
-)
-
-_chain = None
-
-
-def _get_chain():
-    global _chain
-    if _chain is None:
-        llm = get_chat_model(temperature=0)
-        _chain = _prompt | llm | StrOutputParser()
-    return _chain
-
-
-def analyze_topic(topic: str, period_days: int) -> SearchQuery:
-    """
-    관심 분야(주제어)로부터 검색 키워드 후보를 생성하고, 사용자가 입력한
-    period_days와 결합해 SearchQuery를 만든다.
-
-    Args:
-        topic: 사용자가 입력한 관심 분야 원문 (예: "AI 기업 제논")
-        period_days: 사용자가 숫자로 직접 입력한 조회 기간(일)
-    """
-    raw = _get_chain().invoke({"topic": topic})
-    cleaned = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-
-    try:
-        parsed = json.loads(cleaned)
-        optimized_keywords = parsed.get("optimized_keywords") or [topic]
-    except json.JSONDecodeError:
-        # LLM이 형식을 어겼을 때의 안전한 폴백: 원문 주제를 그대로 키워드로 사용
-        optimized_keywords = [topic]
-
-    return SearchQuery(
-        raw_question=topic,
-        optimized_keywords=optimized_keywords,
-        period_days=period_days,
-    )
-
-
-# ---------------------------------------------------------------------------
 # 터미널에서 직접 확인하기: python -m qupict.sense 애플
 # ---------------------------------------------------------------------------
 
-def _choose_interactively(candidates: SenseCandidates) -> SelectedSense:
+def choose_sense_interactively(candidates: SenseCandidates) -> SelectedSense:
+    """터미널에서 후보를 보여 주고 번호로 고르게 한다. (run.py도 이 함수를 쓴다)"""
     if not candidates.senses:
         print("의미 후보를 만들지 못했습니다. 찾고 싶은 대상을 직접 설명해 주세요.")
         desc = input("설명> ").strip()
@@ -436,5 +358,5 @@ if __name__ == "__main__":
         sys.exit(0)
     q = sys.argv[1] if len(sys.argv) > 1 else input("검색어> ").strip()
     cands = generate_sense_candidates(q)
-    selected = _choose_interactively(cands)
+    selected = choose_sense_interactively(cands)
     print(json.dumps(selected.model_dump(), ensure_ascii=False, indent=2))
