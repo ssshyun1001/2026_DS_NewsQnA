@@ -22,6 +22,8 @@ def _get_int(name: str, default: int) -> int:
 class Settings:
     # OpenAI
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
+    # 비워 두면 OpenAI 공식 API, 학교 팩트챗을 쓰면 https://factchat-cloud.mindlogic.ai/v1/gateway
+    openai_base_url: str = os.getenv("OPENAI_BASE_URL", "")
     chat_model: str = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
     embedding_model: str = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 

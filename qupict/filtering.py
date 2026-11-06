@@ -46,7 +46,7 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from qupict.config import settings
-from qupict.llm import get_embeddings
+from qupict.llm import get_chat_model, get_embeddings
 from qupict.schemas import Article
 
 # ---------------------------------------------------------------------------
@@ -231,13 +231,7 @@ _homonym_llm = None
 def _get_homonym_chain():
     global _homonym_llm
     if _homonym_llm is None:
-        from langchain_openai import ChatOpenAI
-
-        llm = ChatOpenAI(
-            model=getattr(settings, "relevance_llm_model", None) or settings.chat_model,
-            api_key=settings.openai_api_key,
-            temperature=0,
-        )
+        llm = get_chat_model(temperature=0)
         _homonym_llm = llm.with_structured_output(_ExclusionTerms)
     return _homonym_llm
 
@@ -444,13 +438,7 @@ async def _llm_judge_borderline(
     articles: list[Article],
     indices: list[int],
 ) -> dict[int, bool]:
-    from langchain_openai import ChatOpenAI
-
-    llm = ChatOpenAI(
-        model=getattr(settings, "relevance_llm_model", "gpt-4o-mini"),
-        api_key=settings.openai_api_key,
-        temperature=0,
-    )
+    llm = get_chat_model(temperature=0)
     structured_llm = llm.with_structured_output(_JudgmentBatch)
 
     results: dict[int, bool] = {}

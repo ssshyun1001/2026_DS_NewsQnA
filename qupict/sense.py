@@ -33,10 +33,10 @@ import sys
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from qupict.config import settings
+from qupict.llm import get_chat_model
 from qupict.schemas import SearchQuery, SelectedSense, Sense, SenseCandidates, unique_terms
 
 MAX_CANDIDATES = 3
@@ -79,7 +79,7 @@ _candidates_llm = None
 def _get_candidates_llm():
     global _candidates_llm
     if _candidates_llm is None:
-        llm = ChatOpenAI(model=settings.chat_model, api_key=settings.openai_api_key, temperature=0)
+        llm = get_chat_model(temperature=0)
         _candidates_llm = llm.with_structured_output(_SenseList)
     return _candidates_llm
 
@@ -161,7 +161,7 @@ _custom_llm = None
 def _get_custom_llm():
     global _custom_llm
     if _custom_llm is None:
-        llm = ChatOpenAI(model=settings.chat_model, api_key=settings.openai_api_key, temperature=0)
+        llm = get_chat_model(temperature=0)
         _custom_llm = llm.with_structured_output(Sense)
     return _custom_llm
 
@@ -283,7 +283,7 @@ _chain = None
 def _get_chain():
     global _chain
     if _chain is None:
-        llm = ChatOpenAI(model=settings.chat_model, api_key=settings.openai_api_key, temperature=0)
+        llm = get_chat_model(temperature=0)
         _chain = _prompt | llm | StrOutputParser()
     return _chain
 

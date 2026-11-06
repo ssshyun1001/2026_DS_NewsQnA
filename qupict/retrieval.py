@@ -32,9 +32,8 @@ from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.vectorstores import FAISS
-from langchain_openai import ChatOpenAI
 
-from qupict.llm import get_embeddings
+from qupict.llm import get_chat_model, get_embeddings
 from qupict.config import settings
 from qupict.schemas import Article
 
@@ -64,11 +63,7 @@ _hyde_chain = None
 def _get_hyde_chain():
     global _hyde_chain
     if _hyde_chain is None:
-        llm = ChatOpenAI(
-            model=getattr(settings, "relevance_llm_model", None) or settings.chat_model,
-            api_key=settings.openai_api_key,
-            temperature=0.3,
-        )
+        llm = get_chat_model(temperature=0.3)
         _hyde_chain = _hyde_prompt | llm | StrOutputParser()
     return _hyde_chain
 
@@ -115,11 +110,7 @@ _MULTI_QUERY_VARIANT_COUNT = 2
 def _get_multi_query_chain():
     global _multi_query_chain
     if _multi_query_chain is None:
-        llm = ChatOpenAI(
-            model=getattr(settings, "relevance_llm_model", None) or settings.chat_model,
-            api_key=settings.openai_api_key,
-            temperature=0.5,
-        )
+        llm = get_chat_model(temperature=0.5)
         _multi_query_chain = _multi_query_prompt | llm | StrOutputParser()
     return _multi_query_chain
 
