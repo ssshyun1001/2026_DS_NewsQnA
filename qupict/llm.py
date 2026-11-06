@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from langchain_openai import OpenAIEmbeddings
 
-from config import settings
+from qupict.config import settings
 
 _embeddings: OpenAIEmbeddings | None = None
 

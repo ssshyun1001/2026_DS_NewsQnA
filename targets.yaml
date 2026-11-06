@@ -1,0 +1,40 @@
+# 수집 대상 목록
+#   query : 네이버 뉴스 검색어
+#   sense : 0단계 의미 후보 중 고를 의미 (후보에 없으면 직접 입력 정의로 처리)
+#   period_days : 수집 기간(일)
+
+- query: 서울여대
+  sense: 서울여자대학교
+  period_days: 30
+
+- query: 삼전
+  sense: 삼성전자
+  period_days: 30
+
+- query: 베라
+  sense: 배스킨라빈스
+  period_days: 30
+
+- query: 강남
+  sense: 방송인 강남
+  period_days: 30
+
+- query: 애플
+  sense: 기업 Apple
+  period_days: 30
+
+- query: 당근
+  sense: 기업 당근(당근마켓)
+  period_days: 30
+
+- query: 눈
+  sense: TODO (내리는 눈 / 사람의 눈 중 선택)
+  period_days: 30
+
+- query: 후드
+  sense: TODO (인물명 / 옷 중 선택)
+  period_days: 30
+
+- query: 마스크
+  sense: TODO (마스크 / 마스크팩 중 선택)
+  period_days: 30

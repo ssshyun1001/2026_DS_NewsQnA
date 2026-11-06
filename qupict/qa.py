@@ -13,8 +13,8 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
-from config import settings
-from app.schemas import Answer, Article
+from qupict.config import settings
+from qupict.schemas import Answer, Article
 
 _SYSTEM_PROMPT = """\
 당신은 신뢰할 수 있는 뉴스 기반 답변 에이전트입니다.

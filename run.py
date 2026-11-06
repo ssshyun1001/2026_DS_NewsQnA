@@ -1,5 +1,7 @@
 """
-AI News Q&A Agent - 메인 엔트리포인트
+QuPicT 실행 파일 (현재는 기존 main.py의 세션 방식 그대로 동작)
+
+TODO: DB 방식으로 바꾸면서 단계별 명령(init-db, senses, collect, filter, index, ask)으로 교체
 
 흐름:
   [1] 관심 분야 입력 (예: "서울여대")
@@ -33,9 +35,9 @@ AI News Q&A Agent - 메인 엔트리포인트
     확정해 filter_by_relevance에 고정값으로 전달한다.
 
 사용법:
-    python main.py                                    # 완전 인터랙티브
-    python main.py "서울여대"                          # topic만 인자, 나머지는 인터랙티브
-    python main.py "서울여대" "전공" 7                  # topic + 검증어 + 기간(일)까지 인자로 전달
+    python run.py                                    # 완전 인터랙티브
+    python run.py "서울여대"                          # topic만 인자, 나머지는 인터랙티브
+    python run.py "서울여대" "전공" 7                  # topic + 검증어 + 기간(일)까지 인자로 전달
 """
 from __future__ import annotations
 
@@ -45,15 +47,18 @@ from dataclasses import dataclass, field
 
 from langchain_community.vectorstores import FAISS
 
-from config import validate_settings
-from app.query_understanding import analyze_topic
-from app.news_search import search_news
-from app.crawler import crawl_articles
-from app.relevance_filter import filter_by_relevance, generate_exclusion_terms
-from app.deduplication import embed_articles, deduplicate_articles
-from app.vector_store import build_in_memory_store, retrieve_relevant_articles
-from app.rag_chain import generate_answer
-from app.schemas import Answer, Article
+from qupict.config import validate_settings
+from qupict.sense import analyze_topic
+from qupict.collect import crawl_articles, search_news
+from qupict.filtering import (
+    deduplicate_articles,
+    embed_articles,
+    filter_by_relevance,
+    generate_exclusion_terms,
+)
+from qupict.retrieval import build_in_memory_store, retrieve_relevant_articles
+from qupict.qa import generate_answer
+from qupict.schemas import Answer, Article
 
 _EXIT_COMMANDS = {"종료", "exit", "quit", "q"}
 
@@ -241,7 +246,7 @@ def main() -> None:
     validate_settings()
 
     if len(sys.argv) >= 4 and sys.argv[-1].isdigit():
-        # 예: python main.py "서울여대" "전공" 7
+        # 예: python run.py "서울여대" "전공" 7
         topic = sys.argv[1]
         validation_terms = [t.strip() for t in sys.argv[2].split(",") if t.strip()]
         period_days = int(sys.argv[-1])

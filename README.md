@@ -420,53 +420,24 @@ Embedding model: text-embedding-3-small
 ## 폴더 구조
 
 ```text
-Project_news_qa_agent/
-│
-├── main.py
-│   └── 뉴스 수집 세션 구축 및 질문 루프
-│
-├── build_labeled_set.py
-│   └── 관련성 필터 평가용 기사 라벨링
-│
-├── eval_filter.py
-│   └── 관련성 필터 성능 평가
-│
-├── eval_retrieval.py
-│   └── Base, HyDE, Multi-Query 검색 성능 비교
-│
-├── config.py
-│   └── 환경변수 및 임계값 설정
-│
+2026_DS_NewsQnA/
+├── run.py              실행 파일 (기존 main.py)
+├── schema.sql          DB 테이블 (작성 예정)
+├── targets.yaml        수집 대상 목록
 ├── requirements.txt
-├── env.example.txt
-│
-└── app/
-    ├── schemas.py
-    │   └── 기사, 답변 및 세션 데이터 모델
-    │
-    ├── query_understanding.py
-    │   └── 뉴스 검색 키워드 생성
-    │
-    ├── news_search.py
-    │   └── 검색 키워드와 검증어 조합 및 뉴스 검색 API
-    │
-    ├── crawler.py
-    │   └── 기사 본문 비동기 크롤링
-    │
-    ├── embeddings.py
-    │   └── 공유 임베딩 클라이언트
-    │
-    ├── relevance_filter.py
-    │   └── 제외 키워드 생성 및 관련성 필터
-    │
-    ├── deduplication.py
-    │   └── 기사 임베딩 및 의미 기반 중복 제거
-    │
-    ├── vector_store.py
-    │   └── FAISS 구축 및 검색 확장
-    │
-    └── rag_chain.py
-        └── 근거 기반 답변 생성
+├── .env.example
+├── qupict/
+│   ├── config.py       환경변수 및 임계값 설정
+│   ├── schemas.py      기사, 답변 데이터 모델
+│   ├── llm.py          공유 임베딩 클라이언트
+│   ├── db.py           DB 연결·저장 (작성 예정)
+│   ├── sense.py        [0단계] 검색 키워드 생성 → 의미 후보로 개편 예정
+│   ├── collect.py      [1단계] 뉴스 검색 API + 본문 크롤링
+│   ├── filtering.py    [2·3단계] 중복 제거 + 관련성 필터
+│   ├── indexing.py     [4단계] 청크·임베딩 (작성 예정)
+│   ├── retrieval.py    [5단계] FAISS 구축, HyDE, Multi-Query
+│   └── qa.py           [5단계] 근거 기반 답변 생성
+└── old/                실험 때 다시 쓸 평가·라벨링 스크립트
 ```
 
 ---
@@ -499,7 +470,7 @@ pip install -r requirements.txt
 
 ### 3. 환경변수 설정
 
-`env.example.txt`를 복사해 `.env` 파일을 생성한 뒤 다음 값을 입력합니다.
+`.env.example`을 복사해 `.env` 파일을 생성한 뒤 다음 값을 입력합니다.
 
 ```env
 OPENAI_API_KEY=
@@ -512,19 +483,19 @@ NAVER_CLIENT_SECRET=
 완전 인터랙티브 방식:
 
 ```bash
-python main.py
+python run.py
 ```
 
 관심 분야만 실행 인자로 전달:
 
 ```bash
-python main.py "서울여대"
+python run.py "서울여대"
 ```
 
 관심 분야, 검증 키워드, 기간을 모두 전달:
 
 ```bash
-python main.py "서울여대" "전공" 7
+python run.py "서울여대" "전공" 7
 ```
 
 프로그램 시작 시 필수 API 키가 누락됐는지 검사합니다. 누락된 값이 있으면 실행을 중단하고 필요한 환경변수를 안내합니다.
@@ -697,7 +668,7 @@ PyCharm 콘솔와 한글 IME 조합에서 입력이 누락되거나 깨질 수 �
 UTF-8 입출력 설정과 불완전한 자모 입력 감지 로직을 적용했으며, 문제가 지속되면 실행 인자로 관심 분야, 검증어, 기간을 전달할 수 있습니다.
 
 ```bash
-python main.py "서울여대" "전공" 7
+python run.py "서울여대" "전공" 7
 ```
 
 ### 실행 시점에 따른 평가 결과 변화
