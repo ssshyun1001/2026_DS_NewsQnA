@@ -1,7 +1,16 @@
-# 수집 대상 목록
-#   query : 네이버 뉴스 검색어
-#   sense : 0단계 의미 후보 중 고를 의미 (후보에 없으면 직접 입력 정의로 처리)
-#   period_days : 수집 기간(일)
+# 수집 대상 목록 (평가용 9개)
+#
+#   query         : 네이버 뉴스 검색어
+#   sense         : 0단계 의미 후보 중 고를 의미 이름
+#                   후보에 없으면 "직접 입력"으로 처리한다 (설명은 description, 없으면 sense 이름)
+#   description   : (선택) 직접 입력할 때 쓸 설명
+#   definition    : (선택) 사람이 확인한 한 줄 정의. 3단계 LLM 검증의 기준이 된다.
+#   aliases       : (선택) 사람이 확인한 별칭. 적으면 LLM이 만든 별칭 대신 이 값을 쓴다.
+#                   [] 를 적으면 "LLM 별칭을 쓰지 않음"
+#   related_terms : (선택) 사람이 확인한 연관어. 적으면 LLM 연관어 대신 이 값을 쓴다.
+#   period_days   : 수집 기간(일)
+#
+# 확인 방법: python -m qupict.sense --targets
 
 - query: 서울여대
   sense: 서울여자대학교
@@ -12,11 +21,18 @@
   period_days: 30
 
 - query: 베라
+  # LLM이 '베라'를 배스킨라빈스로 알아보지 못함 (후보가 없거나 엉뚱한 후보만 나옴) → 직접 입력으로 처리
   sense: 배스킨라빈스
+  description: 아이스크림 브랜드 배스킨라빈스 (줄임말 '베라', '배라')
+  aliases: [배스킨라빈스, 배라, Baskin Robbins]
   period_days: 30
 
 - query: 강남
   sense: 방송인 강남
+  # LLM이 지어낸 정보가 섞임 (별칭 '조남식', 정의 '본명 조성민', 연관어 '비와이') → 사람이 확인한 값으로 교체
+  definition: 가수 겸 방송인 강남 (그룹 M.I.B 출신, 스피드스케이팅 선수 이상화의 남편)
+  aliases: []
+  related_terms: [이상화, M.I.B, 예능, 유튜브, 방송, 출연]
   period_days: 30
 
 - query: 애플
@@ -28,13 +44,13 @@
   period_days: 30
 
 - query: 눈
-  sense: TODO (내리는 눈 / 사람의 눈 중 선택)
+  sense: TODO (후보 - 날씨 눈(雪) / 신체 기관 눈(眼))
   period_days: 30
 
 - query: 후드
-  sense: TODO (인물명 / 옷 중 선택)
+  sense: TODO (후보에 인물이 없음 - 어떤 인물인지 정해서 sense와 description에 적기)
   period_days: 30
 
 - query: 마스크
-  sense: TODO (마스크 / 마스크팩 중 선택)
+  sense: TODO (후보 - 보건용 마스크 / 가면 마스크(팩 포함) / 영화 마스크)
   period_days: 30

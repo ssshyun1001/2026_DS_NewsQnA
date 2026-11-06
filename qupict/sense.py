@@ -11,7 +11,8 @@
   후보가 2개 이상  → 사용자가 하나 선택       → select_sense(...)
   후보가 1개       → 자동 선택               → select_sense(..., 0)
   후보가 0개 / "기타" → 사용자가 직접 설명 입력 → build_custom_sense(...) → select_custom_sense(...)
-  targets.yaml 일괄 처리 → 미리 적어 둔 의미 이름으로 찾기 → select_sense_by_name(...)
+  targets.yaml 일괄 처리 → 미리 적어 둔 의미 이름으로 찾기 → select_for_target(...)
+                          (못 찾으면 직접 입력, 사람이 확인한 별칭·연관어가 있으면 그 값으로 교체)
 
 팀에서 정한 규칙:
   - 후보는 자주 쓰이는 순 TOP3, 나머지는 "기타(직접 입력)"로 처리
@@ -23,7 +24,8 @@
 같은 검색어의 후보를 DB(query_senses)에 저장해 재사용하는 캐싱은 DB 쪽에서 처리한다.
 
 직접 실행해 보기:
-    python -m qupict.sense 애플
+    python -m qupict.sense 애플          # 검색어 하나, 터미널에서 직접 선택
+    python -m qupict.sense --targets     # targets.yaml 전체를 일괄 처리
 """
 from __future__ import annotations
 
@@ -84,14 +86,34 @@ def _get_candidates_llm():
     return _candidates_llm
 
 
+_HANJA_RE = re.compile(r"[㐀-䶿一-鿿豈-﫿]")
+
+
+def _has_hanja(text: str) -> bool:
+    """한자가 섞인 단어인지. (예: "出荷", "積雪" — 한국 기사 본문과 거의 일치하지 않는다)"""
+    return bool(_HANJA_RE.search(text))
+
+
 def _clean_sense(sense: Sense, query: str) -> Sense:
-    """LLM 결과 정리: 공백·중복 제거, 검색어 원문이 별칭/연관어에 섞여 들어온 경우 제거."""
+    """LLM 결과 정리.
+
+    - 공백·중복 제거
+    - 검색어 원문은 별칭·연관어에서 뺀다 (배제어가 되면 모든 기사가 걸러짐)
+    - 한자가 섞인 단어는 뺀다 (예: "出荷")
+    - 검색어 안에 들어 있는 단어는 연관어에서 뺀다
+      (예: 서울여대의 "여대" → 성신여대 기사까지 연관어 점수를 받게 됨)
+    """
     q = query.strip()
+    aliases = [a for a in unique_terms(sense.aliases) if a != q and not _has_hanja(a)]
+    related = [
+        t for t in unique_terms(sense.related_terms)
+        if t != q and t not in q and not _has_hanja(t)
+    ]
     return Sense(
         name=sense.name.strip(),
         definition=sense.definition.strip(),
-        aliases=[a for a in unique_terms(sense.aliases) if a != q],
-        related_terms=[t for t in unique_terms(sense.related_terms) if t != q][:MAX_RELATED_TERMS],
+        aliases=aliases,
+        related_terms=related[:MAX_RELATED_TERMS],
         is_custom=sense.is_custom,
     )
 
@@ -133,6 +155,10 @@ def generate_sense_candidates(query: str) -> SenseCandidates:
     for s in raw:
         s = _clean_sense(s, query)
         if not s.name or s.name in seen_names:  # 이름이 빈 후보, 같은 이름의 후보는 버린다
+            continue
+        if not s.related_terms:
+            # 연관어가 하나도 없다 = LLM이 이 의미를 잘 모른다 (예: "베라" → "인물 베라(확실하지 않음)")
+            # 필터링에 쓸 정보가 없으므로 버리고, 후보가 0개가 되면 "직접 입력"으로 넘어가게 한다.
             continue
         seen_names.add(s.name)
         senses.append(s)
@@ -235,6 +261,31 @@ def select_sense_by_name(candidates: SenseCandidates, name: str) -> SelectedSens
     if len(partial) == 1:                              # 3) 이름 일부 포함 (하나만 걸릴 때만)
         return select_sense(candidates, partial[0])
     return None
+
+
+def select_for_target(candidates: SenseCandidates, target: dict) -> SelectedSense:
+    """targets.yaml 항목 하나로 의미를 고른다 (일괄 수집용).
+
+    1) target["sense"] 이름으로 후보를 찾는다.
+    2) 못 찾으면 "직접 입력"으로 처리한다. 설명은 target["description"], 없으면 sense 이름.
+       (예: "베라"는 LLM이 배스킨라빈스를 몰라서 후보가 없으므로 이 경로로 간다)
+    3) target에 definition / aliases / related_terms가 적혀 있으면 LLM 값 대신 그 값을 쓴다.
+       LLM이 지어낸 정보(예: 방송인 강남 → 별칭 "조남식", 정의 "본명 조성민")를
+       사람이 확인한 값으로 바로잡는 용도다. 빈 리스트 []를 적으면 "LLM 값을 쓰지 않는다"는 뜻이다.
+    """
+    query = candidates.query
+    selected = select_sense_by_name(candidates, target["sense"])
+    if selected is None:
+        description = target.get("description") or target["sense"]
+        selected = select_custom_sense(candidates, build_custom_sense(query, description))
+
+    overrides: dict = {k: unique_terms(target[k]) for k in ("aliases", "related_terms") if k in target}
+    if target.get("definition"):
+        overrides["definition"] = str(target["definition"]).strip()
+    if not overrides:
+        return selected
+    fixed = selected.sense.model_copy(update=overrides)
+    return _make_selection(query, fixed, selected.other_senses)
 
 
 # ---------------------------------------------------------------------------
@@ -341,9 +392,30 @@ def _choose_interactively(candidates: SenseCandidates) -> SelectedSense:
         print(f"0~{len(candidates.senses)} 사이 번호를 입력하세요.")
 
 
+def _print_all_targets() -> None:
+    """targets.yaml의 모든 대상을 처리해 선택 결과를 보여 준다. (python -m qupict.sense --targets)"""
+    from qupict.config import load_targets
+
+    for target in load_targets():
+        query = target["query"]
+        if str(target["sense"]).startswith("TODO"):
+            print(f"\n### {query}: 건너뜀 (targets.yaml의 sense가 아직 TODO)")
+            continue
+        selected = select_for_target(generate_sense_candidates(query), target)
+        s = selected.sense
+        print(f"\n### {query} → {s.name}{' (직접 입력)' if s.is_custom else ''}")
+        print(f"  정의: {s.definition}")
+        print(f"  기사에서 찾을 표기: {selected.match_terms}")
+        print(f"  연관어: {s.related_terms}")
+        print(f"  배제어: {selected.excluded_terms}")
+
+
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    if len(sys.argv) > 1 and sys.argv[1] == "--targets":
+        _print_all_targets()
+        sys.exit(0)
     q = sys.argv[1] if len(sys.argv) > 1 else input("검색어> ").strip()
     cands = generate_sense_candidates(q)
     selected = _choose_interactively(cands)
