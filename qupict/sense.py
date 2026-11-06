@@ -214,9 +214,22 @@ def build_custom_sense(query: str, description: str) -> Sense:
 # 선택
 # ---------------------------------------------------------------------------
 
+SAME_SENSE_MIN_SHARED_TERMS = 2
+
+
 def _make_selection(query: str, chosen: Sense, others: list[Sense]) -> SelectedSense:
-    """선택 결과를 만든다. 배제어 = 고르지 않은 후보들의 연관어 (고른 의미의 단어와 겹치면 뺌)."""
-    own = set(chosen.related_terms) | set(chosen.aliases) | {query}
+    """선택 결과를 만든다. 배제어 = 고르지 않은 후보들의 연관어 (고른 의미의 단어와 겹치면 뺌).
+
+    직접 입력한 의미가 사실은 LLM 후보 중 하나와 같은 의미일 수 있다.
+    (예: 직접 입력 "보건용 마스크" ↔ LLM 후보 "방역 마스크") 그 후보를 '다른 의미'로 두면
+    방역·황사 같은 단어가 배제어가 되어 원하는 기사를 오히려 걸러 버린다.
+    그래서 고른 의미와 연관어가 2개 이상 겹치는 후보는 같은 의미로 보고 제외한다.
+    (LLM 후보끼리는 공통 연관어를 미리 지우므로 이 규칙에 걸리지 않는다)
+    """
+    chosen_terms = set(chosen.related_terms)
+    others = [s for s in others
+              if len(chosen_terms & set(s.related_terms)) < SAME_SENSE_MIN_SHARED_TERMS]
+    own = chosen_terms | set(chosen.aliases) | {query}
     excluded = unique_terms([t for s in others for t in s.related_terms if t not in own])
     return SelectedSense(query=query, sense=chosen, excluded_terms=excluded, other_senses=others)
 
@@ -396,12 +409,17 @@ def _print_all_targets() -> None:
     """targets.yaml의 모든 대상을 처리해 선택 결과를 보여 준다. (python -m qupict.sense --targets)"""
     from qupict.config import load_targets
 
+    # 같은 검색어(예: 눈-날씨 / 눈-신체)는 같은 후보 목록에서 골라야 비교가 되므로 한 번만 만든다.
+    # (LLM 결과는 실행마다 조금씩 달라진다. 실제 파이프라인에서는 DB 캐싱이 이 역할을 한다.)
+    candidates_by_query: dict[str, SenseCandidates] = {}
     for target in load_targets():
         query = target["query"]
         if str(target["sense"]).startswith("TODO"):
             print(f"\n### {query}: 건너뜀 (targets.yaml의 sense가 아직 TODO)")
             continue
-        selected = select_for_target(generate_sense_candidates(query), target)
+        if query not in candidates_by_query:
+            candidates_by_query[query] = generate_sense_candidates(query)
+        selected = select_for_target(candidates_by_query[query], target)
         s = selected.sense
         print(f"\n### {query} → {s.name}{' (직접 입력)' if s.is_custom else ''}")
         print(f"  정의: {s.definition}")
