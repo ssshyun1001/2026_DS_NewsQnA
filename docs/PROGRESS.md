@@ -75,7 +75,7 @@ pip install -r requirements.txt
 
 | 변수 | 어디서 받나 | 비고 |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | **학교 팩트챗** 마이페이지 → API 키 관리 | 키는 발급할 때 한 번만 보임. **각자 본인 계정으로 발급** |
+| `OPENAI_API_KEY` | **팀 공용 키** (서연 계정의 학교 팩트챗에서 발급) | 서연에게 직접 받기. git·공개 채팅방에 올리지 않기 |
 | `OPENAI_BASE_URL` | 그대로 둠 | `https://factchat-cloud.mindlogic.ai/v1/gateway` |
 | `OPENAI_CHAT_MODEL` | 그대로 둠 | `claude-haiku-5-5` |
 | `OPENAI_EMBEDDING_MODEL` | 그대로 둠 | `text-embedding-3-small` (1536차원) |
@@ -115,7 +115,9 @@ python -m qupict.sense --targets
 ### 4-2. LLM·임베딩 — 학교 팩트챗 Gateway
 
 - OpenAI 호환 API라서 코드에서는 주소(`OPENAI_BASE_URL`)만 바꿔서 씁니다.
-- **ChatGPT 구독과는 별개**이고, 학교 계정에 **월 3,000 크레딧**이 있습니다 (매월 1일 갱신). 각자 키를 쓰면 각자 크레딧을 씁니다.
+- **ChatGPT 구독과는 별개**이고, 학교 계정에 **월 3,000 크레딧**이 있습니다 (매월 1일 갱신).
+- **팀은 서연 계정의 키 하나를 같이 씁니다.** 크레딧 3,000을 팀 전체가 나눠 쓰므로, 큰 작업(파이프라인 전체 실행, 실험)은 돌리기 전에 팀에 말해 주세요.
+- 같은 계정 안에서 사람별로 키를 따로 만들어 나눠 쓰면, 크레딧은 그대로 공유하면서 대시보드의 **"키별 사용량"** 으로 누가 얼마나 썼는지 볼 수 있고, 키가 새도 그 키만 지우면 됩니다.
 - OpenAI 공식 API로 바꾸려면 `.env`에서 `OPENAI_BASE_URL`을 비우고 OpenAI 키를 넣으면 됩니다. 코드는 바꿀 필요 없습니다.
 
 **실제로 측정한 크레딧 (1회 호출 기준)**
