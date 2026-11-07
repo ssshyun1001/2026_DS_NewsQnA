@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from langchain_community.vectorstores import FAISS
 
 from qupict.config import validate_settings
-from qupict.sense import choose_sense_interactively, generate_sense_candidates
+from qupict.sense import choose_sense_interactively, load_sense_candidates
 from qupict.collect import build_search_terms, collect_articles
 from qupict.filtering import (
     deduplicate_articles,
@@ -202,7 +202,9 @@ def main() -> None:
         period_days = _read_period_days()
 
     # [0단계] 의미 선택
-    selected = choose_sense_interactively(generate_sense_candidates(topic))
+    candidates, source = load_sense_candidates(topic)
+    print(f"[0/6] 의미 후보 → {source}")
+    selected = choose_sense_interactively(candidates)
     print(f"[0/6] 선택한 의미 → {selected.sense.name}: {selected.sense.definition}")
 
     session = asyncio.run(collect_news(selected, period_days))
