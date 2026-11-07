@@ -77,6 +77,10 @@ class ArticleImage(BaseModel):
     """[1단계] 기사 본문 속 이미지. 이미지 → 텍스트 설명은 4단계에서 만든다."""
     url: str
     caption: str = ""                  # 기사에 원래 달린 사진 설명
+    # 이미지 파일 (collect.download_images로 채움). DB에는 저장하지 않고 4단계에서 LLM에 보낼 때만 메모리에서 쓴다
+    # repr=False: 기사를 출력할 때 수십 KB의 바이트가 화면에 쏟아지지 않게 한다
+    data: Optional[bytes] = Field(default=None, repr=False)
+    content_type: str = ""             # 예: "image/jpeg"
 
 
 class Article(BaseModel):
