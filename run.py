@@ -144,7 +144,8 @@ def print_answer(answer: Answer) -> None:
     if answer.sources:
         print("출처:")
         for i, src in enumerate(answer.sources, start=1):
-            print(f"  [{i}] {src.title} ({src.press or '알 수 없음'}) - {src.link}")
+            kind = f" [{answer.source_kinds[i - 1]}]" if i <= len(answer.source_kinds) else ""
+            print(f"  [{i}] {src.title} ({src.press or '알 수 없음'}){kind} - {src.link}")
     else:
         print("출처: 관련성 있는 기사를 찾지 못해 이번 답변에는 뉴스 출처가 없습니다.")
     print("=" * 60)
