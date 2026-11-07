@@ -17,10 +17,10 @@
 | 1단계 수집 개편 | `qupict/collect.py` | ✅ 의미 기반 검색 + 본문·언론사·이미지 수집 |
 | 2·3단계 필터링 개편 | `qupict/filtering.py` | ✅ 중복 제거 → 규칙 점수 → LLM 관련/무관/보류 + 근거, DB 저장 |
 | 4·5단계 인덱싱·검색·답변 | `indexing.py`, `retrieval.py`, `qa.py` | ✅ 청크·이미지 설명·임베딩 저장, pgvector 검색, 청크 기반 답변 |
+| 실행 명령 | `run.py`, `qupict/pipeline.py` | ✅ `ask`(DB 버전), `collect-all` · `filter-all` · `index-all` · `label` · `status` |
 
-`python run.py 애플 30`으로 **검색어 → 의미 선택 → 수집 → (기존) 필터링 → FAISS → 질문**까지 메모리에서 한 번에 돌아갑니다.
-검증 키워드 입력은 없어졌고, 의미 선택이 대신합니다. 필터링은 아직 기존 방식입니다.
-**DB는 준비됐습니다.** 각 단계가 `qupict/db.py` 함수로 저장·조회하도록 바꾸는 게 다음 일입니다 (아래 9-4).
+**0~5단계가 모두 DB로 이어졌습니다.** `python run.py 애플 30` 한 줄로 의미 선택 → 수집 → 필터 → 인덱싱 → 질문까지 됩니다 (아래 3-5).
+남은 큰 일은 **모여서 12개 대상 수집 + 정답 라벨링**과 **실험 코드**입니다.
 
 ---
 
@@ -142,6 +142,46 @@ DB 안을 직접 보고 싶으면:
 docker exec -it qupict-postgres psql -U qupict -d qupict
 ```
 → `\dt`(테이블 목록), `\dx`(확장 — `vector`가 보이면 정상), `SELECT count(*) FROM articles;`, `\q`(나가기)
+
+### 3-5. 실행 명령 모음 (`run.py`)
+
+| 명령 | 하는 일 |
+| --- | --- |
+| `python run.py 애플 30` | 검색어 + 기간 → 의미 고르기 → 수집 → 필터 → 인덱싱 → **질문** (DB 버전). `--max 30`으로 수집 건수 제한 |
+| `python run.py ask 애플 30 --memory` | DB 없이 메모리에서 (예전 방식, FAISS) |
+| `python run.py collect-all` | `targets.yaml` 대상 전부 수집 (0·1단계) |
+| `python run.py filter-all` | 전부 필터링 (2·3단계). `--redo`: 판정을 지우고 처음부터 (정답 라벨은 유지) |
+| `python run.py label` | **사람이 정답 라벨 붙이기** (1 관련 / 2 무관 / 3 보류 / s 건너뛰기 / b 이전 / q 끝) |
+| `python run.py index-all` | 전부 인덱싱 (4단계). `--no-images`: 이미지 설명 없이 (LLM 비용 0) |
+| `python run.py status` | topic별 현황: 기사·중복·판정·라벨·청크 수 |
+| `python run.py init-db` | DB 테이블 만들기 |
+
+- 일괄 명령은 모두 `--target 강남`처럼 **검색어 하나만** 할 수 있습니다.
+- 모든 명령은 **아직 안 한 것만** 처리합니다 → 중간에 끊겨도 다시 실행하면 이어서 하고, 비용이 다시 들지 않습니다.
+- `ask`에서 고른 의미가 이미 DB에 topic으로 있으면 **저장된 기준(사람이 고친 정의·별칭 포함)** 을 그대로 씁니다.
+- 답변의 출처에는 **답변이 실제로 인용한 기사만** 보여 줍니다 (`Answer.cited`, 실험 C의 출처 정확도용).
+- `label`은 시스템 판정을 보여 주지 않습니다 (정답이 시스템 판정에 끌려가지 않게). 5건마다 모아서 저장하고, 끝낼 때(q)도 저장합니다.
+
+### 3-6. 모이는 날 순서
+
+```bash
+python run.py collect-all
+```
+```bash
+python run.py filter-all
+```
+```bash
+python run.py label
+```
+```bash
+python run.py status
+```
+
+1. **collect-all**: 12개 항목 × 최대 100건. 네이버 검색은 무료, 처음 보는 검색어만 의미 후보 LLM 호출 (약 0.3 크레딧씩)
+2. **filter-all**: 새 기사를 LLM으로 판정 (100건당 약 10~15 크레딧 예상)
+3. **label**: 사람이 나눠서 라벨링 — topic마다 번호를 골라서 하므로 **사람마다 다른 topic**을 맡으면 됩니다
+4. **status**로 남은 라벨 수 확인
+5. (나중에) **index-all**: 질문 답변·실험 B·C용. 이미지 설명 때문에 크레딧이 가장 많이 드는 단계라 따로 실행
 
 ---
 
@@ -521,4 +561,5 @@ python tests/check_db.py
 1. ~~`filtering.py` 개편~~ ✅, ~~`sense.py` 의미 후보 캐시 연결~~ ✅
 2. **12개 대상 일괄 수집 + 정답 라벨링** (팀이 같이 모여서)
 3. ~~`indexing.py`, `retrieval.py`~~ ✅
-4. **`run.py` 단계별 명령** (`senses`, `collect`, `filter`, `index`, `ask`) — 지금은 `init-db`만 있음
+4. ~~`run.py` DB 버전 + 일괄 명령~~ ✅ (`ask`, `collect-all`, `filter-all`, `index-all`, `label`, `status`)
+5. **실험 코드** — 실험 A(필터링: Precision·Recall·F1), B(검색: Recall@5·MRR, FAISS 비교), C(답변: 근거 일치율·환각·출처 정확도). 라벨이 생기기 전에 뼈대와 계산 코드를 만들어 둘 수 있음

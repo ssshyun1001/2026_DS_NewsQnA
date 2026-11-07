@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+import re
+
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -126,4 +128,16 @@ def generate_answer_from_chunks(question: str, hits: list) -> Answer:
     """[DB 버전] 검색된 청크로 답변을 만든다. 출처에 근거 종류(본문 / 이미지 설명)를 함께 돌려준다."""
     context, sources, kinds = build_chunk_context(hits) if hits else (NO_ARTICLE_CONTEXT, [], [])
     answer_text = _get_chain().invoke({"question": question, "context": context})
-    return Answer(question=question, answer=answer_text, sources=sources, source_kinds=kinds)
+    return Answer(question=question, answer=answer_text, sources=sources, source_kinds=kinds,
+                  cited=cited_numbers(answer_text, len(sources)))
+
+
+_CITE_RE = re.compile(r"기사\s*(\d+(?:\s*[,，]\s*(?:기사\s*)?\d+)*)")
+
+
+def cited_numbers(answer_text: str, n_sources: int) -> list[int]:
+    """답변에서 인용한 기사 번호. "(기사 1, 기사 2)", "(기사 1, 2)", "(기사 3, 이미지)" 모두 찾는다."""
+    found: set[int] = set()
+    for group in _CITE_RE.findall(answer_text):
+        found.update(int(n) for n in re.findall(r"\d+", group))
+    return sorted(n for n in found if 1 <= n <= n_sources)

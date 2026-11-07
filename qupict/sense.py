@@ -317,29 +317,47 @@ def select_sense_by_name(candidates: SenseCandidates, name: str) -> SelectedSens
     return None
 
 
-def select_for_target(candidates: SenseCandidates, target: dict) -> SelectedSense:
+def select_for_target(
+    candidates: SenseCandidates,
+    target: dict,
+    known_custom: Sense | None = None,
+) -> SelectedSense:
     """targets.yaml 항목 하나로 의미를 고른다 (일괄 수집용).
 
     1) target["sense"] 이름으로 후보를 찾는다.
     2) 못 찾으면 "직접 입력"으로 처리한다. 설명은 target["description"], 없으면 sense 이름.
        (예: "베라"는 LLM이 배스킨라빈스를 몰라서 후보가 없으므로 이 경로로 간다)
-    3) target에 definition / aliases / related_terms가 적혀 있으면 LLM 값 대신 그 값을 쓴다.
-       LLM이 지어낸 정보(예: 방송인 강남 → 별칭 "조남식", 정의 "본명 조성민")를
-       사람이 확인한 값으로 바로잡는 용도다. 빈 리스트 []를 적으면 "LLM 값을 쓰지 않는다"는 뜻이다.
+       - 의미 이름은 targets.yaml의 sense 그대로 쓴다 (LLM이 붙인 이름은 실행마다 달라질 수 있어서,
+         같은 대상이 DB에 다른 topic으로 두 번 생기지 않게 한다)
+       - known_custom: 이전 실행에서 만들어 DB에 저장해 둔 직접 입력 의미 → LLM을 다시 부르지 않는다
+    3) target에 definition / aliases / related_terms가 적혀 있으면 LLM 값 대신 그 값을 쓴다 (apply_target_overrides).
     """
     query = candidates.query
     selected = select_sense_by_name(candidates, target["sense"])
     if selected is None:
-        description = target.get("description") or target["sense"]
-        selected = select_custom_sense(candidates, build_custom_sense(query, description))
+        if known_custom is not None:
+            custom = known_custom
+        else:
+            description = target.get("description") or target["sense"]
+            custom = build_custom_sense(query, description)
+        custom = custom.model_copy(update={"name": str(target["sense"]).strip(), "is_custom": True})
+        selected = select_custom_sense(candidates, custom)
+    return apply_target_overrides(selected, target)
 
+
+def apply_target_overrides(selected: SelectedSense, target: dict) -> SelectedSense:
+    """targets.yaml에 사람이 적은 definition / aliases / related_terms로 LLM 값을 바꾼다.
+
+    LLM이 지어낸 정보(예: 방송인 강남 → 별칭 "조남식", 정의 "본명 조성민")를
+    사람이 확인한 값으로 바로잡는 용도다. 빈 리스트 []를 적으면 "LLM 값을 쓰지 않는다"는 뜻이다.
+    """
     overrides: dict = {k: unique_terms(target[k]) for k in ("aliases", "related_terms") if k in target}
     if target.get("definition"):
         overrides["definition"] = str(target["definition"]).strip()
     if not overrides:
         return selected
     fixed = selected.sense.model_copy(update=overrides)
-    return _make_selection(query, fixed, selected.other_senses)
+    return _make_selection(selected.query, fixed, selected.other_senses)
 
 
 # ---------------------------------------------------------------------------

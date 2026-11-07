@@ -504,6 +504,8 @@ python run.py 애플 30
 
 실행하면 검색어의 의미 후보(예: 기업 Apple / 과일 사과)가 나오고, 번호로 하나를 고르면 수집이 시작됩니다.
 
+일괄 처리·라벨링 명령(`collect-all`, `filter-all`, `label`, `index-all`, `status`)은 [docs/PROGRESS.md](docs/PROGRESS.md)의 3-5를 보세요.
+
 프로그램 시작 시 필수 API 키가 누락됐는지 검사합니다. 누락된 값이 있으면 실행을 중단하고 필요한 환경변수를 안내합니다.
 
 네이버 뉴스 API는 Naver Cloud Platform의 API Gateway 인증 방식을 사용합니다. 기존 네이버 개발자센터 API와 요청 주소 및 인증 헤더가 다르므로 주의해야 합니다.
