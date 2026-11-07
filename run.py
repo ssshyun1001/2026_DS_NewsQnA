@@ -4,7 +4,7 @@ QuPicT 실행 파일 — 검색어 하나로 수집부터 질문 답변까지 (�
 흐름:
   [0단계] 검색어 입력 → LLM이 의미 후보 제시 → 사용자가 하나 선택      (qupict/sense.py)
   [1단계] 고른 의미의 연관어·별칭으로 네이버 뉴스 검색 → 본문·이미지 수집  (qupict/collect.py)
-  [2·3단계] 임베딩 → 중복 제거 → 관련성 필터                              (qupict/filtering.py, 아직 기존 방식)
+  [2·3단계] 중복 제거 → 1차 규칙 필터 → 2차 LLM 검증(관련/무관/보류)      (qupict/filtering.py)
   [5단계] FAISS 검색 → 근거 기반 답변                                      (qupict/retrieval.py, qupict/qa.py)
 
   기존 "검증 키워드" 입력은 없어졌다. 의미 선택이 그 역할을 대신한다.
@@ -26,19 +26,14 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from langchain_community.vectorstores import FAISS
 
 from qupict.config import validate_settings
 from qupict.sense import choose_sense_interactively, load_sense_candidates
 from qupict.collect import build_search_terms, collect_articles
-from qupict.filtering import (
-    deduplicate_articles,
-    embed_articles,
-    filter_by_relevance,
-    generate_exclusion_terms,
-)
+from qupict.filtering import filter_articles
 from qupict.retrieval import build_in_memory_store, retrieve_relevant_articles
 from qupict.qa import generate_answer
 from qupict.schemas import Answer, Article, SelectedSense
@@ -100,54 +95,39 @@ class NewsSession:
     articles: list[Article]
     store: FAISS
     selected: SelectedSense | None = None
-    exclusion_terms: list[str] = field(default_factory=list)
+
+
+# 질문 답변에 쓸 판정. '보류'도 넣는다: LLM이 확신하지 못한 기사를 버리면 놓치는 정보(Recall)가 생기기 때문
+ANSWER_STATUSES = ("관련", "보류")
 
 
 async def collect_news(selected: SelectedSense, period_days: int) -> NewsSession | None:
-    """[1~5단계] 고른 의미로 뉴스를 수집·정제하고 인메모리 벡터스토어를 만든다."""
+    """[1~5단계] 고른 의미로 뉴스를 수집·필터링하고 인메모리 벡터스토어를 만든다."""
     topic = selected.query
-    print(f"[1/6] 검색어 → {build_search_terms(selected)} (최근 {period_days}일)")
-
-    # 관련성 필터는 아직 기존 방식이다. 고른 의미 이름을 넘겨서 LLM이 '다른 의미'를 제외어로 만들게 한다.
-    # (기존에는 사용자가 입력한 검증 키워드가 이 역할을 했다. 필터링 개편 때 SelectedSense를 직접 쓰도록 바꾼다)
-    exclusion_terms = await generate_exclusion_terms(topic, [selected.sense.name])
-    print(f"[2/6] 제외 키워드 → {exclusion_terms or '없음'}")
+    print(f"[1/4] 검색어 → {build_search_terms(selected)} (최근 {period_days}일)")
+    print(f"      배제어 → {selected.excluded_terms or '없음'}")
 
     metas, articles = await collect_articles(selected, period_days)
     with_images = sum(1 for a in articles if a.images)
-    print(f"[3/6] 뉴스 수집 완료 → 검색 {len(metas)}건, 본문 확보 {len(articles)}건 (이미지 있는 기사 {with_images}건)")
+    print(f"[2/4] 뉴스 수집 완료 → 검색 {len(metas)}건, 본문 확보 {len(articles)}건 (이미지 있는 기사 {with_images}건)")
     if not articles:
         print("기사 본문을 가져오지 못했습니다. 다른 검색어나 기간으로 다시 시도해주세요.")
         return None
 
-    # 임베딩을 먼저 1회 계산해서 중복 제거와 relevance filter가 모두 재사용한다.
-    articles = await embed_articles(articles)
+    # 중복 제거 → 1차 규칙 필터 → 2차 LLM 검증 (중복을 먼저 빼야 LLM이 같은 내용을 여러 번 검사하지 않는다)
+    outcome = await filter_articles(articles, selected)
+    print(f"[3/4] 필터링 완료 → {outcome.summary()}")
 
-    # 중복 제거를 먼저 수행: 같은 사안을 다룬 유사 기사들을 대표 기사 1건으로 합쳐서,
-    # 다음 단계인 관련성 필터(특히 LLM 경계 판정)가 같은 내용을 반복 검사하지 않게 한다.
-    deduped = deduplicate_articles(articles)
-    print(f"[4/6] 중복 제거 완료 → {len(articles)}건 → {len(deduped)}건")
-
-    filtered = await filter_by_relevance(deduped, topic, exclusion_terms=exclusion_terms)
-    print(f"[5/6] 관련성 필터 완료 → {len(filtered)}건 (제외어: {exclusion_terms or '없음'})")
-
+    keep = outcome.links_with(*ANSWER_STATUSES)
+    filtered = [a for a in articles if a.link in keep]
     if not filtered:
-        print(
-            "관련성 검증을 통과한 기사가 없습니다. 제외 키워드가 너무 광범위했을 수 있어요. "
-            "다른 검색어로 다시 시도해주세요."
-        )
+        print("관련 기사로 판정된 기사가 없습니다. 다른 검색어·의미·기간으로 다시 시도해주세요.")
         return None
 
     store = build_in_memory_store(filtered)
-    print(f"[6/6] 인메모리 벡터스토어 구축 완료 → 총 {len(filtered)}건의 기사에 대해 질문할 수 있습니다.\n")
+    print(f"[4/4] 인메모리 벡터스토어 구축 완료 → 총 {len(filtered)}건(관련·보류)의 기사에 대해 질문할 수 있습니다.\n")
 
-    return NewsSession(
-        topic=topic,
-        articles=filtered,
-        store=store,
-        selected=selected,
-        exclusion_terms=exclusion_terms,
-    )
+    return NewsSession(topic=topic, articles=filtered, store=store, selected=selected)
 
 
 def ask_once(session: NewsSession, question: str) -> Answer:
@@ -203,9 +183,9 @@ def main() -> None:
 
     # [0단계] 의미 선택
     candidates, source = load_sense_candidates(topic)
-    print(f"[0/6] 의미 후보 → {source}")
+    print(f"[0/4] 의미 후보 → {source}")
     selected = choose_sense_interactively(candidates)
-    print(f"[0/6] 선택한 의미 → {selected.sense.name}: {selected.sense.definition}")
+    print(f"[0/4] 선택한 의미 → {selected.sense.name}: {selected.sense.definition}")
 
     session = asyncio.run(collect_news(selected, period_days))
     if session is None:
