@@ -1,0 +1,11 @@
+# 줄바꿈을 모든 컴퓨터에서 LF로 통일한다.
+# (Windows의 core.autocrlf 설정 때문에 내용이 안 바뀐 파일도 git diff에 전부 바뀐 걸로 나오던 문제 방지)
+* text=auto eol=lf
+
+# 바이너리 파일은 건드리지 않는다
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.pdf binary

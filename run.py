@@ -14,6 +14,12 @@ QuPicT 실행 파일
     python run.py index-all   [--no-images]             4단계: 이미지 설명 → 청크 → 임베딩 → DB 저장
     python run.py status                                topic별 진행 현황
 
+실험 (기획안 7단계, 결과는 experiments/results/에 저장)
+    python run.py exp-a   [--target 강남]               실험 A: 필터링 방법 비교 (정답 라벨 필요)
+    python run.py make-qa [--target 강남] [--suggest]   실험 B·C용 질문 세트 만들기 (experiments/qa_set.yaml)
+    python run.py exp-b   [--target 강남] [--faiss]     실험 B: 검색 방식 비교 (Recall@5, MRR)
+    python run.py exp-c   [--target 강남] [--limit 10]  실험 C: LLM 단독 vs 기본 RAG vs QuPicT 답변 채점
+
 기타
     python run.py init-db                               DB 테이블 만들기 (schema.sql)
 
@@ -156,16 +162,8 @@ async def prepare_topic(selected: SelectedSense, period_days: int, max_articles:
 
 
 def run_ask_db(selected: SelectedSense, period_days: int, max_articles: int = 100) -> None:
-    from qupict import db
     from qupict.qa import generate_answer_from_chunks
     from qupict.retrieval import search_topic
-
-    # 같은 검색어·의미의 topic이 이미 DB에 있으면 저장된 기준을 그대로 쓴다.
-    # (targets.yaml에서 사람이 고친 정의·별칭이 LLM 원래 값으로 덮어써지지 않게)
-    record = db.get_topic(selected.query, selected.sense.name)
-    if record is not None:
-        selected = record.selected
-        print(f"[0단계] DB에 저장된 기준을 사용 → 정의: {selected.sense.definition}")
 
     topic_id = asyncio.run(prepare_topic(selected, period_days, max_articles))
 
@@ -191,14 +189,14 @@ class NewsSession:
     store: object  # FAISS
 
 
-async def collect_news(selected: SelectedSense, period_days: int) -> NewsSession | None:
+async def collect_news(selected: SelectedSense, period_days: int, max_articles: int = 100) -> NewsSession | None:
     """[메모리 버전] 고른 의미로 뉴스를 수집·필터링하고 FAISS 인메모리 벡터스토어를 만든다."""
     from qupict.collect import build_search_terms, collect_articles
     from qupict.filtering import filter_articles
     from qupict.retrieval import build_in_memory_store
 
     print(f"[1/4] 검색어 → {build_search_terms(selected)} (최근 {period_days}일)")
-    metas, articles = await collect_articles(selected, period_days)
+    metas, articles = await collect_articles(selected, period_days, max_articles)
     print(f"[2/4] 뉴스 수집 완료 → 검색 {len(metas)}건, 본문 확보 {len(articles)}건")
     if not articles:
         print("기사 본문을 가져오지 못했습니다. 다른 검색어나 기간으로 다시 시도해주세요.")
@@ -215,11 +213,11 @@ async def collect_news(selected: SelectedSense, period_days: int) -> NewsSession
     return NewsSession(topic=selected.query, articles=filtered, store=store)
 
 
-def run_ask_memory(selected: SelectedSense, period_days: int) -> None:
+def run_ask_memory(selected: SelectedSense, period_days: int, max_articles: int = 100) -> None:
     from qupict.qa import generate_answer
     from qupict.retrieval import retrieve_relevant_articles
 
-    session = asyncio.run(collect_news(selected, period_days))
+    session = asyncio.run(collect_news(selected, period_days, max_articles))
     if session is None:
         return
 
@@ -228,6 +226,26 @@ def run_ask_memory(selected: SelectedSense, period_days: int) -> None:
         return generate_answer(question, relevant)
 
     run_qa_loop(session.topic, answer)
+
+
+def _use_stored_criteria(selected: SelectedSense) -> SelectedSense:
+    """같은 검색어·의미의 topic이 이미 DB에 있으면 저장된 기준을 그대로 쓴다 (DB·메모리 버전 모두).
+
+    캐시된 LLM 후보에는 지어낸 정보가 남아 있을 수 있다 (실제: 방송인 강남 → "본명 전형수").
+    그대로 쓰면 그 이름으로 검색하고 판정도 흔들린다. targets.yaml로 사람이 고쳐 둔 기준을 우선한다.
+    """
+    if not settings.database_url:
+        return selected
+    try:
+        from qupict import db
+        record = db.get_topic(selected.query, selected.sense.name)
+    except Exception as e:
+        print(f"  [경고] DB에서 저장된 기준을 읽지 못했습니다 ({type(e).__name__}). 고른 의미 그대로 씁니다.")
+        return selected
+    if record is None:
+        return selected
+    print(f"[0단계] DB에 저장된 기준을 사용 → 정의: {record.selected.sense.definition}")
+    return record.selected
 
 
 def cmd_ask(words: list[str], memory: bool, max_articles: int = 100) -> None:
@@ -239,9 +257,9 @@ def cmd_ask(words: list[str], memory: bool, max_articles: int = 100) -> None:
     if not memory and not settings.database_url:
         print("DATABASE_URL이 없어 DB 없이(메모리 버전으로) 실행합니다.")
         memory = True
-    selected = _choose_sense(topic)
+    selected = _use_stored_criteria(_choose_sense(topic))
     if memory:
-        run_ask_memory(selected, period_days)
+        run_ask_memory(selected, period_days, max_articles)
     else:
         run_ask_db(selected, period_days, max_articles)
 
@@ -379,10 +397,32 @@ def cmd_label(query: str | None) -> None:
 
 
 # ---------------------------------------------------------------------------
+# 실험
+# ---------------------------------------------------------------------------
+
+def cmd_make_qa(query: str | None, suggest: bool) -> None:
+    from experiments.qa_set import QA_PATH, make_qa
+    from qupict import db
+    from qupict.pipeline import topic_status
+
+    topics = [t for t in topic_status() if t.llm_relevant and (query is None or t.query == query)]
+    if not topics:
+        print("'관련' 판정을 받은 기사가 있는 topic이 없습니다. 먼저 collect-all → filter-all을 실행하세요.")
+        return
+    for i, t in enumerate(topics, 1):
+        print(f"  {i}. {t.query} → {t.sense_name}  (관련 기사 {t.llm_relevant}건)")
+    topic = topics[0] if len(topics) == 1 else topics[_choose_number("번호> ", len(topics))]
+    articles = db.get_topic_articles(topic.topic_id, statuses=("관련",))
+    added = make_qa(topic.query, topic.sense_name, articles, suggest=suggest)
+    print(f"\n질문 {added}개를 추가했습니다 → {QA_PATH}")
+
+
+# ---------------------------------------------------------------------------
 # 명령 해석
 # ---------------------------------------------------------------------------
 
-COMMANDS = {"ask", "collect-all", "filter-all", "index-all", "label", "status", "init-db"}
+COMMANDS = {"ask", "collect-all", "filter-all", "index-all", "label", "status", "init-db",
+            "make-qa", "exp-a", "exp-b", "exp-c"}
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -411,6 +451,18 @@ def _parser() -> argparse.ArgumentParser:
     lb.add_argument("--target")
 
     sub.add_parser("status", help="topic별 진행 현황")
+
+    ea = sub.add_parser("exp-a", help="실험 A: 필터링 방법 비교")
+    ea.add_argument("--target")
+    mq = sub.add_parser("make-qa", help="실험 B·C용 질문 세트 만들기")
+    mq.add_argument("--target")
+    mq.add_argument("--suggest", action="store_true", help="LLM이 질문·정답 초안을 써 줌")
+    eb = sub.add_parser("exp-b", help="실험 B: 검색 방식 비교")
+    eb.add_argument("--target")
+    eb.add_argument("--faiss", action="store_true", help="예전 FAISS 검색도 비교")
+    ec = sub.add_parser("exp-c", help="실험 C: 답변 신뢰성 비교")
+    ec.add_argument("--target")
+    ec.add_argument("--limit", type=int, help="질문 수 제한 (비용 조절)")
     sub.add_parser("init-db", help="DB 테이블 만들기")
     return p
 
@@ -435,6 +487,17 @@ def main(argv: list[str] | None = None) -> None:
         cmd_label(args.target)
     elif args.command == "status":
         cmd_status()
+    elif args.command == "exp-a":
+        from experiments.exp_a_filtering import main as exp_a
+        exp_a(args.target)
+    elif args.command == "make-qa":
+        cmd_make_qa(args.target, args.suggest)
+    elif args.command == "exp-b":
+        from experiments.exp_b_retrieval import main as exp_b
+        exp_b(args.target, args.faiss)
+    elif args.command == "exp-c":
+        from experiments.exp_c_answers import main as exp_c
+        exp_c(args.target, args.limit)
     elif args.command == "init-db":
         from qupict.db import init_db
         init_db()

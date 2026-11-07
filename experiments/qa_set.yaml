@@ -1,0 +1,25 @@
+# 실험 B·C 질문 세트 (만들기: python run.py make-qa). 형식은 experiments/qa_set.py 참고
+- id: 강남-001
+  query: 강남
+  sense: 방송인 강남
+  question: 강남이 괌 여행 중에 무슨 일을 했어?
+  answer: 괌 동굴 물에 빠져 허우적대던 관광객을 헤엄쳐 가서 구했다
+  evidence:
+  - https://biz.heraldcorp.com/article/10918594?ref=naver
+  - https://mhnse.com/news/articleView.html?idxno=1639423
+- id: 강남-002
+  query: 강남
+  sense: 방송인 강남
+  question: 강남이 이서진과 밥값 내기에서 얼마를 결제했어?
+  answer: 약 150만 원(1,519싱가포르달러)의 식사비를 혼자 결제했다
+  evidence:
+  - https://www.mk.co.kr/article/12201369
+  - https://www.newsen.com/news_view.php?uid=202611062320372510
+  - http://www.osen.co.kr/article/G1112905665
+- id: 강남-003
+  query: 강남
+  sense: 방송인 강남
+  question: 강남이 부른 드라마 OST 곡 제목이 뭐야?
+  answer: 드라마 '너에게 다이브'의 OST '리멤버 미(Remember Me)'
+  evidence:
+  - http://www.queen.co.kr/news/articleView.html?idxno=464986

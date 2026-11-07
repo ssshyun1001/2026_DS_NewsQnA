@@ -41,8 +41,11 @@ class Settings:
     top_k_articles: int = _get_int("TOP_K_ARTICLES", 10)
     max_crawl_articles: int = _get_int("MAX_CRAWL_ARTICLES", 150)
     crawl_timeout_seconds: int = _get_int("CRAWL_TIMEOUT_SECONDS", 10)
-    # 질문-기사 간 코사인 유사도가 이 값 미만이면 출처로 채택하지 않는다.
-    relevance_similarity_threshold: float = _get_float("RELEVANCE_SIMILARITY_THRESHOLD", 0.20)
+    # 질문-청크(기사) 간 코사인 유사도가 이 값 미만이면 답변 근거로 쓰지 않는다.
+    # 0.5: 팀 결정 — 확실히 관련된 근거만 쓰도록 엄격하게. (예전 0.2)
+    #   실제 값 참고: 방송인 강남 질문에서 관련 청크가 0.48~0.70 → 0.5면 상위 일부만 남는다.
+    #   근거가 하나도 안 남으면 답변은 "관련 뉴스를 찾지 못했습니다"로 끝난다.
+    relevance_similarity_threshold: float = _get_float("RELEVANCE_SIMILARITY_THRESHOLD", 0.50)
 
 
 
