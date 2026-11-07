@@ -83,7 +83,7 @@ python run.py ask 서울여대  # 5단계 (질문하기)
 - **중복은 `duplicate_of` 하나로 표시**: 값이 있으면 중복이고, 그 행의 `status`는 비워 둡니다 (DB 제약으로 강제).
 - **판정과 정답 라벨은 따로**: `status`(시스템 판정, `stage` = rule/llm)와 `label`(사람이 붙인 정답)은 같은 값(관련/무관/보류)을 쓰는 서로 다른 컬럼입니다.
 - **임베딩은 1536차원** (`text-embedding-3-small`). 모델을 바꾸면 `schema.sql`의 `vector(1536)`도 바꿔야 합니다.
-- **DB 위치**: 코드는 `.env`의 `DATABASE_URL`만 봅니다. 개발은 로컬 Docker로 하고, 팀 공유·서비스는 pgvector를 지원하는 관리형 PostgreSQL(예: Supabase, 서울 리전)로 옮길 때 주소만 바꾸면 됩니다.
+- **DB 위치**: 팀 공용 DB는 Supabase(서울 리전) 하나를 같이 씁니다. 로컬 Docker는 혼자 실험할 때만. 코드는 `.env`의 `DATABASE_URL`만 보므로 주소만 바꾸면 전환됩니다 (데이터는 자동으로 안 옮겨짐). 만드는 방법은 `docs/PROGRESS.md` 7-3.
 
 ## DB 담당에게: 0단계에서 저장할 값
 

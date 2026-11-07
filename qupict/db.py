@@ -44,12 +44,18 @@ STATUSES = ("관련", "무관", "보류")
 
 # ---------------------------------------------------------------- 연결
 
+def _open(**kwargs) -> psycopg.Connection:
+    if not settings.database_url:
+        raise EnvironmentError("DATABASE_URL이 설정되지 않았습니다. .env 파일을 확인하세요 (.env.example 참고).")
+    # prepare_threshold=None: 공용 DB의 커넥션 풀러(Supabase pooler 등)는 prepared statement를
+    # 지원하지 않는 경우가 있어서 끈다. 로컬 Docker에서도 문제없다.
+    return psycopg.connect(settings.database_url, prepare_threshold=None, connect_timeout=10, **kwargs)
+
+
 @contextmanager
 def connect() -> Iterator[psycopg.Connection]:
     """DB 연결. with 블록이 정상 종료되면 commit, 예외가 나면 rollback 된다."""
-    if not settings.database_url:
-        raise EnvironmentError("DATABASE_URL이 설정되지 않았습니다. .env 파일을 확인하세요 (.env.example 참고).")
-    with psycopg.connect(settings.database_url, row_factory=dict_row) as conn:
+    with _open(row_factory=dict_row) as conn:
         register_vector(conn)
         yield conn
 
@@ -57,7 +63,7 @@ def connect() -> Iterator[psycopg.Connection]:
 def init_db() -> None:
     """schema.sql을 실행해 확장과 테이블을 만든다. 여러 번 실행해도 안전하다."""
     sql = SCHEMA_PATH.read_text(encoding="utf-8")
-    with psycopg.connect(settings.database_url) as conn:  # vector 확장이 생기기 전이라 register_vector를 하지 않는다
+    with _open() as conn:  # vector 확장이 생기기 전이라 register_vector를 하지 않는다
         conn.execute(sql)
 
 

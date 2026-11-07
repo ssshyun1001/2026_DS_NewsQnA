@@ -85,8 +85,8 @@ pip install -r requirements.txt
 | `OPENAI_CHAT_MODEL` | 그대로 둠 | `claude-haiku-5-5` |
 | `OPENAI_EMBEDDING_MODEL` | 그대로 둠 | `text-embedding-3-small` (1536차원) |
 | `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | 네이버 클라우드 플랫폼 (아래 4-1) | 팀에서 하나를 같이 써도 됨 |
-| `POSTGRES_PASSWORD` | 각자 정함 | 로컬 Docker DB 비밀번호 (아래 3-4) |
-| `DATABASE_URL` | 위 비밀번호로 작성 | `postgresql://qupict:<비밀번호>@localhost:5432/qupict` |
+| `DATABASE_URL` | **DB 담당에게 개인 메시지로 받기** (팀 공용 Supabase, 아래 7-3) | 혼자 실험할 땐 로컬 Docker 주소 `postgresql://qupict:<비밀번호>@localhost:5432/qupict` |
+| `POSTGRES_PASSWORD` | 각자 정함 | 로컬 Docker를 쓸 때만 (아래 3-4) |
 
 ### 3-3. 잘 되는지 확인
 
@@ -101,6 +101,8 @@ python -m qupict.sense --targets
 → `targets.yaml`의 대상들을 한 번에 처리해 결과를 보여 줍니다.
 
 ### 3-4. DB 띄우기 (Docker)
+
+> 팀 공용 DB(7-3)를 쓰면 1~3번은 건너뛰고 `pip install`과 점검(5번)만 하면 됩니다. 로컬 Docker는 혼자 실험할 때 씁니다.
 
 1. [Docker Desktop](https://www.docker.com/products/docker-desktop/) 설치 후 실행
 2. `.env`에 `POSTGRES_PASSWORD`와 `DATABASE_URL`을 채움 (두 곳 비밀번호 같게)
@@ -300,11 +302,48 @@ docker exec -it qupict-postgres psql -U qupict -d qupict
 | 필터 다시 돌리기 | `reset_topic_filter`로 판정만 지우고 다시 실행 (정답 라벨은 유지) | 규칙 수정 → 해당 단계만 재실행 |
 | 임베딩 1536차원 | `text-embedding-3-small`. 모델을 바꾸면 `schema.sql`의 `vector(1536)`도 바꿔야 함 | |
 
-### 7-3. 팀 DB 운영
+### 7-3. 팀 공용 DB (Supabase)
 
-- 코드는 `.env`의 **`DATABASE_URL` 하나만** 봅니다. 주소만 바꾸면 어떤 PostgreSQL이든 같은 코드로 동작합니다.
-- **지금 (개발)**: 각자 로컬 Docker. 테스트하다 데이터를 지워도 남에게 영향이 없습니다.
-- **팀 공유·서비스 단계**: pgvector를 지원하는 관리형 PostgreSQL(추천: Supabase 서울 리전)을 하나 만들어 팀이 같은 `DATABASE_URL`을 씁니다. 한 명이 수집한 기사를 모두가 쓰므로 "수집은 한 번만"이 지켜집니다. → 시점과 계정은 팀에서 정하기 (아래 8)
+프로젝트를 다 같이 하므로 **DB는 팀 공용 하나**를 씁니다. 한 명이 수집한 기사·판정·라벨을 모두가 같이 봅니다 ("수집은 한 번만").
+로컬 Docker(3-4)는 혼자 실험할 때만 씁니다. 코드는 `.env`의 `DATABASE_URL`만 보므로 **주소만 바꾸면 공용 ↔ 로컬 전환**이 됩니다.
+
+**왜 Supabase**: pgvector 지원, 서울 리전, 무료(500MB — 9개 대상 × 100건이면 임베딩 포함 약 100~200MB 예상), 웹 화면(Table Editor)에서 표로 데이터를 보고 라벨도 직접 고칠 수 있음.
+
+**만들기 (DB 담당 1명이 한 번)**
+
+1. [supabase.com](https://supabase.com) 가입 → **New project**
+   - Region: **Northeast Asia (Seoul)**
+   - Database Password: 강한 비밀번호 (팀에 전달할 값, 따로 보관)
+2. 프로젝트 화면 위쪽 **Connect** → **Session pooler** 주소 복사 (`...pooler.supabase.com:5432/postgres`)
+   - Direct connection은 IPv6 전용이라 학교·집 네트워크에서 안 될 수 있음 → **Session pooler 사용**
+3. 자기 `.env`의 `DATABASE_URL`을 그 주소로 바꾸고 (`[YOUR-PASSWORD]` 자리에 비밀번호, 끝에 `?sslmode=require`)
+
+```bash
+python run.py init-db
+```
+
+```bash
+python tests/check_db.py
+```
+→ `🎉 전부 통과`면 완료. (점검 스크립트는 `__DB점검__` 표시가 붙은 가짜 데이터만 만들고 지우므로 공용 DB에서 돌려도 안전합니다)
+
+4. 팀원 초대: **Organization Settings → Team → Invite** (웹 화면에서 데이터 보기용)
+
+**팀원 (각자)**
+
+1. DB 담당에게 `DATABASE_URL`을 **개인 메시지로** 받기 (단톡방·이슈·PR·코드에 올리지 않기)
+2. `.env`의 `DATABASE_URL`을 바꾸고 `python tests/check_db.py`로 확인
+
+**주의할 것**
+
+| 항목 | 내용 |
+| --- | --- |
+| 일시 정지 | 무료 플랜은 **7일 동안 접속이 없으면 정지**됩니다. 대시보드에서 Restore하면 데이터 그대로 돌아옵니다 |
+| 같이 쓰는 DB | `reset_topic_filter`, 테이블 삭제(`DROP`), `docker compose down -v` 같은 지우는 작업은 **팀에 먼저 말하기**. 실험은 가능하면 로컬 DB에서 |
+| 테이블 구조 변경 | `schema.sql`은 `IF NOT EXISTS`라서 **이미 있는 테이블의 컬럼 추가·변경은 반영 안 됩니다.** 바꿀 때는 DB 담당이 `ALTER TABLE`을 공용 DB에 직접 실행하고 `schema.sql`도 같이 고칩니다 |
+| 비용·크레딧 | 같은 topic을 두 사람이 동시에 수집하지 않기 (DB는 안전하지만 LLM 크레딧이 두 번 듦) |
+| 로컬 데이터 옮기기 | 주소를 바꿔도 데이터는 안 옮겨집니다. 필요하면 `pg_dump`로 내보내 공용 DB에 넣기 (DB 담당에게 요청) |
+| 서비스 단계 | 사용자가 많아지면 커넥션 풀(`psycopg_pool`)과 마이그레이션 도구(Alembic 등)를 추가해야 합니다. 지금 팀 개발에는 필요 없음 |
 
 ### 7-4. 단계별로 쓰는 함수 (각 단계 담당)
 
@@ -338,7 +377,8 @@ docker exec -it qupict-postgres psql -U qupict -d qupict
 - [ ] **언론사 기사 본문·이미지 수집이 허용되는지** 확인 (기획안의 "확인 필요" 항목)
 - [ ] PR #1 리뷰 후 머지 여부
 - [x] DB 구조 — 기사 한 번만 저장, 기간 = 발행일, topic 재사용 시 새 기사만 추가, 중복은 `duplicate_of`로만 표시
-- [ ] **팀 공용 DB(Supabase 등)로 언제 옮길지, 누구 계정으로 만들지**
+- [x] 팀 공용 DB 사용 — Supabase (7-3)
+- [ ] **Supabase 프로젝트 만들 사람(계정) 정하기**, 만든 뒤 팀원에게 `DATABASE_URL` 전달
 - [ ] 줄바꿈(LF/CRLF) 통일 — 지금 `git diff`에 내용이 안 바뀐 파일도 전부 바뀐 걸로 나옴. `.gitattributes` 추가 필요
 
 ---
