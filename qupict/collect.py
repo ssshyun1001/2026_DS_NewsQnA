@@ -309,7 +309,6 @@ async def _fetch_and_parse(
                 return Article(
                     title=meta.title,
                     link=meta.link,
-                    naver_link=meta.naver_link,
                     press=press or meta.press,
                     pub_date=meta.pub_date,
                     content=content[:_MAX_CONTENT_LENGTH],
@@ -423,7 +422,8 @@ async def collect_to_db(
 
     저장되는 곳 (schema.sql)
       topics          고른 의미 (정의·별칭·연관어·배제어·다른 의미)
-      articles        제목·링크·네이버 링크·언론사·발행일·요약·본문·수집 시각
+      articles        제목·링크·언론사·발행일·요약·본문·수집 시각
+                      (네이버 뉴스 링크는 크롤링할 때만 쓰고 저장하지 않는다. 출처·중복 확인은 link 기준)
       article_images  이미지 주소·캡션·기사 안 순서 (이미지 파일은 저장하지 않음)
       article_topics  기사 ↔ topic 연결 + 이 기사를 찾은 검색어
     """

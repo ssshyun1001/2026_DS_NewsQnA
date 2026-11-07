@@ -396,7 +396,7 @@ python tests/check_db.py
 ## 8. 정해야 할 것
 
 - [x] **이미지 파일 DB 저장 안 함** — 4단계에서 관련 기사의 이미지만 그때 받아서 LLM에 보냄 (Supabase 용량 절약). DB 변경 없음
-- [ ] **`articles.naver_link` 저장** — 칸은 있는데 `db.save_articles`의 INSERT에 빠져 있어 항상 비어 있음. 수집 쪽은 이제 `Article.naver_link`를 채워서 넘김 → `save_articles`에 한 줄 추가 필요 (DB 담당)
+- [x] **네이버 뉴스 링크는 DB에 저장하지 않음** — 크롤링할 때만 쓰고(검색 결과에 있음), 출처·중복 확인은 `link`로 함. `articles.naver_link` 칸은 쓰지 않으므로 지워도 됨 (DB 담당 선택)
 
 - [x] 눈·후드·마스크 — 의미별로 2개씩 넣어 "고르는 의미에 따라 결과가 달라지는지" 확인 (위 ②)
 - [x] 강남 정보 확인 — 이상화의 남편 맞음

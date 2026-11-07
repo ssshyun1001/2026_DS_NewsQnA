@@ -87,7 +87,6 @@ class Article(BaseModel):
     """[1단계 결과] 본문까지 가져온 기사."""
     title: str
     link: str
-    naver_link: Optional[str] = None   # DB articles.naver_link
     press: Optional[str] = None
     pub_date: Optional[datetime] = None
     content: str = ""
