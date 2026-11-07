@@ -11,10 +11,9 @@ from __future__ import annotations
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 
-from config import settings
-from app.schemas import Answer, Article
+from qupict.llm import get_chat_model
+from qupict.schemas import Answer, Article
 
 _SYSTEM_PROMPT = """\
 당신은 신뢰할 수 있는 뉴스 기반 답변 에이전트입니다.
@@ -58,9 +57,7 @@ _prompt = ChatPromptTemplate.from_messages(
 
 
 def _build_chain():
-    llm = ChatOpenAI(
-        model=settings.chat_model, api_key=settings.openai_api_key, temperature=0.1
-    )
+    llm = get_chat_model(temperature=0.1)
     return _prompt | llm | StrOutputParser()
 
 
