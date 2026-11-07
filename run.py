@@ -20,6 +20,7 @@ TODO: DB가 준비되면 단계별 명령(init-db, senses, collect, filter, inde
     python run.py                 # 검색어·기간 모두 입력받기
     python run.py 애플            # 검색어만 인자로, 기간은 입력받기
     python run.py 애플 30         # 검색어 + 기간(일)
+    python run.py init-db         # DB 테이블 만들기 (schema.sql)
 """
 from __future__ import annotations
 
@@ -184,9 +185,14 @@ def run_qa_loop(session: NewsSession) -> None:
 
 
 def main() -> None:
-    validate_settings()
-
     args = sys.argv[1:]
+    if args[:1] == ["init-db"]:              # python run.py init-db
+        from qupict.db import init_db
+        init_db()
+        print("DB 테이블을 만들었습니다 (schema.sql).")
+        return
+
+    validate_settings()
     if args and args[-1].isdigit():          # 예: python run.py 애플 30
         period_days = int(args.pop())
     else:
