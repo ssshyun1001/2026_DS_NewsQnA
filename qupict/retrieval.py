@@ -4,7 +4,7 @@
 디스크에 영구 저장하지 않고, 요청마다 FAISS 인메모리 인덱스를
 새로 구축한 뒤 질문과 가장 관련도 높은 기사만 골라 컨텍스트로 사용한다.
 
-임베딩 클라이언트는 app.embeddings의 공유 인스턴스를 사용한다.
+임베딩 클라이언트는 qupict.llm의 공유 인스턴스를 사용한다.
 
 검색 방식 1 (HyDE, Hypothetical Document Embeddings):
   "제논의 대표는 누구야?" 같은 자연스러운 질문 문장은, 실제 뉴스 기사 본문
@@ -32,11 +32,10 @@ from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.vectorstores import FAISS
-from langchain_openai import ChatOpenAI
 
-from app.embeddings import get_embeddings
-from config import settings
-from app.schemas import Article
+from qupict.llm import get_chat_model, get_embeddings
+from qupict.config import settings
+from qupict.schemas import Article
 
 _HYDE_SYSTEM_PROMPT = """\
 당신은 검색 품질을 높이기 위한 보조 도구입니다.
@@ -64,11 +63,7 @@ _hyde_chain = None
 def _get_hyde_chain():
     global _hyde_chain
     if _hyde_chain is None:
-        llm = ChatOpenAI(
-            model=getattr(settings, "relevance_llm_model", None) or settings.chat_model,
-            api_key=settings.openai_api_key,
-            temperature=0.3,
-        )
+        llm = get_chat_model(temperature=0.3)
         _hyde_chain = _hyde_prompt | llm | StrOutputParser()
     return _hyde_chain
 
@@ -115,11 +110,7 @@ _MULTI_QUERY_VARIANT_COUNT = 2
 def _get_multi_query_chain():
     global _multi_query_chain
     if _multi_query_chain is None:
-        llm = ChatOpenAI(
-            model=getattr(settings, "relevance_llm_model", None) or settings.chat_model,
-            api_key=settings.openai_api_key,
-            temperature=0.5,
-        )
+        llm = get_chat_model(temperature=0.5)
         _multi_query_chain = _multi_query_prompt | llm | StrOutputParser()
     return _multi_query_chain
 
