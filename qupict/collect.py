@@ -23,7 +23,8 @@
 
 ## 결과 섞기 (_interleave)
 
-  검색어마다 최대 100건씩 받은 뒤, 검색어별로 돌아가며 하나씩 뽑아 상한(기본 100건)을 채운다.
+  검색어마다 최신순으로 최대 300건(100건씩 3쪽, 기간 밖으로 나가면 일찍 멈춤)을 받은 뒤,
+  검색어별로 돌아가며 하나씩 뽑아 상한(ask 100건, collect-all 300건)을 채운다.
   첫 검색어 결과만으로 상한이 차 버리는 것을 막아, 여러 검색어의 기사가 고르게 들어오게 한다.
 
 ## 기간
@@ -48,7 +49,8 @@ _NAVER_NEWS_URL = "https://naverapihub.apigw.ntruss.com/search/v1/news"
 _TAG_RE = re.compile(r"<.*?>")
 
 _NAVER_MAX_DISPLAY = 100        # 네이버 뉴스 검색 API가 한 번에 주는 최대 건수
-DEFAULT_MAX_ARTICLES = 100      # 대상 하나당 수집할 기사 수 상한
+DEFAULT_MAX_ARTICLES = 100      # 대상 하나당 수집할 기사 수 상한 (ask 기본값. 모이는 날 collect-all은 300)
+SEARCH_PAGES = 3                # 검색어 하나당 최대 몇 쪽(1쪽 = 100건)까지 받을지. 기간 밖으로 나가면 일찍 멈춘다
 MAX_RELATED_IN_QUERY = 3        # "검색어 + 연관어" 조합에 쓸 연관어 개수 (API 호출 수 = 이 값 + 별칭 수 + 1)
 
 
@@ -93,16 +95,36 @@ def _interleave(results_by_term: list[list[NewsMeta]], limit: int) -> list[NewsM
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
-async def _fetch_one_keyword(session: aiohttp.ClientSession, keyword: str) -> list[dict]:
+async def _fetch_page(session: aiohttp.ClientSession, keyword: str, start: int) -> list[dict]:
     headers = {
         "X-NCP-APIGW-API-KEY-ID": settings.naver_client_id,
         "X-NCP-APIGW-API-KEY": settings.naver_client_secret,
     }
-    params = {"query": keyword, "display": _NAVER_MAX_DISPLAY, "start": 1, "sort": "date"}
+    params = {"query": keyword, "display": _NAVER_MAX_DISPLAY, "start": start, "sort": "date"}
     async with session.get(_NAVER_NEWS_URL, headers=headers, params=params) as resp:
         resp.raise_for_status()
         data = await resp.json(content_type=None)
         return data.get("items", [])
+
+
+async def _fetch_one_keyword(session: aiohttp.ClientSession, keyword: str,
+                             cutoff: datetime | None = None, pages: int = None) -> list[dict]:
+    """검색어 하나를 최신순으로 최대 pages쪽(1쪽 = 100건)까지 받는다.
+
+    네이버는 한 번에 100건만 주므로, 인기 검색어는 첫 쪽이 하루치밖에 안 될 수 있다.
+    다음 쪽을 이어 받되, 결과가 100건보다 적거나 쪽의 마지막 기사가 기간(cutoff) 밖이면 멈춘다.
+    """
+    pages = SEARCH_PAGES if pages is None else pages
+    items: list[dict] = []
+    for page in range(pages):
+        batch = await _fetch_page(session, keyword, 1 + page * _NAVER_MAX_DISPLAY)
+        items.extend(batch)
+        if len(batch) < _NAVER_MAX_DISPLAY:
+            break
+        last = _parse_pubdate(batch[-1].get("pubDate", ""))
+        if cutoff and last and last < cutoff:
+            break
+    return items
 
 
 def _to_metas(items: list[dict], search_term: str, cutoff: datetime) -> list[NewsMeta]:
@@ -137,7 +159,7 @@ async def search_news(
 
     async with aiohttp.ClientSession() as session:
         responses = await asyncio.gather(
-            *(_fetch_one_keyword(session, t) for t in terms), return_exceptions=True
+            *(_fetch_one_keyword(session, t, cutoff) for t in terms), return_exceptions=True
         )
 
     results_by_term = []
