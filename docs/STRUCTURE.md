@@ -27,6 +27,8 @@
 │   ├── retrieval.py      [5단계] SQL 조건 + 벡터 검색, HyDE, Multi-Query
 │   └── qa.py             [5단계] 근거 기반 답변 + 출처
 │
+├── old/                  예전 평가·라벨링 스크립트 (지금 구조에 맞게 고침, 아래 표)
+│
 ├── experiments/          [7단계] 실험 (python run.py exp-a / exp-b / exp-c / make-qa / sim)
 │   ├── exp_a_filtering.py  실험 A: 필터링 방법 비교
 │   ├── exp_b_retrieval.py  실험 B: 검색 방식 비교
@@ -38,14 +40,19 @@
 └── tests/                오프라인 테스트 (python tests/run_offline.py, 크레딧 0)
 ```
 
-예전 `old/` 폴더의 스크립트는 지웠습니다 (git 기록에는 남아 있음). 각각 아래 기능이 대신합니다.
+`old/`는 예전 평가·라벨링 스크립트를 **지금 구조(`qupict/`)에 맞게 고친 것**입니다. DB 없이도 돌아가고(파일·메모리), 프로젝트 맨 위 폴더에서 실행합니다.
 
-| 예전 파일 | 지금 대신하는 것 |
-| --- | --- |
-| `build_labeled_set.py` (y/n 라벨, JSON 파일) | `python run.py label` (관련/무관/보류 라벨, DB에 저장) |
-| `eval_filter.py` (제외어 필터 V0/V1/V2) | `python run.py exp-a` (실험 A: baseline · 1-a · 1-b · 1-c · 2-b · 제안) |
-| `eval_retrieval.py` (키워드 포함 여부로 검색 성공률) | `python run.py exp-b` (실험 B: 정답 근거 기사로 Recall@5 · MRR) |
-| `debug_similarity.py` (기준값 없이 유사도 출력) | `python run.py sim` (`experiments/similarity.py`로 옮김) |
+| 파일 | 하는 일 | 실행 | 같은 일을 하는 run.py 명령 |
+| --- | --- | --- | --- |
+| `build_labeled_set.py` | 수집 → 중복 제거 → 최신 대표 기사 150건에 1 관련 / 2 무관 / 3 보류 라벨 → `old/labeled_set.json` | `python old/build_labeled_set.py 강남 "방송인 강남" 30` | `run.py label` (DB에 저장) |
+| `eval_filter.py` | `labeled_set.json`으로 V0 필터 없음 / V1 규칙 필터 / V2 규칙 + LLM 검증 비교 (Precision·Recall·F1·Accuracy) | `python old/eval_filter.py` | `run.py exp-a` (방법 6가지) |
+| `eval_retrieval.py` | 골든셋(제논·당근·서울여대·강남 39문항)으로 Base / HyDE / Multi-Query / Both 검색 성공률 (키워드 포함 여부) | `python old/eval_retrieval.py 강남` | `run.py exp-b` (Recall@5·MRR) |
+| `debug_similarity.py` | 기준값 없이 질문과의 유사도 출력 (HyDE 없음 / HyDE) | `python old/debug_similarity.py 강남 "방송인 강남" "질문"` | `run.py sim` (방식 4가지, 질문 세트 전체) |
+| `_common.py` | 위 스크립트 공용: 의미 정하기 (DB topic → targets.yaml → 후보에서 고르기) | — | — |
+
+- 예전 "검증 키워드" 자리는 **고른 의미 이름**(예: `방송인 강남`)이 대신합니다.
+- `eval_retrieval.py`·`debug_similarity.py`는 DB에 topic이 있으면 실제 서비스 검색(pgvector)을 쓰고, 없거나 `--memory`를 주면 예전처럼 그 자리에서 수집합니다.
+- `eval_retrieval.py`의 골든 질문은 2026년 7월 기사로 만든 것이라, 최근 30일 기사만 있는 DB에서는 성공률이 낮게 나옵니다 (`[DEBUG]` 줄로 확인).
 
 로컬 개발용 PostgreSQL은 `docker compose up -d`로 띄웁니다 (`docker-compose.yml`, `.env`에 `POSTGRES_PASSWORD` 필요).
 

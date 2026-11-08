@@ -441,7 +441,8 @@ Embedding model: text-embedding-3-small
 │   ├── indexing.py     [4단계] 청크·임베딩 (작성 예정)
 │   ├── retrieval.py    [5단계] FAISS 구축, HyDE, Multi-Query
 │   └── qa.py           [5단계] 근거 기반 답변 생성
-└── experiments/        [7단계] 실험 A·B·C, 질문 세트, 유사도 확인 (예전 old/ 스크립트를 대신함)
+├── experiments/        [7단계] 실험 A·B·C, 질문 세트, 유사도 확인
+└── old/                예전 평가·라벨링 스크립트 (지금 구조에 맞게 고침)
 ```
 
 ---
