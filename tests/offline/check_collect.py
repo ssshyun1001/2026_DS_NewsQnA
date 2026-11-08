@@ -24,6 +24,26 @@ assert [x.link for x in collect._interleave([A, B], 3)] == ["a1", "b1", "a2"]
 assert collect._interleave([], 5) == []
 print("2 ok: 섞기")
 
+# 2-1) 쪽 넘기기: 100건씩 최대 3쪽, 100건 미만이거나 쪽 마지막 기사가 기간 밖이면 멈춤
+import asyncio as _aio
+_kst = timezone(timedelta(hours=9))
+_day = lambda d: (datetime.now(_kst) - timedelta(days=d)).strftime("%a, %d %b %Y %H:%M:%S %z")
+def _pages(*sizes_and_age):
+    calls = []
+    async def fake_page(session, keyword, start):
+        calls.append(start)
+        n, age = sizes_and_age[len(calls) - 1]
+        return [{"pubDate": _day(age)}] * n
+    return fake_page, calls
+cut = datetime.now(timezone.utc) - timedelta(days=30)
+collect._fetch_page, calls = _pages((100, 1), (100, 5), (100, 9))
+assert len(_aio.run(collect._fetch_one_keyword(None, "k", cut))) == 300 and calls == [1, 101, 201]   # 3쪽까지
+collect._fetch_page, calls = _pages((100, 1), (40, 3))
+assert len(_aio.run(collect._fetch_one_keyword(None, "k", cut))) == 140 and calls == [1, 101]        # 결과가 끝남
+collect._fetch_page, calls = _pages((100, 1), (100, 40), (100, 50))
+assert len(_aio.run(collect._fetch_one_keyword(None, "k", cut))) == 200 and calls == [1, 101]        # 기간 밖으로 나감
+print("2-1 ok: 쪽 넘기기")
+
 # 3) API 결과 → NewsMeta: 기간 밖 제외, 네이버 링크 구분, HTML 태그 제거
 now = datetime.now(timezone(timedelta(hours=9)))
 fmt = lambda d: d.strftime("%a, %d %b %Y %H:%M:%S %z")

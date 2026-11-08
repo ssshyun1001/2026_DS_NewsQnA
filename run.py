@@ -8,9 +8,9 @@ QuPicT 실행 파일
     python run.py ask 애플 30 --memory    DB 없이 메모리에서 (예전 방식, FAISS 검색)
 
 모이는 날: targets.yaml 대상 일괄 처리 (--target 강남 처럼 검색어 하나만 할 수도 있음)
-    python run.py collect-all [--days 30] [--max 100]   0·1단계: 의미 선택 → 뉴스 수집 → DB 저장
+    python run.py collect-all [--days 30] [--max 300]   0·1·2단계: 의미 선택 → 뉴스 수집 → 중복 제거 → DB 저장
     python run.py filter-all  [--redo]                  2·3단계: 중복 제거 → 규칙 → LLM 판정 → DB 저장
-    python run.py label       [--target 강남]           중복 제거(LLM 없음) → 사람이 정답 라벨 붙이기 (관련 / 무관 / 보류)
+    python run.py label       [--target 강남] [--limit 150]  최신 대표 기사 150건에 정답 라벨 (관련 / 무관 / 보류)
     python run.py index-all   [--no-images]             4단계: 이미지 설명 → 청크 → 임베딩 → DB 저장
     python run.py status                                topic별 진행 현황
 
@@ -287,10 +287,12 @@ def _for_each_target(query: str | None, title: str, step) -> None:
     print(f"\n완료 (실패 {len(failed)}개{': ' + ', '.join(failed) if failed else ''})")
 
 
-def cmd_collect_all(query: str | None, days: int, max_articles: int) -> None:
-    from qupict.pipeline import collect_target
+def cmd_collect_all(query: str | None, days: int, max_articles: int | None = None) -> None:
+    from qupict.pipeline import COLLECT_MAX_PER_TARGET, LABEL_PER_TARGET, collect_target
     validate_settings()
-    _for_each_target(query, f"수집 (최근 {days}일, 대상당 최대 {max_articles}건)",
+    max_articles = COLLECT_MAX_PER_TARGET if max_articles is None else max_articles
+    _for_each_target(query, f"수집 → 중복 제거 (최근 {days}일, 대상당 최대 {max_articles}건, "
+                            f"라벨 목표: 대표 기사 {LABEL_PER_TARGET}건)",
                      lambda t: collect_target(t, days, max_articles))
 
 
@@ -307,18 +309,20 @@ def cmd_index_all(query: str | None, describe_images: bool) -> None:
 
 
 def cmd_status() -> None:
-    from qupict.pipeline import topic_status
+    from qupict.pipeline import LABEL_PER_TARGET, topic_status
 
     rows = topic_status()
     if not rows:
         print("아직 DB에 topic이 없습니다. collect-all 또는 ask로 수집하세요.")
         return
     print(f"{'id':>3} {'검색어 → 의미':<28} {'기사':>4} {'중복':>4} {'미판정':>5} {'규칙무관':>7} "
-          f"{'관련':>4} {'무관':>4} {'보류':>4} {'라벨':>9} {'청크':>4}")
+          f"{'관련':>4} {'무관':>4} {'보류':>4} {'대표':>4} {'라벨':>9} {'청크':>4}")
     for r in rows:
         name = f"{r.query} → {r.sense_name}"[:28]
         print(f"{r.topic_id:>3} {name:<28} {r.articles:>4} {r.duplicates:>4} {r.unjudged:>5} {r.rule_irrelevant:>7} "
-              f"{r.llm_relevant:>4} {r.llm_irrelevant:>4} {r.llm_hold:>4} {f'{r.labeled}/{r.to_label}':>9} {r.chunked:>4}")
+              f"{r.llm_relevant:>4} {r.llm_irrelevant:>4} {r.llm_hold:>4} {r.to_label:>4} "
+              f"{f'{r.labeled}/{LABEL_PER_TARGET}':>9} {r.chunked:>4}")
+    print(f"대표 = 중복이 아닌 기사, 라벨 = 정답 라벨 수 / 대상당 목표 {LABEL_PER_TARGET}건 (최신 대표 기사부터)")
 
 
 # ---------------------------------------------------------------------------
@@ -334,16 +338,19 @@ LABEL_GUIDE = """\
   s 건너뛰기   b 이전 기사로   q 저장하고 끝내기"""
 
 
-def cmd_label(query: str | None) -> None:
+def cmd_label(query: str | None, limit: int | None = None) -> None:
+    """대상마다 중복 제거 후 최신 대표 기사 limit건(기본 150)에 정답 라벨을 붙인다."""
     from qupict import db
-    from qupict.pipeline import articles_to_label, topic_status
+    from qupict.pipeline import LABEL_PER_TARGET, articles_to_label, topic_status
 
-    topics = [t for t in topic_status() if t.to_label and (query is None or t.query == query)]
+    limit = LABEL_PER_TARGET if limit is None else limit
+    topics = [t for t in topic_status()
+              if t.to_label > t.labeled and t.labeled < limit and (query is None or t.query == query)]
     if not topics:
-        print("라벨을 붙일 기사가 없습니다. 먼저 collect-all을 실행하세요 (filter-all은 안 해도 됩니다).")
+        print(f"라벨을 붙일 기사가 없습니다. 모든 대상이 {limit}건을 채웠거나, 아직 collect-all을 안 했습니다.")
         return
     for i, t in enumerate(topics, 1):
-        print(f"  {i}. {t.query} → {t.sense_name}  (라벨 {t.labeled}/{t.to_label})")
+        print(f"  {i}. {t.query} → {t.sense_name}  (라벨 {t.labeled}/{limit}, 대표 기사 {t.to_label}건)")
     topic = topics[0] if len(topics) == 1 else topics[_choose_number("번호> ", len(topics))]
     record = db.get_topic(topic.query, topic.sense_name)
 
@@ -353,10 +360,14 @@ def cmd_label(query: str | None) -> None:
     duplicates = asyncio.run(dedup_topic(topic.topic_id))
     print(f"  비슷한 기사 {len(duplicates)}건을 중복으로 표시했습니다 → 대표 기사만 보여 줍니다."
           if duplicates else "  새로 찾은 중복 기사는 없습니다.")
-    items = articles_to_label(topic.topic_id)
+    remaining = limit - topic.labeled
+    items = articles_to_label(topic.topic_id, limit=remaining)      # 최신 대표 기사부터 남은 개수만
     if not items:
-        print("이 topic은 라벨을 다 붙였습니다.")
+        print("이 topic은 라벨을 붙일 대표 기사가 더 없습니다.")
         return
+    print(f"  목표 {limit}건 중 {topic.labeled}건 완료 → 최신 대표 기사부터 {len(items)}건을 보여 줍니다."
+          + (f" (대표 기사가 모자라 {remaining - len(items)}건 부족: collect-all로 더 수집하세요)"
+             if len(items) < remaining else ""))
 
     sense = record.selected.sense
     print(f"\n[찾는 대상] {topic.query} → {sense.name}: {sense.definition}")
@@ -364,7 +375,7 @@ def cmd_label(query: str | None) -> None:
     print(LABEL_GUIDE)
 
     pending: dict[str, str] = {}
-    done = 0
+    done: set[str] = set()                   # 이번에 라벨을 붙인 기사 (b로 돌아가 고쳐도 한 번만 셈)
 
     def flush():
         nonlocal pending
@@ -396,13 +407,15 @@ def cmd_label(query: str | None) -> None:
                 print("1 / 2 / 3 / s / b / q 중에 입력하세요.")
                 continue
             pending[a.link] = LABEL_KEYS[key]
-            done += 1
+            done.add(a.link)
             i += 1
             if len(pending) >= LABEL_SAVE_EVERY:
                 flush()
     finally:
         flush()
-    print(f"\n이번에 {done}건 라벨을 저장했습니다. (남은 기사: {len(articles_to_label(topic.topic_id))}건)")
+    left = max(0, remaining - len(done))
+    print(f"\n이번에 {len(done)}건 라벨을 저장했습니다. (목표 {limit}건까지 남은 라벨: {left}건"
+          + (", 건너뛴 기사는 다음에 다시 나옵니다)" if left else ", 이 대상은 완료)"))
 
 
 # ---------------------------------------------------------------------------
@@ -465,7 +478,8 @@ def _parser() -> argparse.ArgumentParser:
     c = sub.add_parser("collect-all", help="targets.yaml 대상 수집")
     c.add_argument("--target", help="이 검색어만 (예: 강남)")
     c.add_argument("--days", type=int, default=DEFAULT_PERIOD_DAYS, help="최근 며칠 (기본 30)")
-    c.add_argument("--max", type=int, default=100, dest="max_articles", help="대상당 최대 기사 수 (기본 100)")
+    c.add_argument("--max", type=int, default=None, dest="max_articles",
+                   help="대상당 최대 기사 수 (기본 300: 중복을 빼고 라벨 150건이 남게)")
 
     f = sub.add_parser("filter-all", help="targets.yaml 대상 필터링")
     f.add_argument("--target")
@@ -477,6 +491,7 @@ def _parser() -> argparse.ArgumentParser:
 
     lb = sub.add_parser("label", help="정답 라벨 붙이기")
     lb.add_argument("--target")
+    lb.add_argument("--limit", type=int, help="대상당 라벨 목표 (기본 150, 최신 대표 기사부터)")
 
     sub.add_parser("status", help="topic별 진행 현황")
 
@@ -515,7 +530,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "index-all":
         cmd_index_all(args.target, not args.no_images)
     elif args.command == "label":
-        cmd_label(args.target)
+        cmd_label(args.target, args.limit)
     elif args.command == "status":
         cmd_status()
     elif args.command == "exp-a":

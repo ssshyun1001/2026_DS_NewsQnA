@@ -16,14 +16,16 @@ run.cmd_ask = lambda words, memory, max_articles=100: called.__setitem__("ask", 
 run.cmd_collect_all = lambda q, d, m: called.__setitem__("collect", (q, d, m))
 run.cmd_filter_all = lambda q, redo: called.__setitem__("filter", (q, redo))
 run.cmd_index_all = lambda q, img: called.__setitem__("index", (q, img))
-run.cmd_label = lambda q: called.__setitem__("label", q)
+run.cmd_label = lambda q, limit=None: called.__setitem__("label", (q, limit))
 run.main(["애플", "30"]); assert called["ask"] == (["애플", "30"], False, 100)
 run.main(["ask", "애플", "--memory"]); assert called["ask"] == (["애플"], True, 100)
 run.main(["강남", "30", "--max", "15"]); assert called["ask"] == (["강남", "30"], False, 15)
 run.main(["collect-all", "--target", "강남", "--max", "15"]); assert called["collect"] == ("강남", 30, 15)
 run.main(["filter-all", "--redo"]); assert called["filter"] == (None, True)
 run.main(["index-all", "--no-images"]); assert called["index"] == (None, False)
-run.main(["label", "--target", "눈"]); assert called["label"] == "눈"
+run.main(["label", "--target", "눈"]); assert called["label"] == ("눈", None)        # 기본 150은 cmd_label 안에서
+run.main(["label", "--limit", "20"]); assert called["label"] == (None, 20)
+run.main(["collect-all"]); assert called["collect"] == (None, 30, None)               # 기본 300은 cmd_collect_all 안에서
 print("1 ok: 명령 해석")
 
 # 2) 대상별 실행: 하나가 실패해도 나머지는 계속
@@ -65,7 +67,11 @@ importlib.reload(run)
 from qupict import pipeline as P2
 items = [P2.LabelItem(f"L{i}", f"제목{i}", "언론", datetime(2026, 11, 1, tzinfo=timezone.utc), "강남", "", "본문") for i in range(8)]
 P2.topic_status = lambda: [P2.TopicStatus(3, "강남", "방송인 강남", 8, 0, 0, 0, 0, 0, 0, 0, 8, 0)]
-P2.articles_to_label = lambda tid, include_labeled=False: items
+label_limits = []
+def fake_to_label(tid, include_labeled=False, limit=None):
+    label_limits.append(limit)
+    return items[:limit] if limit is not None else items
+P2.articles_to_label = fake_to_label
 class Rec2: selected = SelectedSense(query="강남", sense=Sense(name="방송인 강남", definition="M.I.B 출신"))
 db.get_topic = lambda q, n: Rec2()
 saves = []
@@ -85,5 +91,41 @@ assert dedup_calls == [3] and any("2건을 중복으로 표시" in o for o in ou
 # L0=관련 → L1=무관 → 잘못된 키 x(그대로) → b로 L1에 돌아가 3(보류)로 고침 → L2 건너뜀(s) → L3 관련, L4 관련, L5 무관(5건 → 저장) → q
 assert saves == [{"L0": "관련", "L1": "보류", "L3": "관련", "L4": "관련", "L5": "무관"}], saves
 assert not any("관련 기사" in o and "시스템" in o for o in out) and any("시스템 판정은 보여 주지 않습니다" in o for o in out)
+assert label_limits == [150] and any("남은 라벨: 145건" in o for o in out)      # 기본 목표 150건, 5건 저장
 print("4 ok: 라벨링 키·되돌리기·모아서 저장", saves)
+
+# 5) 라벨 목표: 이미 붙인 라벨을 빼고 최신 대표 기사부터 남은 개수만, 다 채운 대상은 목록에서 빠짐
+label_limits.clear(); saves.clear(); out.clear()
+P2.topic_status = lambda: [P2.TopicStatus(3, "강남", "방송인 강남", 8, 0, 0, 0, 0, 0, 0, 6, 8, 0)]   # 라벨 6건
+keys = iter(["1", "2", "1", "1"])
+builtins.input = lambda prompt="": next(keys)
+builtins.print = lambda *a, **k: out.append(" ".join(map(str, a)))
+run.cmd_label("강남", limit=10)
+builtins.print = builtins_print
+assert label_limits == [4] and len(saves[0]) == 4                   # 10 - 6 = 4건만 보여 주고 저장
+assert any("이 대상은 완료" in o for o in out)
+P2.topic_status = lambda: [P2.TopicStatus(3, "강남", "방송인 강남", 8, 0, 0, 0, 0, 0, 0, 10, 8, 0)]
+out.clear(); builtins.print = lambda *a, **k: out.append(" ".join(map(str, a)))
+run.cmd_label("강남", limit=10)
+builtins.print = builtins_print
+assert any("라벨을 붙일 기사가 없습니다" in o for o in out)         # 목표를 채운 대상은 나오지 않음
+print("5 ok: 대상당 라벨 목표 (최신 대표 기사부터 남은 개수만)")
+
+# 6) collect-all 한 대상: 수집 → 중복 제거 → 대표 기사 수, 150건 미만이면 알려 줌
+import asyncio
+from qupict.collect import CollectResult
+P3 = importlib.reload(P2)
+P3.resolve_target = lambda t: (3, None)
+async def fake_collect(sel, days, mx): return CollectResult(3, searched=mx, reused=0, crawled=mx, crawl_failed=0, images=0)
+async def fake_dedup2(tid): return {"x": "y", "z": "y"}
+P3.collect_to_db, P3.dedup_topic, P3.count_representatives = fake_collect, fake_dedup2, lambda tid: 120
+r = asyncio.run(P3.collect_target({"query": "강남", "sense": "방송인 강남"}))
+assert r.collected.searched == 300 and r.duplicates == 2 and r.representatives == 120
+assert "대표 기사 120건" in r.summary() and "30건 적음" in r.summary() and "--max를 늘려" in r.summary()
+async def fake_collect_few(sel, days, mx): return CollectResult(3, searched=200, reused=0, crawled=190, crawl_failed=10, images=0)
+P3.collect_to_db = fake_collect_few
+assert "--days를 늘려" in asyncio.run(P3.collect_target({"query": "강남", "sense": "방송인 강남"})).summary()
+P3.count_representatives = lambda tid: 160
+assert "적음" not in asyncio.run(P3.collect_target({"query": "강남", "sense": "방송인 강남"})).summary()
+print("6 ok: collect-all 수집 → 중복 제거 → 대표 기사 수")
 print("ALL PASS")

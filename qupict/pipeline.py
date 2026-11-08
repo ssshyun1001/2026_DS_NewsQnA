@@ -18,12 +18,15 @@ from datetime import datetime
 from qupict import db
 from qupict.collect import CollectResult, collect_to_db
 from qupict.config import load_targets
-from qupict.filtering import FilterOutcome, filter_topic
+from qupict.filtering import FilterOutcome, dedup_topic, filter_topic
 from qupict.indexing import IndexResult, index_topic
 from qupict.schemas import SelectedSense
 from qupict.sense import load_sense_candidates, select_for_target, select_sense_by_name
 
 DEFAULT_PERIOD_DAYS = 30
+LABEL_PER_TARGET = 150          # 대상당 정답 라벨 수: 중복 제거 후 최신 대표 기사 150건
+COLLECT_MAX_PER_TARGET = 300    # 대상당 수집 상한: 본문 실패·중복을 빼고도 대표 기사가 150건 남게
+                                # (강남 30일 검색 후보 약 295건 기준. 모자라면 collect-all이 알려 준다)
 
 
 # ---------------------------------------------------------------------------
@@ -65,10 +68,36 @@ def resolve_target(target: dict) -> tuple[int, SelectedSense]:
 # 단계 실행 (topic 하나)
 # ---------------------------------------------------------------------------
 
+@dataclass
+class CollectTargetResult:
+    """collect-all 한 대상의 결과: 수집 + 중복 제거 후 대표 기사 수 (라벨 150건이 되는지 바로 보이게)"""
+    collected: CollectResult
+    duplicates: int         # 이번에 새로 중복으로 표시한 기사
+    representatives: int    # 중복이 아닌 기사 = 라벨 붙일 후보
+    max_articles: int       # 이번 수집 상한
+
+    @property
+    def topic_id(self) -> int:
+        return self.collected.topic_id
+
+    def summary(self) -> str:
+        text = (f"{self.collected.summary()} → 중복 {self.duplicates}건 표시, "
+                f"대표 기사 {self.representatives}건")
+        if self.representatives < LABEL_PER_TARGET:
+            # 상한까지 찼으면 검색 결과는 더 있다 → 상한을 올린다. 상한보다 적게 찾았으면 기간 안 기사가 부족하다
+            hint = "--max를 늘려" if self.collected.searched >= self.max_articles else "--days를 늘려"
+            text += (f"  ⚠ 라벨 목표 {LABEL_PER_TARGET}건보다 {LABEL_PER_TARGET - self.representatives}건 적음"
+                     f" ({hint} 다시 수집하면 이어서 채움)")
+        return text
+
+
 async def collect_target(target: dict, period_days: int = DEFAULT_PERIOD_DAYS,
-                         max_articles: int = 100) -> CollectResult:
+                         max_articles: int = COLLECT_MAX_PER_TARGET) -> CollectTargetResult:
+    """수집 → 중복 제거 (임베딩만, LLM 판정 없음). 라벨 붙일 대표 기사가 몇 건인지 같이 돌려준다."""
     _, selected = resolve_target(target)
-    return await collect_to_db(selected, period_days, max_articles)
+    collected = await collect_to_db(selected, period_days, max_articles)
+    duplicates = await dedup_topic(collected.topic_id)
+    return CollectTargetResult(collected, len(duplicates), count_representatives(collected.topic_id), max_articles)
 
 
 async def filter_target(target: dict, redo: bool = False) -> FilterOutcome:
@@ -138,16 +167,27 @@ class LabelItem:
     content: str
 
 
-def articles_to_label(topic_id: int, include_labeled: bool = False) -> list[LabelItem]:
-    """정답 라벨을 붙일 기사 (중복으로 표시된 기사는 대표 기사만 보면 되므로 뺀다). 발행일 최신순."""
+def count_representatives(topic_id: int) -> int:
+    """중복이 아닌 기사 수 (= 라벨 붙일 후보)."""
+    with db.connect() as conn:
+        r = conn.execute("SELECT count(*) AS n FROM article_topics WHERE topic_id = %s AND duplicate_of IS NULL",
+                         (topic_id,)).fetchone()
+    return r["n"]
+
+
+def articles_to_label(topic_id: int, include_labeled: bool = False,
+                      limit: int | None = None) -> list[LabelItem]:
+    """정답 라벨을 붙일 기사 (중복으로 표시된 기사는 대표 기사만 보면 되므로 뺀다). 발행일 최신순.
+    limit: 최신 기사부터 이 개수만 (라벨 150건 목표에서 남은 개수)"""
     with db.connect() as conn:
         rows = conn.execute(
             f"""SELECT a.link, a.title, a.press, a.pub_date, at.search_term, a.description, a.content
                 FROM article_topics at JOIN articles a ON a.id = at.article_id
                 WHERE at.topic_id = %s AND at.duplicate_of IS NULL
                       {'' if include_labeled else 'AND at.label IS NULL'}
-                ORDER BY a.pub_date DESC NULLS LAST, a.id""",
-            (topic_id,),
+                ORDER BY a.pub_date DESC NULLS LAST, a.id
+                {'LIMIT %s' if limit is not None else ''}""",
+            (topic_id, limit) if limit is not None else (topic_id,),
         ).fetchall()
     return [LabelItem(r["link"], r["title"], r["press"], r["pub_date"], r["search_term"],
                       r["description"], r["content"]) for r in rows]
