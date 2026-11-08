@@ -20,7 +20,7 @@
 
 pgvector는 청크를 찾으므로 "청크가 처음 나온 순서"대로 기사 순위를 매긴다.
 
-실행: python run.py exp-b [--target 강남] [--faiss]
+실행: python evaluate.py exp-b [--target 강남] [--faiss]
 """
 from __future__ import annotations
 
@@ -111,7 +111,7 @@ def run(query: str | None = None, with_faiss: bool = False) -> tuple[list[dict],
 
 def main(query: str | None = None, with_faiss: bool = False) -> None:
     if not load_qa(query=query):
-        print("질문 세트가 없습니다. 먼저 python run.py make-qa 로 질문을 만드세요.")
+        print("질문 세트가 없습니다. 먼저 python evaluate.py make-qa 로 질문을 만드세요.")
         return
     summary, per_question = run(query, with_faiss)
     print()

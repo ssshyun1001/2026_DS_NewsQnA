@@ -10,7 +10,7 @@
     answer: 괌 동굴에서 물에 빠진 관광객을 헤엄쳐 가서 구했다
     evidence: [https://...]          # 정답이 들어 있는 기사 link (1개 이상)
 
-만들기: python run.py make-qa [--target 강남] [--suggest]
+만들기: python evaluate.py make-qa [--target 강남] [--suggest]
   topic의 '관련' 기사를 하나씩 보여 주고, 그 기사로 답할 수 있는 질문과 정답을 입력한다.
   --suggest를 주면 LLM이 질문·정답 초안을 먼저 써 준다 (사람이 확인하고 Enter로 받거나 고쳐 쓴다).
   최근 사건을 묻는 질문을 넣으면 "LLM 단독 답변의 한계"(실험 C)가 잘 드러난다.
@@ -47,7 +47,7 @@ def load_qa(path: Path | None = None, query: str | None = None) -> list[QAItem]:
 
 def save_qa(items: list[QAItem], path: Path | None = None) -> None:
     path = path or QA_PATH
-    header = "# 실험 B·C 질문 세트 (만들기: python run.py make-qa). 형식은 experiments/qa_set.py 참고\n"
+    header = "# 실험 B·C 질문 세트 (만들기: python evaluate.py make-qa). 형식은 experiments/qa_set.py 참고\n"
     body = yaml.safe_dump([asdict(x) for x in items], allow_unicode=True, sort_keys=False, width=1000)
     path.write_text(header + body, encoding="utf-8")
 

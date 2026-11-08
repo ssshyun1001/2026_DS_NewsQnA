@@ -6,11 +6,11 @@
   그래서 답이 안 나왔을 때 "근거 기사가 아예 없었는지, 있었는데 기준값에 걸렸는지" 알 수 없다.
   이 도구는 기준값을 끄고 청크 유사도를 그대로 보여 준다.
 
-  python run.py sim --target 강남 "강남이 부른 OST 제목이 뭐야?"
+  python evaluate.py sim --target 강남 "강남이 부른 OST 제목이 뭐야?"
       질문 하나: 검색 방식(base · hyde · multi · both)마다 위쪽 청크와 유사도
       (질문 세트에 있는 질문이면 정답 근거 기사에 ★ 표시)
 
-  python run.py sim [--target 강남]
+  python evaluate.py sim [--target 강남]
       질문 세트(qa_set.yaml) 전체: 질문마다 "정답 근거 기사 청크의 최고 유사도"
       → 기준값 후보(0.40 / 0.45 / 0.50)마다 정답 근거가 살아남는 질문 수 (회의에서 기준값 정할 때)
 
@@ -170,7 +170,7 @@ def main_qa(query: str | None = None) -> None:
     from experiments.qa_set import load_qa
 
     if not load_qa(query=query):
-        print("질문 세트가 없습니다. 먼저 python run.py make-qa 로 질문을 만드세요.")
+        print("질문 세트가 없습니다. 먼저 python evaluate.py make-qa 로 질문을 만드세요.")
         return
     summary, per_question = qa_report(query)
     if not per_question:

@@ -13,7 +13,7 @@ debug_similarity.py — threshold 없이 실제 코사인 유사도 값을 확�
   - 메모리 모드  : DB에 topic이 없거나 --memory를 주면, 예전처럼 그 자리에서 수집 → 필터링 →
                   FAISS 기사 유사도를 본다 (기간을 함께 줘야 함, LLM 판정 비용이 든다)
   - 유사도 앞의 O / - 는 지금 기준값을 넘는지 (O = 답변 근거로 쓰임)
-  (검색 방식 4가지 비교·질문 세트 전체 보기는 python run.py sim)
+  (검색 방식 4가지 비교·질문 세트 전체 보기는 python evaluate.py sim)
 
 사용법 (프로젝트 맨 위 폴더에서):
   python old/debug_similarity.py 강남 "방송인 강남" "강남의 아내는 누구야?"
@@ -53,7 +53,7 @@ def debug_db(record, question: str) -> None:
         vector = get_embeddings().embed_documents([search_text])[0]
         hits = search_vectors(record.id, [vector], SHOW_LIMIT)
         if not hits:
-            print("  (청크 없음 — 이 topic을 python run.py index-all 했는지 확인하세요)")
+            print("  (청크 없음 — 이 topic을 python admin.py index-all 했는지 확인하세요)")
         for h in hits:
             image = " [이미지]" if h.source == "image" else ""
             print(f"  {h.similarity:.3f} {_mark(h.similarity)}  {h.article.title}{image}")

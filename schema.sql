@@ -1,5 +1,5 @@
 -- QuPicT DB 테이블 (PostgreSQL + pgvector)
--- 실행: python run.py init-db   (여러 번 실행해도 안전: IF NOT EXISTS)
+-- 실행: python admin.py init-db   (여러 번 실행해도 안전: IF NOT EXISTS)
 --
 -- 설계 원칙
 --   - 기사(articles)는 link 기준으로 한 번만 저장한다. 여러 topic에 걸린 기사는 article_topics로 연결한다.

@@ -17,7 +17,7 @@
 | 1단계 수집 개편 | `qupict/collect.py` | ✅ 의미 기반 검색 + 본문·언론사·이미지 수집 |
 | 2·3단계 필터링 개편 | `qupict/filtering.py` | ✅ 중복 제거 → 규칙 점수 → LLM 관련/무관/보류 + 근거, DB 저장 |
 | 4·5단계 인덱싱·검색·답변 | `indexing.py`, `retrieval.py`, `qa.py` | ✅ 청크·이미지 설명·임베딩 저장, pgvector 검색, 청크 기반 답변 |
-| 실행 명령 | `run.py`, `qupict/pipeline.py` | ✅ `ask`(DB 버전), `collect-all` · `filter-all` · `index-all` · `label` · `status` |
+| 실행 파일 | `run.py` · `admin.py` · `evaluate.py` | ✅ 용도별로 분리: 서비스(질문하기) / 서비스 DB 관리(일괄 수집·판정·인덱싱·현황) / 평가(라벨·실험) |
 | 실험 코드 (7단계) | `experiments/` | ✅ 실험 A·B·C + 질문 세트 도구 (`exp-a` · `make-qa` · `exp-b` · `exp-c`), 강남으로 시험 실행 |
 | 오프라인 테스트 | `tests/offline/` | ✅ 9개 묶음, `python tests/run_offline.py` (크레딧 0, DB 없이도 됨) |
 
@@ -29,9 +29,11 @@
 
 ```text
 2026_DS_NewsQnA/
-├── run.py              실행 파일 (기존 main.py)
+├── run.py              서비스 실행 파일: python run.py 강남 30 (질문하기만)
+├── admin.py            서비스 DB 관리: collect-all · filter-all · index-all · status · init-db
+├── evaluate.py         평가: label · make-qa · exp-a · exp-b · exp-c · sim
 ├── targets.yaml        평가용 수집 대상 9개 + 고를 의미
-├── schema.sql          DB 테이블 6개 (python run.py init-db)
+├── schema.sql          DB 테이블 6개 (python admin.py init-db)
 ├── docker-compose.yml  로컬 PostgreSQL + pgvector (docker compose up -d)
 ├── requirements.txt
 ├── .env.example        API 키 설정 예시 (.env로 복사해서 사용)
@@ -123,7 +125,7 @@ pip install -r requirements.txt
 ```
 
 ```bash
-python run.py init-db
+python admin.py init-db
 ```
 
 5. 점검 (LLM·네이버 API는 안 부름, 크레딧 0)
@@ -147,18 +149,33 @@ docker exec -it qupict-postgres psql -U qupict -d qupict
 ```
 → `\dt`(테이블 목록), `\dx`(확장 — `vector`가 보이면 정상), `SELECT count(*) FROM articles;`, `\q`(나가기)
 
-### 3-5. 실행 명령 모음 (`run.py`)
+### 3-5. 실행 명령 모음 (실행 파일 3개)
+
+실행 파일은 **용도마다 하나**입니다. 예전처럼 `python run.py collect-all`을 치면 어느 파일로 옮겼는지 알려 줍니다.
+
+| 실행 파일 | 누구를 위한 것 | 쓰는 데이터 |
+| --- | --- | --- |
+| `run.py` | **서비스** 사용자 (질문하고 답 받기) | 서비스 DB |
+| `admin.py` | 서비스 DB 관리 (12개 대상 미리 채우기, 현황) | 서비스 DB |
+| `evaluate.py` | 평가 (정답 라벨, 질문 세트, 실험 A·B·C) | 지금은 서비스 DB → **정답 JSON으로 바꿀 예정** |
+
+**서비스 (`run.py`)**
 
 | 명령 | 하는 일 |
 | --- | --- |
 | `python run.py 애플 30` | 검색어 + 기간 → 의미 고르기 → 수집 → 필터 → 인덱싱 → **질문** (DB 버전). `--max 30`으로 수집 건수 제한 |
-| `python run.py ask 애플 30 --memory` | DB 없이 메모리에서 (예전 방식, FAISS) |
-| `python run.py collect-all` | `targets.yaml` 대상 전부 수집 → 중복 제거 (0·1·2단계). 대상당 최대 **300건** (`--max`), 끝나면 대표 기사 수를 알려 줌 |
-| `python run.py filter-all` | 전부 필터링 (2·3단계). `--redo`: 판정을 지우고 처음부터 (정답 라벨은 유지) |
-| `python run.py label` | **대상당 최신 대표 기사 150건에 정답 라벨** (1 관련 / 2 무관 / 3 보류 / s 건너뛰기 / b 이전 / q 끝). `--limit`로 목표 변경. 중복 제거는 임베딩만 써서 LLM 비용 없음, `filter-all` 전에 해도 됨 |
-| `python run.py index-all` | 전부 인덱싱 (4단계). `--no-images`: 이미지 설명 없이 (LLM 비용 0) |
-| `python run.py status` | topic별 현황: 기사·중복·판정·라벨·청크 수 |
-| `python run.py init-db` | DB 테이블 만들기 |
+| `python run.py 애플 30 --memory` | DB 없이 메모리에서 (예전 방식, FAISS) |
+
+**서비스 DB 관리 (`admin.py`) · 평가 (`evaluate.py`)**
+
+| 명령 | 하는 일 |
+| --- | --- |
+| `python admin.py collect-all` | `targets.yaml` 대상 전부 수집 → 중복 제거 (0·1·2단계). 대상당 최대 **300건** (`--max`), 끝나면 대표 기사 수를 알려 줌 |
+| `python admin.py filter-all` | 전부 필터링 (2·3단계). `--redo`: 판정을 지우고 처음부터 (정답 라벨은 유지) |
+| `python evaluate.py label` | **대상당 최신 대표 기사 150건에 정답 라벨** (1 관련 / 2 무관 / 3 보류 / s 건너뛰기 / b 이전 / q 끝). `--limit`로 목표 변경. 중복 제거는 임베딩만 써서 LLM 비용 없음, `filter-all` 전에 해도 됨 |
+| `python admin.py index-all` | 전부 인덱싱 (4단계). `--no-images`: 이미지 설명 없이 (LLM 비용 0) |
+| `python admin.py status` | topic별 현황: 기사·중복·판정·라벨·청크 수 |
+| `python admin.py init-db` | DB 테이블 만들기 |
 
 - 일괄 명령은 모두 `--target 강남`처럼 **검색어 하나만** 할 수 있습니다.
 - 모든 명령은 **아직 안 한 것만** 처리합니다 → 중간에 끊겨도 다시 실행하면 이어서 하고, 비용이 다시 들지 않습니다.
@@ -173,16 +190,16 @@ docker exec -it qupict-postgres psql -U qupict -d qupict
 ### 3-6. 모이는 날 순서
 
 ```bash
-python run.py collect-all
+python admin.py collect-all
 ```
 ```bash
-python run.py label
+python evaluate.py label
 ```
 ```bash
-python run.py filter-all
+python admin.py filter-all
 ```
 ```bash
-python run.py status
+python admin.py status
 ```
 
 1. **collect-all**: 12개 항목 × 최대 300건 → 중복 제거. 네이버 검색은 무료, 처음 보는 검색어만 의미 후보 LLM 호출 (약 0.3 크레딧씩), 중복 제거는 임베딩만 (거의 0). 대상마다 "대표 기사 N건"이 150 이상인지 확인
@@ -497,7 +514,7 @@ print(outcome.summary())   # 중복 0건 | 규칙 무관 0건 | LLM 관련 6 · 
 3. 자기 `.env`의 `DATABASE_URL`을 그 주소로 바꾸고 (`[YOUR-PASSWORD]` 자리에 비밀번호, 끝에 `?sslmode=require`)
 
 ```bash
-python run.py init-db
+python admin.py init-db
 ```
 
 ```bash
@@ -529,7 +546,7 @@ python tests/check_db.py
 
 | 단계 | 함수 | 하는 일 |
 | --- | --- | --- |
-| 공통 | `init_db()` | 테이블 만들기 (`python run.py init-db`) |
+| 공통 | `init_db()` | 테이블 만들기 (`python admin.py init-db`) |
 | 0 | `get_sense_candidates(query)` / `save_sense_candidates(c)` | 의미 후보 캐시 읽기 / 저장 |
 | 0 | `save_topic(selected)` → topic id, `get_topic(query, sense_name)` | topic 만들기·재사용 / 읽기 |
 | 1 | `collect.collect_to_db(selected, period_days)` → topic id | **1단계 DB 버전 (완성)**: topic 저장 → 검색 → 이미 있는 기사는 연결만 → 새 기사만 크롤링·저장 |
@@ -551,11 +568,11 @@ python tests/check_db.py
 
 | 명령 | 실험 | 비교 | 지표 | 필요한 것 |
 | --- | --- | --- | --- | --- |
-| `python run.py exp-a` | A. 필터링 | baseline / 1-a 별칭 / 1-b 검증어 / 1-c 규칙 점수 / 2-b LLM만 / **제안(규칙+LLM)** | Precision·Recall·F1·Accuracy·무관 유입률·LLM 호출 수 | 정답 라벨 |
-| `python run.py make-qa` | B·C 질문 세트 | — | — | 관련 기사 |
-| `python run.py exp-b` | B. 검색 | base / HyDE / Multi-Query / both (`--faiss`: 예전 FAISS도) | Recall@5·MRR·검색 시간 | 질문 세트 + `index-all` |
-| `python run.py exp-c` | C. 답변 | LLM 단독 / 기본 RAG(필터 없음) / **QuPicT** | 정답률·근거 일치율·환각 비율·출처 정확도 (LLM 채점) | 질문 세트 + `index-all` |
-| `python run.py sim` | 유사도 확인 | 기준값 0.40 / 0.45 / 0.50 | 정답 근거 기사의 최고 유사도, 기준값별로 살아남는 질문 수 | 질문 세트 + `index-all` |
+| `python evaluate.py exp-a` | A. 필터링 | baseline / 1-a 별칭 / 1-b 검증어 / 1-c 규칙 점수 / 2-b LLM만 / **제안(규칙+LLM)** | Precision·Recall·F1·Accuracy·무관 유입률·LLM 호출 수 | 정답 라벨 |
+| `python evaluate.py make-qa` | B·C 질문 세트 | — | — | 관련 기사 |
+| `python evaluate.py exp-b` | B. 검색 | base / HyDE / Multi-Query / both (`--faiss`: 예전 FAISS도) | Recall@5·MRR·검색 시간 | 질문 세트 + `index-all` |
+| `python evaluate.py exp-c` | C. 답변 | LLM 단독 / 기본 RAG(필터 없음) / **QuPicT** | 정답률·근거 일치율·환각 비율·출처 정확도 (LLM 채점) | 질문 세트 + `index-all` |
+| `python evaluate.py sim` | 유사도 확인 | 기준값 0.40 / 0.45 / 0.50 | 정답 근거 기사의 최고 유사도, 기준값별로 살아남는 질문 수 | 질문 세트 + `index-all` |
 
 - 모두 `--target 강남`처럼 검색어 하나만 할 수 있고, 결과는 `experiments/results/`에 `실험_날짜시각.json/.csv`로 저장됩니다 (CSV는 엑셀에서 바로 열림).
 - **실험 A**: 정답 '보류'는 지표에서 빼고, 시스템 판정 '보류'는 관련으로 셉니다 (서비스가 보류 기사도 답변에 쓰므로). 1-c는 기준값별 결과도 같이 저장 → 규칙 기준값 정할 때 사용. 2-b는 규칙으로 걸러진 기사만 LLM을 추가로 부르고 캐시에 저장 (다시 돌려도 비용 0).
@@ -576,8 +593,8 @@ python tests/check_db.py
 
 - `RELEVANCE_SIMILARITY_THRESHOLD` (기본 0.5, `.env`로 바꿀 수 있음): 질문과 청크의 유사도가 이 값 미만이면 답변 근거로 쓰지 않습니다.
 - 엄격하게 확실한 근거만 쓰지만, **질문 표현에 따라 관련 청크도 0.48~0.54 근처**라 "기사를 찾지 못했습니다"로 끝나는 질문이 생깁니다 (위 OST 질문).
-- 질문 세트가 쌓이면 **`python run.py sim`**으로 기준값 0.4 / 0.45 / 0.5를 비교해 보세요. 질문마다 정답 근거 기사의 최고 유사도와, 기준값별로 정답 근거가 살아남는 질문 수를 보여 줍니다 (질문 1개당 LLM 2번).
-- 답이 "기사를 찾지 못했습니다"로 나오면 `python run.py sim --target 강남 "그 질문"`으로 근거가 없었는지, 기준값에 걸렸는지 확인할 수 있습니다.
+- 질문 세트가 쌓이면 **`python evaluate.py sim`**으로 기준값 0.4 / 0.45 / 0.5를 비교해 보세요. 질문마다 정답 근거 기사의 최고 유사도와, 기준값별로 정답 근거가 살아남는 질문 수를 보여 줍니다 (질문 1개당 LLM 2번).
+- 답이 "기사를 찾지 못했습니다"로 나오면 `python evaluate.py sim --target 강남 "그 질문"`으로 근거가 없었는지, 기준값에 걸렸는지 확인할 수 있습니다.
 - `old/` 폴더의 예전 평가·라벨링 스크립트 4개는 지금 구조에 맞게 고쳐 두었습니다 (DB 없이도 실행, 사용법은 `docs/STRUCTURE.md`).
 
 ## 11. 정해야 할 것
@@ -606,7 +623,7 @@ python tests/check_db.py
 1. ~~`filtering.py` 개편~~ ✅, ~~`sense.py` 의미 후보 캐시 연결~~ ✅
 2. **12개 대상 일괄 수집 + 정답 라벨링** (팀이 같이 모여서)
 3. ~~`indexing.py`, `retrieval.py`~~ ✅
-4. ~~`run.py` DB 버전 + 일괄 명령~~ ✅ (`ask`, `collect-all`, `filter-all`, `index-all`, `label`, `status`)
+4. ~~`run.py` DB 버전 + 일괄 명령~~ ✅ → 실행 파일 3개로 분리 ✅ (`run.py` 서비스 / `admin.py` DB 관리 / `evaluate.py` 평가)
 5. ~~실험 코드~~ ✅ (A·B·C + 질문 세트 도구), ~~테스트 저장소로 옮기기~~ ✅
 6. **(모여서)** `collect-all` → `label` (중복 제거 포함) → `filter-all` → `make-qa` → `index-all`
 7. **실험 실행** `exp-a` → `exp-b` → `exp-c` → 결과 정리 (README 성능 평가 갱신)

@@ -27,7 +27,7 @@ eval_filter.py — Relevance Filter 효과 측정 스크립트
   2) python old/eval_filter.py 실행
   비용: V2에서 규칙을 통과한 기사 8건당 LLM 1번 (약 0.3 크레딧)
 
-(DB에 붙인 라벨로 평가하려면 python run.py exp-a — 방법 6가지 비교, 결과 파일 저장)
+(DB에 붙인 라벨로 평가하려면 python evaluate.py exp-a — 방법 6가지 비교, 결과 파일 저장)
 """
 
 from __future__ import annotations

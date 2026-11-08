@@ -425,7 +425,9 @@ Embedding model: text-embedding-3-small
 
 ```text
 2026_DS_NewsQnA/
-├── run.py              실행 파일 (기존 main.py)
+├── run.py              서비스 실행 파일 (기존 main.py): 검색어로 질문하기
+├── admin.py            서비스 DB 관리 (미리 수집·판정·인덱싱, 현황)
+├── evaluate.py         평가 (정답 라벨, 실험 A·B·C)
 ├── schema.sql          DB 테이블 (작성 예정)
 ├── targets.yaml        수집 대상 목록
 ├── requirements.txt

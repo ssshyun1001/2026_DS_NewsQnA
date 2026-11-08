@@ -1,5 +1,5 @@
 """
-유사도 확인 도구 (python run.py sim): 기준값 없이 유사도, 정답 근거 순위, 기준값별 통과 수 (가짜 LLM·DB)
+유사도 확인 도구 (python evaluate.py sim): 기준값 없이 유사도, 정답 근거 순위, 기준값별 통과 수 (가짜 LLM·DB)
 
 LLM·네이버·DB를 실제로 부르지 않는다 (크레딧 0). 실행: python tests/run_offline.py
 """

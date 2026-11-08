@@ -1,4 +1,4 @@
-# 실험 B·C 질문 세트 (만들기: python run.py make-qa). 형식은 experiments/qa_set.py 참고
+# 실험 B·C 질문 세트 (만들기: python evaluate.py make-qa). 형식은 experiments/qa_set.py 참고
 - id: 강남-001
   query: 강남
   sense: 방송인 강남
