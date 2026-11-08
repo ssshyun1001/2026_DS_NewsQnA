@@ -171,20 +171,30 @@ def search_topic(
 
     period_days: 질문하는 시점 기준 최근 며칠 안에 발행된 기사만 (기획안: "SQL로 최근 30일 기사만 가져온 뒤 벡터 검색")
     """
-    from qupict import db
-
     threshold = settings.relevance_similarity_threshold if similarity_threshold is None else similarity_threshold
     texts = build_search_texts(question, topic_context(selected), use_hyde, use_multi_query)
     vectors = get_embeddings().embed_documents(texts)
+    hits = search_vectors(topic_id, vectors, k * 3, period_days, statuses)
+    return [h for h in hits if h.similarity >= threshold][:k]
+
+
+def search_vectors(topic_id: int, vectors: list[list[float]], per_vector: int,
+                   period_days: int | None = None,
+                   statuses: tuple[str, ...] = SEARCH_STATUSES) -> list:
+    """검색 문장 임베딩 여러 개로 각각 찾고 합친다 (기준값 없이, 유사도 높은 순).
+
+    같은 청크가 여러 문장에서 나오면 가장 높은 유사도를 쓴다 (max-pooling).
+    search_topic과 유사도 확인 도구(experiments/similarity.py)가 같이 쓴다.
+    """
+    from qupict import db
 
     best: dict[tuple[str, str], object] = {}       # (기사 link, 청크 내용) → 가장 높은 유사도의 hit
     for vec in vectors:
-        for hit in db.search_chunks(topic_id, vec, k=k * 3, period_days=period_days, statuses=statuses):
+        for hit in db.search_chunks(topic_id, vec, k=per_vector, period_days=period_days, statuses=statuses):
             key = (hit.article.link, hit.content)
             if key not in best or hit.similarity > best[key].similarity:
                 best[key] = hit
-    hits = sorted((h for h in best.values() if h.similarity >= threshold), key=lambda h: -h.similarity)
-    return hits[:k]
+    return sorted(best.values(), key=lambda h: -h.similarity)
 
 
 # ---------------------------------------------------------------------------

@@ -46,12 +46,11 @@
 │   ├── indexing.py     [4단계] 이미지 설명 → 청크 → 임베딩 저장
 │   ├── retrieval.py    [5단계] pgvector 검색 (+HyDE·Multi-Query), FAISS는 비교 실험용
 │   └── qa.py           [5단계] 답변 생성
-├── experiments/        [7단계] 실험 A·B·C, 질문 세트(qa_set.yaml), 결과(results/)
+├── experiments/        [7단계] 실험 A·B·C, 질문 세트(qa_set.yaml), 유사도 확인, 결과(results/)
 ├── tests/
 │   ├── check_db.py     DB 점검 (python tests/check_db.py, 실제 DB 사용)
 │   ├── run_offline.py  오프라인 테스트 전체 실행 (크레딧 0)
 │   └── offline/        단계별 오프라인 테스트
-├── old/                예전 평가·라벨링 스크립트 (실행 안 됨, experiments/가 대신함 → 지워도 됨)
 └── docs/
     ├── PROGRESS.md     이 문서
     └── STRUCTURE.md    폴더 설계, 기존→새 파일 대응표, DB 저장 형태
@@ -551,6 +550,7 @@ python tests/check_db.py
 | `python run.py make-qa` | B·C 질문 세트 | — | — | 관련 기사 |
 | `python run.py exp-b` | B. 검색 | base / HyDE / Multi-Query / both (`--faiss`: 예전 FAISS도) | Recall@5·MRR·검색 시간 | 질문 세트 + `index-all` |
 | `python run.py exp-c` | C. 답변 | LLM 단독 / 기본 RAG(필터 없음) / **QuPicT** | 정답률·근거 일치율·환각 비율·출처 정확도 (LLM 채점) | 질문 세트 + `index-all` |
+| `python run.py sim` | 유사도 확인 | 기준값 0.40 / 0.45 / 0.50 | 정답 근거 기사의 최고 유사도, 기준값별로 살아남는 질문 수 | 질문 세트 + `index-all` |
 
 - 모두 `--target 강남`처럼 검색어 하나만 할 수 있고, 결과는 `experiments/results/`에 `실험_날짜시각.json/.csv`로 저장됩니다 (CSV는 엑셀에서 바로 열림).
 - **실험 A**: 정답 '보류'는 지표에서 빼고, 시스템 판정 '보류'는 관련으로 셉니다 (서비스가 보류 기사도 답변에 쓰므로). 1-c는 기준값별 결과도 같이 저장 → 규칙 기준값 정할 때 사용. 2-b는 규칙으로 걸러진 기사만 LLM을 추가로 부르고 캐시에 저장 (다시 돌려도 비용 0).
@@ -571,7 +571,9 @@ python tests/check_db.py
 
 - `RELEVANCE_SIMILARITY_THRESHOLD` (기본 0.5, `.env`로 바꿀 수 있음): 질문과 청크의 유사도가 이 값 미만이면 답변 근거로 쓰지 않습니다.
 - 엄격하게 확실한 근거만 쓰지만, **질문 표현에 따라 관련 청크도 0.48~0.54 근처**라 "기사를 찾지 못했습니다"로 끝나는 질문이 생깁니다 (위 OST 질문).
-- 질문 세트가 쌓이면 **실험 B를 기준값별로 돌려서**(예: 0.4 / 0.45 / 0.5) 확인하는 걸 추천합니다.
+- 질문 세트가 쌓이면 **`python run.py sim`**으로 기준값 0.4 / 0.45 / 0.5를 비교해 보세요. 질문마다 정답 근거 기사의 최고 유사도와, 기준값별로 정답 근거가 살아남는 질문 수를 보여 줍니다 (질문 1개당 LLM 2번).
+- 답이 "기사를 찾지 못했습니다"로 나오면 `python run.py sim --target 강남 "그 질문"`으로 근거가 없었는지, 기준값에 걸렸는지 확인할 수 있습니다.
+- 예전 `old/` 폴더는 지웠습니다. 각 파일을 대신하는 기능은 `docs/STRUCTURE.md`에 정리해 두었습니다.
 
 ## 11. 정해야 할 것
 

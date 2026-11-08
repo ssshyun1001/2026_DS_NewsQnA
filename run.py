@@ -19,6 +19,8 @@ QuPicT 실행 파일
     python run.py make-qa [--target 강남] [--suggest]   실험 B·C용 질문 세트 만들기 (experiments/qa_set.yaml)
     python run.py exp-b   [--target 강남] [--faiss]     실험 B: 검색 방식 비교 (Recall@5, MRR)
     python run.py exp-c   [--target 강남] [--limit 10]  실험 C: LLM 단독 vs 기본 RAG vs QuPicT 답변 채점
+    python run.py sim     [--target 강남] ["질문"]      유사도 확인: 기준값 없이 청크 유사도 보기
+                                                        (질문 없이 → 질문 세트로 기준값 0.40/0.45/0.50 비교)
 
 기타
     python run.py init-db                               DB 테이블 만들기 (schema.sql)
@@ -417,12 +419,31 @@ def cmd_make_qa(query: str | None, suggest: bool) -> None:
     print(f"\n질문 {added}개를 추가했습니다 → {QA_PATH}")
 
 
+def cmd_sim(query: str | None, question: str | None) -> None:
+    """유사도 확인. 질문이 있으면 그 질문 하나, 없으면 질문 세트 전체 (experiments/similarity.py)"""
+    from experiments import similarity
+    from qupict.pipeline import pick_targets, target_label
+
+    if not question:
+        similarity.main_qa(query)
+        return
+    if not query:
+        print('질문 하나를 볼 때는 --target 이 필요합니다. 예: python run.py sim --target 강남 "질문"')
+        return
+    targets = pick_targets(query)
+    if len(targets) > 1:                         # 눈·후드·마스크처럼 의미가 여러 개인 검색어
+        for i, t in enumerate(targets, 1):
+            print(f"  {i}. {target_label(t)}")
+    target = targets[0] if len(targets) == 1 else targets[_choose_number("번호> ", len(targets))]
+    similarity.main_question(target["query"], str(target["sense"]).strip(), question)
+
+
 # ---------------------------------------------------------------------------
 # 명령 해석
 # ---------------------------------------------------------------------------
 
 COMMANDS = {"ask", "collect-all", "filter-all", "index-all", "label", "status", "init-db",
-            "make-qa", "exp-a", "exp-b", "exp-c"}
+            "make-qa", "exp-a", "exp-b", "exp-c", "sim"}
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -463,6 +484,9 @@ def _parser() -> argparse.ArgumentParser:
     ec = sub.add_parser("exp-c", help="실험 C: 답변 신뢰성 비교")
     ec.add_argument("--target")
     ec.add_argument("--limit", type=int, help="질문 수 제한 (비용 조절)")
+    sm = sub.add_parser("sim", help="유사도 확인 (기준값 없이)")
+    sm.add_argument("question", nargs="?", help="볼 질문 (없으면 질문 세트 전체)")
+    sm.add_argument("--target")
     sub.add_parser("init-db", help="DB 테이블 만들기")
     return p
 
@@ -498,6 +522,8 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "exp-c":
         from experiments.exp_c_answers import main as exp_c
         exp_c(args.target, args.limit)
+    elif args.command == "sim":
+        cmd_sim(args.target, args.question)
     elif args.command == "init-db":
         from qupict.db import init_db
         init_db()
