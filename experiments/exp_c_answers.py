@@ -21,7 +21,7 @@
 
 비용: 질문 1개당 LLM 약 10번 (답변 3 + 검색 문장 4 + 채점 3). 질문 50개면 수백 크레딧 → --limit로 나눠 돌릴 수 있다.
 
-실행: python run.py exp-c [--target 강남] [--limit 10]
+실행: python evaluate.py exp-c [--target 강남] [--limit 10]
 """
 from __future__ import annotations
 
@@ -179,7 +179,7 @@ def run(query: str | None = None, limit: int | None = None) -> tuple[list[dict],
 
 def main(query: str | None = None, limit: int | None = None) -> None:
     if not load_qa(query=query):
-        print("질문 세트가 없습니다. 먼저 python run.py make-qa 로 질문을 만드세요.")
+        print("질문 세트가 없습니다. 먼저 python evaluate.py make-qa 로 질문을 만드세요.")
         return
     summary, per_answer = run(query, limit)
     print()

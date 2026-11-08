@@ -8,9 +8,9 @@ build_labeled_set.py — 평가용 골드셋 라벨링 도구 (DB 없이 JSON �
 지금 구조에 맞춰 바뀐 점
   - 검증 키워드(validation_terms) 대신 0단계에서 고른 의미(SelectedSense)를 기준으로 쓴다
   - 라벨링 전에 중복 기사를 묶고(2단계와 같은 기준, 유사도 0.90) 대표 기사만 보여 준다
-  - 대상당 최신 대표 기사 150건까지만 라벨링한다 (run.py label과 같은 기준)
+  - 대상당 최신 대표 기사 150건까지만 라벨링한다 (python evaluate.py label과 같은 기준)
   - 라벨은 1 관련 / 2 무관 / 3 보류 (예전 y/n → is_actually_relevant도 같이 저장해서 예전 형식과 호환)
-  - 공용 DB에는 쓰지 않는다 (DB에 라벨을 붙이려면 python run.py label)
+  - 공용 DB에는 쓰지 않는다 (DB에 라벨을 붙이려면 python evaluate.py label)
 
 사용법 (프로젝트 맨 위 폴더에서):
     python old/build_labeled_set.py 강남 "방송인 강남" 30

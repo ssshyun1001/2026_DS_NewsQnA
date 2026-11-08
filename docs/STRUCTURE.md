@@ -13,7 +13,9 @@
 ├── .gitignore
 ├── schema.sql            DB 테이블 6개
 ├── targets.yaml          수집 대상 9개 (검색어, 고를 의미, 기간)
-├── run.py                실행: python run.py <단계>
+├── run.py                서비스: python run.py 강남 30 (질문하기만)
+├── admin.py              서비스 DB 관리: python admin.py collect-all / filter-all / index-all / status / init-db
+├── evaluate.py           평가: python evaluate.py label / make-qa / exp-a / exp-b / exp-c / sim
 │
 ├── qupict/               파이프라인 코드: 단계 하나 = 파일 하나
 │   ├── config.py         설정값
@@ -29,7 +31,7 @@
 │
 ├── old/                  예전 평가·라벨링 스크립트 (지금 구조에 맞게 고침, 아래 표)
 │
-├── experiments/          [7단계] 실험 (python run.py exp-a / exp-b / exp-c / make-qa / sim)
+├── experiments/          [7단계] 실험 (python evaluate.py exp-a / exp-b / exp-c / make-qa / sim)
 │   ├── exp_a_filtering.py  실험 A: 필터링 방법 비교
 │   ├── exp_b_retrieval.py  실험 B: 검색 방식 비교
 │   ├── exp_c_answers.py    실험 C: 답변 신뢰성 비교
@@ -42,12 +44,12 @@
 
 `old/`는 예전 평가·라벨링 스크립트를 **지금 구조(`qupict/`)에 맞게 고친 것**입니다. DB 없이도 돌아가고(파일·메모리), 프로젝트 맨 위 폴더에서 실행합니다.
 
-| 파일 | 하는 일 | 실행 | 같은 일을 하는 run.py 명령 |
+| 파일 | 하는 일 | 실행 | 같은 일을 하는 명령 |
 | --- | --- | --- | --- |
-| `build_labeled_set.py` | 수집 → 중복 제거 → 최신 대표 기사 150건에 1 관련 / 2 무관 / 3 보류 라벨 → `old/labeled_set.json` | `python old/build_labeled_set.py 강남 "방송인 강남" 30` | `run.py label` (DB에 저장) |
-| `eval_filter.py` | `labeled_set.json`으로 V0 필터 없음 / V1 규칙 필터 / V2 규칙 + LLM 검증 비교 (Precision·Recall·F1·Accuracy) | `python old/eval_filter.py` | `run.py exp-a` (방법 6가지) |
-| `eval_retrieval.py` | 골든셋(제논·당근·서울여대·강남 39문항)으로 Base / HyDE / Multi-Query / Both 검색 성공률 (키워드 포함 여부) | `python old/eval_retrieval.py 강남` | `run.py exp-b` (Recall@5·MRR) |
-| `debug_similarity.py` | 기준값 없이 질문과의 유사도 출력 (HyDE 없음 / HyDE) | `python old/debug_similarity.py 강남 "방송인 강남" "질문"` | `run.py sim` (방식 4가지, 질문 세트 전체) |
+| `build_labeled_set.py` | 수집 → 중복 제거 → 최신 대표 기사 150건에 1 관련 / 2 무관 / 3 보류 라벨 → `old/labeled_set.json` | `python old/build_labeled_set.py 강남 "방송인 강남" 30` | `evaluate.py label` (DB에 저장) |
+| `eval_filter.py` | `labeled_set.json`으로 V0 필터 없음 / V1 규칙 필터 / V2 규칙 + LLM 검증 비교 (Precision·Recall·F1·Accuracy) | `python old/eval_filter.py` | `evaluate.py exp-a` (방법 6가지) |
+| `eval_retrieval.py` | 골든셋(제논·당근·서울여대·강남 39문항)으로 Base / HyDE / Multi-Query / Both 검색 성공률 (키워드 포함 여부) | `python old/eval_retrieval.py 강남` | `evaluate.py exp-b` (Recall@5·MRR) |
+| `debug_similarity.py` | 기준값 없이 질문과의 유사도 출력 (HyDE 없음 / HyDE) | `python old/debug_similarity.py 강남 "방송인 강남" "질문"` | `evaluate.py sim` (방식 4가지, 질문 세트 전체) |
 | `_common.py` | 위 스크립트 공용: 의미 정하기 (DB topic → targets.yaml → 후보에서 고르기) | — | — |
 
 - 예전 "검증 키워드" 자리는 **고른 의미 이름**(예: `방송인 강남`)이 대신합니다.
@@ -58,16 +60,23 @@
 
 ## 실행
 
+실행 파일은 용도마다 하나입니다.
+
 ```bash
-python run.py init-db     # 테이블 만들기
-python run.py senses      # 0단계
-python run.py collect     # 1단계
-python run.py filter      # 2·3단계
-python run.py index       # 4단계
-python run.py ask 서울여대  # 5단계 (질문하기)
+python run.py 서울여대 7          # 서비스: 0~5단계 (의미 선택 → 수집 → 필터 → 인덱싱 → 질문)
+
+python admin.py init-db           # 서비스 DB: 테이블 만들기 (처음 한 번)
+python admin.py collect-all       # 서비스 DB: 12개 대상 미리 수집 + 중복 제거 (0·1·2단계)
+python admin.py filter-all        # 서비스 DB: 미리 판정 (2·3단계)
+python admin.py index-all         # 서비스 DB: 미리 인덱싱 (4단계)
+python admin.py status            # 서비스 DB: 현황
+
+python evaluate.py label          # 평가: 정답 라벨
+python evaluate.py make-qa        # 평가: 실험 B·C 질문 세트
+python evaluate.py exp-a          # 평가: 실험 A (exp-b, exp-c, sim도 같은 방식)
 ```
 
-각 단계는 DB에서 앞 단계 결과를 읽고 결과를 DB에 저장합니다. 수집은 한 번만 하고, 규칙을 고치면 해당 단계만 다시 돌립니다.
+서비스 단계는 DB에서 앞 단계 결과를 읽고 결과를 DB에 저장합니다. 수집은 한 번만 하고, 규칙을 고치면 해당 단계만 다시 돌립니다.
 
 ## 기존 파일 → 새 파일
 

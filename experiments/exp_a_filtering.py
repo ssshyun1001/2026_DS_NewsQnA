@@ -20,7 +20,7 @@
   추가 판정은 experiments/results/llm_only_cache.json에 저장해서 다시 돌려도 비용이 들지 않는다.
 - 1c는 기준값별 결과도 함께 낸다 (규칙 기준값을 정할 때 참고).
 
-실행: python run.py exp-a [--target 강남]
+실행: python evaluate.py exp-a [--target 강남]
 """
 from __future__ import annotations
 
@@ -164,7 +164,7 @@ def main(query: str | None = None) -> None:
     rows = asyncio.run(run(query))
     overall = [r for r in rows if r.get("target") == "전체(micro)"]
     if not overall or overall[0]["n"] == 0:
-        print("정답 라벨이 있는 기사가 없습니다. 먼저 python run.py label 로 라벨을 붙이세요.")
+        print("정답 라벨이 있는 기사가 없습니다. 먼저 python evaluate.py label 로 라벨을 붙이세요.")
         return
     print("\n[전체(micro)]")
     print_table(overall, ["method", "n", "precision", "recall", "f1", "accuracy", "irrelevant_inflow", "llm_calls"])

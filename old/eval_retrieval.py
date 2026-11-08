@@ -42,7 +42,7 @@ eval_retrieval.py — HyDE / Multi-Query Retriever 개선 효과 측정 스크�
   검색된 결과(DB 모드: 청크 내용 + 기사 제목, 메모리 모드: 기사 제목 + 본문) 중 하나라도
   그 키워드를 포함하면 성공(hit)으로 센다.
   완전한 정답 여부(faithfulness)까지는 보지 않는, 순수 검색 성공률(retrieval hit rate) 지표다.
-  (정답 근거 기사 링크로 Recall@5·MRR을 재려면 python run.py exp-b)
+  (정답 근거 기사 링크로 Recall@5·MRR을 재려면 python evaluate.py exp-b)
 
 사용법 (프로젝트 맨 위 폴더에서):
   python old/eval_retrieval.py 제논

@@ -319,7 +319,7 @@ def _labeled_links(topic_id: int) -> set[str]:
 
 
 async def dedup_topic(topic_id: int) -> dict[str, str]:
-    """[DB 버전, 2단계만] 판정 없이 중복 표시만 한다. 라벨 붙이기 전에 쓴다 (python run.py label).
+    """[DB 버전, 2단계만] 판정 없이 중복 표시만 한다. 라벨 붙이기 전에 쓴다 (python evaluate.py label).
 
     - LLM을 부르지 않는다. 기사 임베딩만 계산한다 (이미 DB에 있으면 다시 계산 안 함, 크레딧 거의 0).
     - 아직 판정하지 않은 기사끼리, 그리고 이미 판정한 대표 기사와 비교한다 (filter_topic과 같은 기준).

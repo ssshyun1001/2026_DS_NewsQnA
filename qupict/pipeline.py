@@ -1,7 +1,8 @@
 """
 DB 파이프라인 묶음 — 0~5단계를 topic(검색어 × 고른 의미) 단위로 이어서 실행한다
 
-run.py의 명령들이 이 파일의 함수를 부른다.
+admin.py(서비스 DB 관리)와 evaluate.py(평가)의 명령들이 이 파일의 함수를 부른다.
+(서비스 run.py는 이 파일을 거치지 않고 단계 함수를 직접 부른다)
 
   resolve_target(target)     targets.yaml 항목 → (topic id, 고른 의미)   [0단계, LLM 비용은 처음 한 번]
   collect_target / filter / index                                         [1·2·3·4단계, 각 단계 함수 호출]
