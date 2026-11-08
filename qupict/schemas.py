@@ -111,3 +111,5 @@ class Answer(BaseModel):
     question: str
     answer: str
     sources: list[Article]
+    # sources와 같은 순서로, 근거가 된 부분: "본문" / "이미지 설명" / "본문 + 이미지 설명" (청크 검색일 때만)
+    source_kinds: list[str] = Field(default_factory=list)
