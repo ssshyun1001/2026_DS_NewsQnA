@@ -27,12 +27,25 @@
 │   ├── retrieval.py      [5단계] SQL 조건 + 벡터 검색, HyDE, Multi-Query
 │   └── qa.py             [5단계] 근거 기반 답변 + 출처
 │
-└── old/                  실험 때 다시 쓸 기존 파일 (지금은 안 건드림)
-    ├── eval_filter.py
-    ├── eval_retrieval.py
-    ├── build_labeled_set.py
-    └── debug_similarity.py
+├── experiments/          [7단계] 실험 (python run.py exp-a / exp-b / exp-c / make-qa / sim)
+│   ├── exp_a_filtering.py  실험 A: 필터링 방법 비교
+│   ├── exp_b_retrieval.py  실험 B: 검색 방식 비교
+│   ├── exp_c_answers.py    실험 C: 답변 신뢰성 비교
+│   ├── qa_set.py / .yaml   실험 B·C 질문 세트
+│   ├── similarity.py       유사도 확인 (기준값 없이 청크 유사도 보기)
+│   └── common.py           지표 계산, 결과 저장
+│
+└── tests/                오프라인 테스트 (python tests/run_offline.py, 크레딧 0)
 ```
+
+예전 `old/` 폴더의 스크립트는 지웠습니다 (git 기록에는 남아 있음). 각각 아래 기능이 대신합니다.
+
+| 예전 파일 | 지금 대신하는 것 |
+| --- | --- |
+| `build_labeled_set.py` (y/n 라벨, JSON 파일) | `python run.py label` (관련/무관/보류 라벨, DB에 저장) |
+| `eval_filter.py` (제외어 필터 V0/V1/V2) | `python run.py exp-a` (실험 A: baseline · 1-a · 1-b · 1-c · 2-b · 제안) |
+| `eval_retrieval.py` (키워드 포함 여부로 검색 성공률) | `python run.py exp-b` (실험 B: 정답 근거 기사로 Recall@5 · MRR) |
+| `debug_similarity.py` (기준값 없이 유사도 출력) | `python run.py sim` (`experiments/similarity.py`로 옮김) |
 
 로컬 개발용 PostgreSQL은 `docker compose up -d`로 띄웁니다 (`docker-compose.yml`, `.env`에 `POSTGRES_PASSWORD` 필요).
 
