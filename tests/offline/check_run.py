@@ -70,11 +70,18 @@ class Rec2: selected = SelectedSense(query="강남", sense=Sense(name="방송인
 db.get_topic = lambda q, n: Rec2()
 saves = []
 db.save_labels = lambda tid, labels: saves.append(dict(labels))
+import qupict.filtering as F2
+dedup_calls = []
+async def fake_dedup(tid):
+    dedup_calls.append(tid)
+    return {"D1": "L0", "D2": "L3"}
+F2.dedup_topic = fake_dedup
 keys = iter(["1", "2", "x", "b", "3", "s", "1", "1", "2", "q"])
 builtins.input = lambda prompt="": next(keys)
 out.clear(); builtins.print = lambda *a, **k: out.append(" ".join(map(str, a)))
 run.cmd_label("강남")
 builtins.print = builtins_print
+assert dedup_calls == [3] and any("2건을 중복으로 표시" in o for o in out)   # 라벨 전에 중복 제거부터
 # L0=관련 → L1=무관 → 잘못된 키 x(그대로) → b로 L1에 돌아가 3(보류)로 고침 → L2 건너뜀(s) → L3 관련, L4 관련, L5 무관(5건 → 저장) → q
 assert saves == [{"L0": "관련", "L1": "보류", "L3": "관련", "L4": "관련", "L5": "무관"}], saves
 assert not any("관련 기사" in o and "시스템" in o for o in out) and any("시스템 판정은 보여 주지 않습니다" in o for o in out)

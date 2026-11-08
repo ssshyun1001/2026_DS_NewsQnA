@@ -10,7 +10,7 @@ QuPicT 실행 파일
 모이는 날: targets.yaml 대상 일괄 처리 (--target 강남 처럼 검색어 하나만 할 수도 있음)
     python run.py collect-all [--days 30] [--max 100]   0·1단계: 의미 선택 → 뉴스 수집 → DB 저장
     python run.py filter-all  [--redo]                  2·3단계: 중복 제거 → 규칙 → LLM 판정 → DB 저장
-    python run.py label       [--target 강남]           사람이 정답 라벨 붙이기 (관련 / 무관 / 보류)
+    python run.py label       [--target 강남]           중복 제거(LLM 없음) → 사람이 정답 라벨 붙이기 (관련 / 무관 / 보류)
     python run.py index-all   [--no-images]             4단계: 이미지 설명 → 청크 → 임베딩 → DB 저장
     python run.py status                                topic별 진행 현황
 
@@ -340,12 +340,19 @@ def cmd_label(query: str | None) -> None:
 
     topics = [t for t in topic_status() if t.to_label and (query is None or t.query == query)]
     if not topics:
-        print("라벨을 붙일 기사가 없습니다. 먼저 collect-all (과 filter-all)을 실행하세요.")
+        print("라벨을 붙일 기사가 없습니다. 먼저 collect-all을 실행하세요 (filter-all은 안 해도 됩니다).")
         return
     for i, t in enumerate(topics, 1):
         print(f"  {i}. {t.query} → {t.sense_name}  (라벨 {t.labeled}/{t.to_label})")
     topic = topics[0] if len(topics) == 1 else topics[_choose_number("번호> ", len(topics))]
     record = db.get_topic(topic.query, topic.sense_name)
+
+    # [2단계 중복 제거] 비슷한 기사는 대표 기사 하나만 라벨을 붙이면 된다 (임베딩만, LLM 판정 없음)
+    from qupict.filtering import dedup_topic
+    print("\n중복 기사 찾는 중 (임베딩만 씀, LLM 판정 없음)…")
+    duplicates = asyncio.run(dedup_topic(topic.topic_id))
+    print(f"  비슷한 기사 {len(duplicates)}건을 중복으로 표시했습니다 → 대표 기사만 보여 줍니다."
+          if duplicates else "  새로 찾은 중복 기사는 없습니다.")
     items = articles_to_label(topic.topic_id)
     if not items:
         print("이 topic은 라벨을 다 붙였습니다.")

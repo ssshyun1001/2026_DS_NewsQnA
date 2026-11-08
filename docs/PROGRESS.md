@@ -154,7 +154,7 @@ docker exec -it qupict-postgres psql -U qupict -d qupict
 | `python run.py ask 애플 30 --memory` | DB 없이 메모리에서 (예전 방식, FAISS) |
 | `python run.py collect-all` | `targets.yaml` 대상 전부 수집 (0·1단계) |
 | `python run.py filter-all` | 전부 필터링 (2·3단계). `--redo`: 판정을 지우고 처음부터 (정답 라벨은 유지) |
-| `python run.py label` | **사람이 정답 라벨 붙이기** (1 관련 / 2 무관 / 3 보류 / s 건너뛰기 / b 이전 / q 끝) |
+| `python run.py label` | **중복 제거 → 사람이 정답 라벨 붙이기** (1 관련 / 2 무관 / 3 보류 / s 건너뛰기 / b 이전 / q 끝). 중복 제거는 임베딩만 써서 LLM 비용 없음, `filter-all` 전에 해도 됨 |
 | `python run.py index-all` | 전부 인덱싱 (4단계). `--no-images`: 이미지 설명 없이 (LLM 비용 0) |
 | `python run.py status` | topic별 현황: 기사·중복·판정·라벨·청크 수 |
 | `python run.py init-db` | DB 테이블 만들기 |
@@ -163,6 +163,8 @@ docker exec -it qupict-postgres psql -U qupict -d qupict
 - 모든 명령은 **아직 안 한 것만** 처리합니다 → 중간에 끊겨도 다시 실행하면 이어서 하고, 비용이 다시 들지 않습니다.
 - `ask`에서 고른 의미가 이미 DB에 topic으로 있으면 **저장된 기준(사람이 고친 정의·별칭 포함)** 을 그대로 씁니다.
 - 답변의 출처에는 **답변이 실제로 인용한 기사만** 보여 줍니다 (`Answer.cited`, 실험 C의 출처 정확도용).
+- `label`은 시작할 때 **중복 기사부터 표시**합니다 (2단계와 같은 기준, 유사도 0.90). 비슷한 기사는 대표 기사 하나만 보여 주므로 같은 내용을 여러 번 라벨링하지 않습니다. LLM 판정은 하지 않아서 `filter-all` 없이 바로 라벨링할 수 있습니다.
+- **라벨 붙인 기사는 중복으로 바뀌지 않습니다.** 나중에 기사를 더 수집하거나 `filter-all --redo`를 해도 라벨 붙은 기사는 대표로 남습니다 (중복이 되면 실험 A에서 빠지기 때문).
 - `label`은 시스템 판정을 보여 주지 않습니다 (정답이 시스템 판정에 끌려가지 않게). 5건마다 모아서 저장하고, 끝낼 때(q)도 저장합니다.
 
 ### 3-6. 모이는 날 순서
@@ -171,18 +173,18 @@ docker exec -it qupict-postgres psql -U qupict -d qupict
 python run.py collect-all
 ```
 ```bash
-python run.py filter-all
+python run.py label
 ```
 ```bash
-python run.py label
+python run.py filter-all
 ```
 ```bash
 python run.py status
 ```
 
 1. **collect-all**: 12개 항목 × 최대 100건. 네이버 검색은 무료, 처음 보는 검색어만 의미 후보 LLM 호출 (약 0.3 크레딧씩)
-2. **filter-all**: 새 기사를 LLM으로 판정 (100건당 약 10~15 크레딧 예상)
-3. **label**: 사람이 나눠서 라벨링 — topic마다 번호를 골라서 하므로 **사람마다 다른 topic**을 맡으면 됩니다
+2. **label**: 중복 제거 후 사람이 나눠서 라벨링 — topic마다 번호를 골라서 하므로 **사람마다 다른 topic**을 맡으면 됩니다. 중복 제거는 LLM 비용이 없고, 시스템 판정 없이 라벨을 붙이므로 정답이 시스템에 끌려가지 않습니다
+3. **filter-all**: 중복이 아닌 대표 기사만 규칙·LLM으로 판정 (100건당 약 10~15 크레딧 예상). 라벨과 판정은 따로 저장되므로 label과 순서를 바꿔도 됩니다
 4. **status**로 남은 라벨 수 확인
 5. (나중에) **index-all**: 질문 답변·실험 B·C용. 이미지 설명 때문에 크레딧이 가장 많이 드는 단계라 따로 실행
 6. **make-qa**: 라벨을 붙이며 기사를 읽은 김에 실험 B·C용 질문을 만든다 (`--suggest`면 LLM 초안). 대상마다 5~10개 정도
@@ -603,6 +605,6 @@ python tests/check_db.py
 3. ~~`indexing.py`, `retrieval.py`~~ ✅
 4. ~~`run.py` DB 버전 + 일괄 명령~~ ✅ (`ask`, `collect-all`, `filter-all`, `index-all`, `label`, `status`)
 5. ~~실험 코드~~ ✅ (A·B·C + 질문 세트 도구), ~~테스트 저장소로 옮기기~~ ✅
-6. **(모여서)** `collect-all` → `filter-all` → `label` → `make-qa` → `index-all`
+6. **(모여서)** `collect-all` → `label` (중복 제거 포함) → `filter-all` → `make-qa` → `index-all`
 7. **실험 실행** `exp-a` → `exp-b` → `exp-c` → 결과 정리 (README 성능 평가 갱신)
 8. (나중에) 웹사이트·대시보드
