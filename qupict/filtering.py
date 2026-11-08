@@ -107,6 +107,7 @@ def find_duplicates(
     articles: list[Article],
     existing: list[Article] = (),
     threshold: float | None = None,
+    keep: set[str] | frozenset[str] = frozenset(),
 ) -> dict[str, str]:
     """임베딩 유사도가 threshold 이상인 기사를 중복으로 묶는다. {중복 기사 link: 대표 기사 link}
 
@@ -114,13 +115,18 @@ def find_duplicates(
     - existing: 이미 판정을 마친 대표 기사들 (DB 버전에서 새 기사만 처리할 때).
       이 기사들은 항상 대표로 남는다. 새 기사가 이 중 하나와 비슷하면 새 기사가 중복이 된다.
       (이미 판정한 기사를 중복으로 바꾸면 판정을 다시 해야 하므로)
+    - keep: articles 중 절대 중복으로 바꾸면 안 되는 기사 link (사람이 이미 정답 라벨을 붙인 기사).
+      중복이 되면 실험 A에서 빠져서 라벨이 버려지므로, 이 기사들은 항상 대표로 남긴다.
     """
     threshold = settings.dedup_similarity_threshold if threshold is None else threshold
     reps: list[Article] = [a for a in existing if a.embedding is not None]
     duplicates: dict[str, str] = {}
-    # 긴 기사부터 대표 후보로 본다 → 비슷한 기사 무리에서 가장 긴 기사가 대표가 된다
-    for article in sorted((a for a in articles if a.embedding is not None), key=lambda a: -len(a.content)):
-        if reps:
+    # 라벨 붙은 기사를 먼저 대표로 세우고, 나머지는 긴 기사부터 대표 후보로 본다
+    # → 비슷한 기사 무리에서 (라벨 붙은 기사가 없으면) 가장 긴 기사가 대표가 된다
+    ordered = sorted((a for a in articles if a.embedding is not None),
+                     key=lambda a: (a.link not in keep, -len(a.content)))
+    for article in ordered:
+        if reps and article.link not in keep:
             sims = _unit(np.array([r.embedding for r in reps])) @ _unit(np.array([article.embedding]))[0]
             best = int(np.argmax(sims))
             if sims[best] >= threshold:
@@ -280,10 +286,12 @@ async def filter_articles(
     articles: list[Article],
     selected: SelectedSense,
     existing: list[Article] = (),
+    keep: set[str] | frozenset[str] = frozenset(),
 ) -> FilterOutcome:
-    """[메모리 버전] 중복 제거 → 규칙 → LLM. 기사 목록은 바꾸지 않고 판정 결과만 돌려준다."""
+    """[메모리 버전] 중복 제거 → 규칙 → LLM. 기사 목록은 바꾸지 않고 판정 결과만 돌려준다.
+    keep: 중복으로 바꾸지 않을 기사 link (정답 라벨 붙은 기사, find_duplicates 참고)"""
     await embed_articles(articles)
-    duplicates = find_duplicates(articles, existing)
+    duplicates = find_duplicates(articles, existing, keep=keep)
     candidates = [a for a in articles if a.link not in duplicates]
 
     rule_verdicts, to_llm = [], []
@@ -296,6 +304,41 @@ async def filter_articles(
 
     llm_verdicts, unjudged = await llm_verify(to_llm, selected)
     return FilterOutcome(duplicates, rule_verdicts + llm_verdicts, unjudged)
+
+
+def _labeled_links(topic_id: int) -> set[str]:
+    """사람이 정답 라벨을 붙인 기사 link (중복으로 바꾸지 않게 지킬 기사)."""
+    from qupict import db
+    with db.connect() as conn:
+        rows = conn.execute(
+            """SELECT a.link FROM article_topics at JOIN articles a ON a.id = at.article_id
+               WHERE at.topic_id = %s AND at.label IS NOT NULL""",
+            (topic_id,),
+        ).fetchall()
+    return {r["link"] for r in rows}
+
+
+async def dedup_topic(topic_id: int) -> dict[str, str]:
+    """[DB 버전, 2단계만] 판정 없이 중복 표시만 한다. 라벨 붙이기 전에 쓴다 (python run.py label).
+
+    - LLM을 부르지 않는다. 기사 임베딩만 계산한다 (이미 DB에 있으면 다시 계산 안 함, 크레딧 거의 0).
+    - 아직 판정하지 않은 기사끼리, 그리고 이미 판정한 대표 기사와 비교한다 (filter_topic과 같은 기준).
+    - 대표 기사는 판정하지 않은 채로 남는다 → 나중에 filter-all이 대표 기사만 규칙·LLM으로 판정한다.
+    - 여러 번 실행해도 결과가 같다. 라벨 붙은 기사는 중복으로 바뀌지 않는다.
+    돌려주는 값: 이번에 새로 중복으로 표시한 {중복 기사 link: 대표 기사 link}
+    """
+    from qupict import db
+
+    new = db.get_topic_articles(topic_id, unjudged_only=True)
+    if not new:
+        return {}
+    existing = db.get_topic_articles(topic_id, statuses=STATUSES, include_duplicates=False)
+    missing = [a for a in new + existing if a.embedding is None]
+    await embed_articles(new + existing)
+    duplicates = find_duplicates(new, existing, keep=_labeled_links(topic_id))
+    db.save_article_embeddings(missing)
+    db.save_duplicates(topic_id, duplicates)
+    return duplicates
 
 
 async def filter_topic(
@@ -321,7 +364,7 @@ async def filter_topic(
 
     missing = [a for a in new + existing if a.embedding is None]   # 임베딩을 새로 계산할 기사
     await embed_articles(existing)
-    outcome = await filter_articles(new, selected, existing)
+    outcome = await filter_articles(new, selected, existing, keep=_labeled_links(topic_id))
     db.save_article_embeddings(missing)
     db.save_duplicates(topic_id, outcome.duplicates)
     db.save_judgments(topic_id, [db.Judgment(v.link, v.status, v.stage, v.reason, v.model)

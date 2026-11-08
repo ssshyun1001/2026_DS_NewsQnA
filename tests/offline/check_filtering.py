@@ -38,7 +38,10 @@ arts = [A("short", "t", "x" * 10, near), A("long", "t", "x" * 50, e1), A("other"
 assert F.find_duplicates(arts, threshold=0.9) == {"short": "long"}
 old = A("old", "t", "x", e1)   # 이미 판정됨 (본문은 짧아도 대표 유지)
 assert F.find_duplicates(arts, existing=[old], threshold=0.9) == {"long": "old", "short": "old"}
-print("3 ok: 중복 제거")
+# 라벨 붙은 기사(keep)는 짧아도 대표로 남고, 이미 판정한 기사와 비슷해도 중복이 되지 않는다
+assert F.find_duplicates(arts, threshold=0.9, keep={"short"}) == {"long": "short"}
+assert F.find_duplicates(arts, existing=[old], threshold=0.9, keep={"short"}) == {"long": "old"}
+print("3 ok: 중복 제거 (라벨 붙은 기사 지키기 포함)")
 
 # 4) LLM 검증: 배치 나누기, 번호 매칭, 빠진 번호·범위 밖 번호, 호출 실패
 class FakeLLM:
@@ -101,6 +104,7 @@ db.get_topic_articles = lambda tid, period_days=None, statuses=None, include_dup
 db.save_article_embeddings = lambda arts: saved.__setitem__("emb", sorted(a.link for a in arts))
 db.save_duplicates = lambda tid, d: saved.__setitem__("dups", d)
 db.save_judgments = lambda tid, js: saved.__setitem__("judg", [(j.link, j.status, j.stage) for j in js])
+F._labeled_links = lambda tid: set()
 out = asyncio.run(F.filter_topic(5, gangnam, redo=True))
 assert saved["reset"] == 5 and saved["emb"] == ["e1", "n1"]   # n2는 이미 임베딩이 있어서 다시 계산·저장 안 함
 assert saved["dups"] == {}
@@ -108,4 +112,23 @@ assert ("n2", "무관", "rule") in saved["judg"] and any(l == "n1" and s == "llm
 db.get_topic_articles = lambda *a, **k: []
 assert asyncio.run(F.filter_topic(5, gangnam)).verdicts == []      # 새 기사 없음
 print("6 ok: DB 버전 (재판정·임베딩 저장·결과 저장·새 기사 없음)")
+
+# 7) dedup_topic: 판정 없이 중복 표시만 (LLM 0번), 라벨 붙은 기사는 지킴, 다시 돌려도 같음
+v = [1.0, 0.0, 0.0]
+long_, short_, lab = A("d_long", "t", "x" * 50, v), A("d_short", "t", "x" * 10, v), A("d_lab", "t", "x" * 5, None)
+saved.clear()
+db.get_topic_articles = lambda tid, period_days=None, statuses=None, include_duplicates=True, unjudged_only=False: [long_, short_, lab] if unjudged_only else []
+F._labeled_links = lambda tid: {"d_lab"}
+emb_calls = []
+class SameEmb:
+    async def aembed_documents(self, texts): emb_calls.append(len(texts)); return [[1.0, 0.0, 0.0] for _ in texts]
+F.get_embeddings = lambda: SameEmb()
+F.llm_verify = None                          # 부르면 바로 오류 → LLM을 안 부르는지 확인
+dups = asyncio.run(F.dedup_topic(9))
+assert dups == {"d_long": "d_lab", "d_short": "d_lab"}, dups          # 라벨 붙은 기사가 대표
+assert saved["dups"] == dups and saved["emb"] == ["d_lab"] and emb_calls == [1]
+assert "judg" not in saved                                            # 판정은 저장하지 않음
+db.get_topic_articles = lambda *a, **k: []
+assert asyncio.run(F.dedup_topic(9)) == {}
+print("7 ok: dedup_topic (판정 없이 중복만, 라벨 기사 지킴)")
 print("ALL PASS")
