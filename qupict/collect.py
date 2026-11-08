@@ -6,6 +6,7 @@
   search_news(selected, period_days)   → list[NewsMeta]   검색 (기사 제목·링크·날짜·요약)
   crawl_articles(metas)                → list[Article]    본문·언론사·이미지 크롤링
   collect_articles(selected, period)   → list[Article]    위 둘을 한 번에
+  collect_to_db(selected, period_days) → topic id         DB 버전: 이미 있는 기사는 재사용, 새 기사만 크롤링
 
 ## 검색어 만들기 (build_search_terms)
 
@@ -333,3 +334,26 @@ async def collect_articles(
     metas = await search_news(selected, period_days, max_articles)
     articles = await crawl_articles(metas)
     return metas, articles
+
+
+async def collect_to_db(
+    selected: SelectedSense,
+    period_days: int,
+    max_articles: int = DEFAULT_MAX_ARTICLES,
+) -> int:
+    """
+    [1단계 DB 버전] 고른 의미의 topic을 만들거나 재사용하고, 기간 안 기사를 DB에 채운다. topic id를 돌려준다.
+
+    같은 topic을 다시 요청하면: 검색은 다시 하지만(API 호출은 저렴), DB에 이미 있는 기사는
+    크롤링하지 않고 topic에 연결만 한다. DB에 없는 기사(주로 지난 수집 이후 새로 나온 기사)만 크롤링해 저장한다.
+    이후 단계는 db.get_topic_articles(topic_id, period_days=...)로 발행일 기준 기간 안 기사를 꺼내 쓴다.
+    """
+    from qupict import db
+
+    topic_id = db.save_topic(selected)
+    metas = await search_news(selected, period_days, max_articles)
+    new_metas = db.link_known_articles(topic_id, metas)
+    articles = await crawl_articles(new_metas)
+    db.save_articles(topic_id, articles)
+    db.mark_topic_collected(topic_id)
+    return topic_id

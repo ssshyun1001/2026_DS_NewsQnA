@@ -33,6 +33,9 @@ class Settings:
     naver_client_id: str = os.getenv("NAVER_CLIENT_ID", "")
     naver_client_secret: str = os.getenv("NAVER_CLIENT_SECRET", "")
 
+    # PostgreSQL + pgvector (로컬 Docker / 팀 공용 DB 모두 이 주소 하나만 바꾸면 된다)
+    database_url: str = os.getenv("DATABASE_URL", "")
+
     # Pipeline tuning
     dedup_similarity_threshold: float = _get_float("DEDUP_SIMILARITY_THRESHOLD", 0.90)
     top_k_articles: int = _get_int("TOP_K_ARTICLES", 10)

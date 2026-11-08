@@ -34,7 +34,7 @@
     └── debug_similarity.py
 ```
 
-PostgreSQL을 각자 로컬에서 Docker로 띄울 경우에만 `docker-compose.yml`을 추가합니다.
+로컬 개발용 PostgreSQL은 `docker compose up -d`로 띄웁니다 (`docker-compose.yml`, `.env`에 `POSTGRES_PASSWORD` 필요).
 
 ## 실행
 
@@ -74,6 +74,16 @@ python run.py ask 서울여대  # 5단계 (질문하기)
 | `article_images` | 이미지 원본, 캡션, LLM 설명 |
 | `article_topics` | 기사별 판정(관련/무관/보류), 근거 한 줄, 정답 라벨 |
 | `article_chunks` | 청크 텍스트 + 임베딩 벡터 |
+
+정해 둔 규칙 (자세한 컬럼은 `schema.sql`, 저장·조회 함수는 `qupict/db.py`)
+
+- **기사는 link 기준 한 번만 저장**: 여러 topic에 걸린 기사는 `article_topics`로 연결합니다. 본문·청크·임베딩은 한 번만 만듭니다.
+- **기간은 topic에 저장하지 않음**: 질문한 시각 기준 `[지금 - period_days, 지금]` 안에 **발행된**(`articles.pub_date`) 기사만 씁니다.
+- **같은 topic 재사용**: `(검색어, 의미 이름)`이 같으면 같은 topic입니다. 다시 요청하면 검색은 다시 하지만, DB에 있는 기사는 크롤링하지 않고 새 기사만 가져와 저장합니다 (`collect.collect_to_db`).
+- **중복은 `duplicate_of` 하나로 표시**: 값이 있으면 중복이고, 그 행의 `status`는 비워 둡니다 (DB 제약으로 강제).
+- **판정과 정답 라벨은 따로**: `status`(시스템 판정, `stage` = rule/llm)와 `label`(사람이 붙인 정답)은 같은 값(관련/무관/보류)을 쓰는 서로 다른 컬럼입니다.
+- **임베딩은 1536차원** (`text-embedding-3-small`). 모델을 바꾸면 `schema.sql`의 `vector(1536)`도 바꿔야 합니다.
+- **DB 위치**: 팀 공용 DB는 Supabase(서울 리전) 하나를 같이 씁니다. 로컬 Docker는 혼자 실험할 때만. 코드는 `.env`의 `DATABASE_URL`만 보므로 주소만 바꾸면 전환됩니다 (데이터는 자동으로 안 옮겨짐). 만드는 방법은 `docs/PROGRESS.md` 7-3.
 
 ## DB 담당에게: 0단계에서 저장할 값
 
