@@ -1,5 +1,13 @@
 """
-관련성 필터 (Relevance Filtering) — 제외 키워드(동음이의어) + 직접언급 보호
+[2·3단계] 필터링 — 의미 기반 중복 제거 + 관련성 필터
+
+## 중복 제거 (기존 app/deduplication.py)
+
+기사 본문 임베딩의 코사인 유사도가 threshold 이상인 기사 쌍 중
+본문이 더 짧은 쪽을 제거해 대표 기사만 남긴다.
+임베딩은 한 번만 계산해 관련성 필터와 함께 쓴다.
+
+## 관련성 필터 — 제외 키워드(동음이의어) + 직접언급 보호
 
 역할 분담을 명확히 나눴다:
 
@@ -37,9 +45,76 @@ import re
 import numpy as np
 from pydantic import BaseModel, Field
 
-from app.embeddings import get_embeddings
-from app.schemas import Article
-from config import settings
+from qupict.config import settings
+from qupict.llm import get_chat_model, get_embeddings
+from qupict.schemas import Article
+
+# ---------------------------------------------------------------------------
+# 중복 제거 (기존 app/deduplication.py)
+# ---------------------------------------------------------------------------
+def _cosine_similarity_matrix(vectors: np.ndarray) -> np.ndarray:
+    norm = np.linalg.norm(vectors, axis=1, keepdims=True)
+    norm[norm == 0] = 1e-10
+    normalized = vectors / norm
+    return normalized @ normalized.T
+
+
+async def embed_articles(articles: list[Article]) -> list[Article]:
+    """기사 본문을 임베딩하여 Article.embedding에 채운다.
+
+    이미 embedding이 채워진 기사는 다시 계산하지 않는다
+    (relevance filter 단계에서 이미 채워졌을 수 있으므로).
+    """
+    if not articles:
+        return articles
+
+    to_embed = [a for a in articles if a.embedding is None]
+    if not to_embed:
+        return articles
+
+    texts = [f"{a.title}\n{a.content}" for a in to_embed]
+    vectors = await get_embeddings().aembed_documents(texts)
+    for article, vec in zip(to_embed, vectors):
+        article.embedding = vec
+    return articles
+
+
+def deduplicate_articles(
+    articles: list[Article], threshold: float | None = None
+) -> list[Article]:
+    """
+    코사인 유사도 threshold 이상인 기사 그룹에서 대표 기사 1개만 남긴다.
+    대표 기사는 본문 길이가 가장 긴 기사를 선택한다 (정보량이 가장 많다고 가정).
+    """
+    threshold = threshold if threshold is not None else settings.dedup_similarity_threshold
+    embedded = [a for a in articles if a.embedding is not None]
+    if len(embedded) <= 1:
+        return articles
+
+    vectors = np.array([a.embedding for a in embedded])
+    sim_matrix = _cosine_similarity_matrix(vectors)
+    n = len(embedded)
+    kept = [True] * n
+
+    for i in range(n):
+        if not kept[i]:
+            continue
+        for j in range(i + 1, n):
+            if not kept[j]:
+                continue
+            if sim_matrix[i, j] >= threshold:
+                if len(embedded[i].content) >= len(embedded[j].content):
+                    kept[j] = False
+                else:
+                    kept[i] = False
+                    break
+
+    return [article for article, keep in zip(embedded, kept) if keep]
+
+
+# ---------------------------------------------------------------------------
+# 관련성 필터
+# ---------------------------------------------------------------------------
 
 _DEFAULT_EXCLUSION_LOW = 0.20
 _DEFAULT_EXCLUSION_HIGH = 0.35
@@ -156,13 +231,7 @@ _homonym_llm = None
 def _get_homonym_chain():
     global _homonym_llm
     if _homonym_llm is None:
-        from langchain_openai import ChatOpenAI
-
-        llm = ChatOpenAI(
-            model=getattr(settings, "relevance_llm_model", None) or settings.chat_model,
-            api_key=settings.openai_api_key,
-            temperature=0,
-        )
+        llm = get_chat_model(temperature=0)
         _homonym_llm = llm.with_structured_output(_ExclusionTerms)
     return _homonym_llm
 
@@ -369,13 +438,7 @@ async def _llm_judge_borderline(
     articles: list[Article],
     indices: list[int],
 ) -> dict[int, bool]:
-    from langchain_openai import ChatOpenAI
-
-    llm = ChatOpenAI(
-        model=getattr(settings, "relevance_llm_model", "gpt-4o-mini"),
-        api_key=settings.openai_api_key,
-        temperature=0,
-    )
+    llm = get_chat_model(temperature=0)
     structured_llm = llm.with_structured_output(_JudgmentBatch)
 
     results: dict[int, bool] = {}
