@@ -6,7 +6,8 @@
   search_news(selected, period_days)   → list[NewsMeta]   검색 (기사 제목·링크·날짜·요약)
   crawl_articles(metas)                → list[Article]    본문·언론사·이미지 크롤링
   collect_articles(selected, period)   → list[Article]    위 둘을 한 번에
-  collect_to_db(selected, period_days) → topic id         DB 버전: 이미 있는 기사는 재사용, 새 기사만 크롤링
+  collect_to_db(selected, period_days) → CollectResult    DB 버전: 이미 있는 기사는 재사용, 새 기사만 크롤링
+  download_images(articles)            → 이미지 파일 내려받기 (4단계에서 관련 기사의 이미지 설명을 만들 때 사용)
 
 ## 검색어 만들기 (build_search_terms)
 
@@ -33,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import aiohttp
@@ -180,7 +182,8 @@ _SELECTOR_CANDIDATES = [
 _MIN_CONTENT_LENGTH = 100
 _MAX_CONTENT_LENGTH = 6000       # 과도한 컨텍스트 방지
 MAX_IMAGES_PER_ARTICLE = 5
-_SKIP_IMAGE_RE = re.compile(r"(icon|logo|btn|banner|blank|spacer|\.gif($|\?))", re.I)
+# 아이콘·로고·기자 프로필 사진 등 기사 내용과 상관없는 이미지 주소
+_SKIP_IMAGE_RE = re.compile(r"(icon|logo|btn|banner|blank|spacer|avatar|profile|default-user|byline|\.gif($|\?))", re.I)
 
 
 def _find_body(soup: BeautifulSoup) -> Tag | None:
@@ -325,6 +328,60 @@ async def crawl_articles(metas: list[NewsMeta], concurrency: int = 8) -> list[Ar
     return [a for a in results if a is not None]
 
 
+# ---------------------------------------------------------------------------
+# 이미지 파일 내려받기
+#
+# 1단계(수집)에서는 이미지 주소·사진 설명만 모아 DB에 저장한다. 이미지 파일은 DB에 저장하지 않는다
+# (팀 결정: Supabase 무료 용량 500MB를 아끼기 위해. article_images에는 주소·캡션·LLM 설명만 있다).
+#
+# 파일은 4단계에서 "관련" 판정을 받은 기사의 이미지 설명을 만들 때만, 그때 이 함수로 받아
+# 메모리에서 LLM에 보내고 버린다. 걸러질 기사의 이미지는 받지 않는다.
+# ---------------------------------------------------------------------------
+
+MAX_IMAGE_BYTES = 5 * 1024 * 1024   # 5MB보다 큰 파일은 받지 않는다 (DB 용량·LLM 입력 한도)
+# 5KB보다 작은 파일은 버린다. 실제로 받아 보니 이런 파일은 기자 프로필 사진, 작은 그래픽,
+# 자리만 차지하는 미리보기 이미지였다 (기사 사진은 보통 수십 KB 이상). 4단계 이미지 설명에 쓸모가 없다.
+MIN_IMAGE_BYTES = 5 * 1024
+
+
+async def _download_one(
+    session: aiohttp.ClientSession, image: ArticleImage, referer: str, semaphore: asyncio.Semaphore
+) -> bool:
+    if image.data is not None:          # 이미 받은 이미지는 건너뛴다
+        return True
+    # 일부 사이트는 다른 사이트에서 이미지를 직접 가져가는 것을 막아서, 기사 주소를 Referer로 같이 보낸다
+    headers = {**_HEADERS, "Referer": referer}
+    async with semaphore:
+        try:
+            timeout = aiohttp.ClientTimeout(total=settings.crawl_timeout_seconds)
+            async with session.get(image.url, headers=headers, timeout=timeout) as resp:
+                content_type = resp.headers.get("Content-Type", "").split(";")[0].strip()
+                if resp.status != 200 or not content_type.startswith("image/"):
+                    return False
+                if resp.content_length and resp.content_length > MAX_IMAGE_BYTES:
+                    return False
+                data = await resp.content.read(MAX_IMAGE_BYTES + 1)
+        except (aiohttp.ClientError, asyncio.TimeoutError):
+            return False
+    if not data or not (MIN_IMAGE_BYTES <= len(data) <= MAX_IMAGE_BYTES):
+        return False
+    image.data, image.content_type = data, content_type
+    return True
+
+
+async def download_images(articles: list[Article], concurrency: int = 8) -> tuple[int, int]:
+    """기사들의 이미지 파일을 내려받아 ArticleImage.data에 채운다.
+
+    받지 못한 이미지(주소 오류, 이미지가 아님, 5KB 미만·5MB 초과)는 data가 None으로 남는다.
+    돌려주는 값: (받은 개수, 전체 이미지 개수)
+    """
+    semaphore = asyncio.Semaphore(concurrency)
+    jobs = [(img, a.link) for a in articles for img in a.images]
+    async with aiohttp.ClientSession() as session:
+        results = await asyncio.gather(*(_download_one(session, img, ref, semaphore) for img, ref in jobs))
+    return sum(results), len(jobs)
+
+
 async def collect_articles(
     selected: SelectedSense,
     period_days: int,
@@ -336,17 +393,39 @@ async def collect_articles(
     return metas, articles
 
 
+@dataclass
+class CollectResult:
+    """collect_to_db 결과. topic_id로 이후 단계가 DB에서 기사를 꺼내 쓴다."""
+    topic_id: int
+    searched: int        # 네이버 검색으로 찾은 기사 수 (기간 안, 중복 링크 제외)
+    reused: int          # DB에 이미 있어서 크롤링 없이 topic에 연결만 한 기사 수
+    crawled: int         # 새로 크롤링해 저장한 기사 수
+    crawl_failed: int    # 본문을 못 가져와서 저장하지 못한 기사 수 (다음 수집 때 다시 시도됨)
+    images: int          # 새로 저장한 기사의 이미지 수 (주소·캡션)
+
+    def summary(self) -> str:
+        return (f"검색 {self.searched}건 → DB 재사용 {self.reused}건 + 새로 저장 {self.crawled}건"
+                f" (본문 실패 {self.crawl_failed}건, 이미지 {self.images}개)")
+
+
 async def collect_to_db(
     selected: SelectedSense,
     period_days: int,
     max_articles: int = DEFAULT_MAX_ARTICLES,
-) -> int:
+) -> CollectResult:
     """
-    [1단계 DB 버전] 고른 의미의 topic을 만들거나 재사용하고, 기간 안 기사를 DB에 채운다. topic id를 돌려준다.
+    [1단계 DB 버전] 고른 의미의 topic을 만들거나 재사용하고, 기간 안 기사를 DB에 채운다.
 
-    같은 topic을 다시 요청하면: 검색은 다시 하지만(API 호출은 저렴), DB에 이미 있는 기사는
+    같은 topic을 다시 요청하면: 검색은 다시 하지만(API 호출은 무료), DB에 이미 있는 기사는
     크롤링하지 않고 topic에 연결만 한다. DB에 없는 기사(주로 지난 수집 이후 새로 나온 기사)만 크롤링해 저장한다.
     이후 단계는 db.get_topic_articles(topic_id, period_days=...)로 발행일 기준 기간 안 기사를 꺼내 쓴다.
+
+    저장되는 곳 (schema.sql)
+      topics          고른 의미 (정의·별칭·연관어·배제어·다른 의미)
+      articles        제목·링크·언론사·발행일·요약·본문·수집 시각
+                      (네이버 뉴스 링크는 크롤링할 때만 쓰고 저장하지 않는다. 출처·중복 확인은 link 기준)
+      article_images  이미지 주소·캡션·기사 안 순서 (이미지 파일은 저장하지 않음)
+      article_topics  기사 ↔ topic 연결 + 이 기사를 찾은 검색어
     """
     from qupict import db
 
@@ -356,4 +435,11 @@ async def collect_to_db(
     articles = await crawl_articles(new_metas)
     db.save_articles(topic_id, articles)
     db.mark_topic_collected(topic_id)
-    return topic_id
+    return CollectResult(
+        topic_id=topic_id,
+        searched=len(metas),
+        reused=len(metas) - len(new_metas),
+        crawled=len(articles),
+        crawl_failed=len(new_metas) - len(articles),
+        images=sum(len(a.images) for a in articles),
+    )

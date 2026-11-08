@@ -41,14 +41,12 @@ class Settings:
     top_k_articles: int = _get_int("TOP_K_ARTICLES", 10)
     max_crawl_articles: int = _get_int("MAX_CRAWL_ARTICLES", 150)
     crawl_timeout_seconds: int = _get_int("CRAWL_TIMEOUT_SECONDS", 10)
-    # 질문-기사 간 코사인 유사도가 이 값 미만이면 출처로 채택하지 않는다.
-    relevance_similarity_threshold: float = _get_float("RELEVANCE_SIMILARITY_THRESHOLD", 0.20)
+    # 질문-청크(기사) 간 코사인 유사도가 이 값 미만이면 답변 근거로 쓰지 않는다.
+    # 0.5: 팀 결정 — 확실히 관련된 근거만 쓰도록 엄격하게. (예전 0.2)
+    #   실제 값 참고: 방송인 강남 질문에서 관련 청크가 0.48~0.70 → 0.5면 상위 일부만 남는다.
+    #   근거가 하나도 안 남으면 답변은 "관련 뉴스를 찾지 못했습니다"로 끝난다.
+    relevance_similarity_threshold: float = _get_float("RELEVANCE_SIMILARITY_THRESHOLD", 0.50)
 
-    # 제외 키워드(LLM 자동 생성, topic 기준 혼동 개체) 임베딩 경계값.
-    # high 이상이면 명확히 혼동 개체(동음이의어/유사 명칭) -> LLM 호출 없이 즉시 제외.
-    # low 미만이면 명확히 무관한 혼동 -> 통과. 그 사이(경계)만 LLM 재확인.
-    exclusion_low_threshold: float = _get_float("EXCLUSION_LOW_THRESHOLD", 0.20)
-    exclusion_high_threshold: float = _get_float("EXCLUSION_HIGH_THRESHOLD", 0.35)
 
 
 settings = Settings()

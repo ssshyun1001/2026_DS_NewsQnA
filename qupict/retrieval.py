@@ -1,30 +1,35 @@
 """
-5. 즉시형(In-Memory) Vector Store
+[5단계] 검색 — 질문에 답할 근거 청크 찾기
 
-디스크에 영구 저장하지 않고, 요청마다 FAISS 인메모리 인덱스를
-새로 구축한 뒤 질문과 가장 관련도 높은 기사만 골라 컨텍스트로 사용한다.
+  search_topic(topic_id, question, selected)   DB 버전 (pgvector): 질문 답변은 이걸 쓴다
+  build_in_memory_store / retrieve_relevant_articles
+                                               FAISS 메모리 버전: 기존 방식, 실험 B의 비교 대상으로 남겨 둠
 
-임베딩 클라이언트는 qupict.llm의 공유 인스턴스를 사용한다.
+## DB 버전 (pgvector)
+
+  1) 검색 문장 만들기   원 질문 + HyDE 가상 기사 문장, Multi-Query 변형 질문들
+  2) SQL 조건 + 벡터 검색   topic(검색어 × 고른 의미) · 판정(관련·보류) · 발행일 기간으로 먼저 좁히고,
+                            그 안에서 청크 임베딩 유사도로 찾는다 (db.search_chunks)
+  3) 합치기             같은 청크는 여러 검색 문장 중 가장 높은 유사도를 쓴다 (max-pooling)
+  4) 기준 미달 버리기   유사도가 RELEVANCE_SIMILARITY_THRESHOLD 미만이면 근거로 쓰지 않는다
+
+  기사 전체가 아니라 약 500자 청크를 찾으므로, 답변에 넣는 글이 훨씬 짧아진다
+  (예전: 기사 최대 10건 × 6,000자 → 지금: 청크 5개 × 약 500자). 답변 LLM 비용도 그만큼 준다.
+
+## 검색 문장 늘리기 (기존 설명)
 
 검색 방식 1 (HyDE, Hypothetical Document Embeddings):
   "제논의 대표는 누구야?" 같은 자연스러운 질문 문장은, 실제 뉴스 기사 본문
   스타일("제논의 고석태 대표는...")과 임베딩 공간에서 꽤 떨어져 있어서,
   질문 텍스트를 그대로 임베딩해 검색하면 관련 기사가 있어도 유사도 threshold를
-  못 넘겨 검색이 실패하는 경우가 잦다 ("GEN 2.0"처럼 기사 제목과 비슷한
-  키워드성 질문만 성공하고, 자연어 질문은 실패하는 비대칭이 발생).
-
-  이를 완화하기 위해, 질문을 그대로 검색하지 않고 LLM으로 "이 질문에 답하는
-  가상의 뉴스 문장"을 먼저 생성한 뒤 그 문장으로 검색한다. 가상의 문장은
-  사실 여부와 무관하게 뉴스 기사와 문체가 비슷해서, 실제 관련 기사와의
+  못 넘겨 검색이 실패하는 경우가 잦다.
+  질문을 그대로 검색하지 않고 LLM으로 "이 질문에 답하는 가상의 뉴스 문장"을 먼저 생성한 뒤
+  그 문장으로 검색한다. 가상의 문장은 뉴스 기사와 문체가 비슷해서 실제 관련 기사와의
   임베딩 유사도가 훨씬 높게 나온다.
 
 검색 방식 2 (Multi-Query Retriever):
-  HyDE 하나만으로는 LLM이 생성한 가상 문장 하나의 표현/관점에 검색 품질이
-  좌우될 수 있다. 이를 보완하기 위해 LLM으로 같은 질문을 표현이 다른 여러
-  버전으로 바꿔 쓴 뒤, 각 버전으로 독립적으로 검색하고 결과를 병합한다.
-  기사별로 여러 쿼리 중 가장 높은 유사도(max-pooling)를 채택하므로, 어떤
-  질문 표현이든 하나라도 그 기사와 잘 맞으면 채택될 수 있어 재현율이 높아진다.
-  LLM 호출이 실패하면 원 질문/HyDE 검색만으로 안전하게 폴백한다.
+  LLM으로 같은 질문을 표현이 다른 여러 버전으로 바꿔 쓴 뒤, 각 버전으로 독립적으로 검색하고
+  결과를 병합한다 (max-pooling). LLM 호출이 실패하면 원 질문/HyDE 검색만으로 안전하게 폴백한다.
 """
 from __future__ import annotations
 
@@ -35,7 +40,10 @@ from langchain_community.vectorstores import FAISS
 
 from qupict.llm import get_chat_model, get_embeddings
 from qupict.config import settings
-from qupict.schemas import Article
+from qupict.schemas import Article, SelectedSense
+
+SEARCH_STATUSES = ("관련", "보류")   # 검색 대상 판정 (indexing.INDEX_STATUSES와 같게)
+DEFAULT_TOP_K_CHUNKS = 5
 
 _HYDE_SYSTEM_PROMPT = """\
 당신은 검색 품질을 높이기 위한 보조 도구입니다.
@@ -128,6 +136,60 @@ def _generate_query_variants(question: str, topic: str = "") -> list[str]:
     except Exception:
         return []
 
+
+def topic_context(selected: SelectedSense) -> str:
+    """HyDE·Multi-Query에 줄 주제 맥락. 고른 의미의 정의까지 넣어 다른 의미로 빗나가지 않게 한다.
+    예: "강남 (방송인 강남: 가수 겸 방송인 강남, 그룹 M.I.B 출신 …)" """
+    return f"{selected.query} ({selected.sense.name}: {selected.sense.definition})"
+
+
+def build_search_texts(question: str, context: str, use_hyde: bool = True,
+                       use_multi_query: bool = True) -> list[str]:
+    """검색에 쓸 문장 목록: [원 질문(+HyDE 가상 문장), 변형 질문 …]"""
+    texts = [_build_search_text(question, context, use_hyde=use_hyde)]
+    if use_multi_query:
+        texts.extend(_generate_query_variants(question, context))
+    return texts
+
+
+# ---------------------------------------------------------------------------
+# DB 버전 (pgvector)
+# ---------------------------------------------------------------------------
+
+def search_topic(
+    topic_id: int,
+    question: str,
+    selected: SelectedSense,
+    k: int = DEFAULT_TOP_K_CHUNKS,
+    period_days: int | None = None,
+    use_hyde: bool = True,
+    use_multi_query: bool = True,
+    similarity_threshold: float | None = None,
+    statuses: tuple[str, ...] = SEARCH_STATUSES,
+) -> list:
+    """topic 안에서 질문과 가까운 청크를 최대 k개 찾는다. (db.ChunkHit 목록, 유사도 높은 순)
+
+    period_days: 질문하는 시점 기준 최근 며칠 안에 발행된 기사만 (기획안: "SQL로 최근 30일 기사만 가져온 뒤 벡터 검색")
+    """
+    from qupict import db
+
+    threshold = settings.relevance_similarity_threshold if similarity_threshold is None else similarity_threshold
+    texts = build_search_texts(question, topic_context(selected), use_hyde, use_multi_query)
+    vectors = get_embeddings().embed_documents(texts)
+
+    best: dict[tuple[str, str], object] = {}       # (기사 link, 청크 내용) → 가장 높은 유사도의 hit
+    for vec in vectors:
+        for hit in db.search_chunks(topic_id, vec, k=k * 3, period_days=period_days, statuses=statuses):
+            key = (hit.article.link, hit.content)
+            if key not in best or hit.similarity > best[key].similarity:
+                best[key] = hit
+    hits = sorted((h for h in best.values() if h.similarity >= threshold), key=lambda h: -h.similarity)
+    return hits[:k]
+
+
+# ---------------------------------------------------------------------------
+# FAISS 메모리 버전 (기존 방식 — 실험 B 비교용)
+# ---------------------------------------------------------------------------
 
 def build_in_memory_store(articles: list[Article]) -> FAISS:
     """중복 제거된 기사들로 임시 FAISS 인메모리 인덱스를 만든다."""

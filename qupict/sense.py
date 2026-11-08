@@ -6,8 +6,9 @@
 고른 의미(SelectedSense)가 이후 수집·필터링·검색의 기준이 된다.
 
 흐름:
-  generate_sense_candidates("애플")
+  load_sense_candidates("애플")           ← DB에 있으면 DB 것, 없으면 LLM으로 만들어 DB에 저장
       → SenseCandidates: 자주 쓰이는 순 최대 3개 (정의 + 별칭 + 연관어)
+      (generate_sense_candidates = DB 없이 LLM만 부르는 함수)
   후보가 2개 이상  → 사용자가 하나 선택       → select_sense(...)
   후보가 1개       → 자동 선택               → select_sense(..., 0)
   후보가 0개 / "기타" → 사용자가 직접 설명 입력 → build_custom_sense(...) → select_custom_sense(...)
@@ -20,8 +21,8 @@
   - LLM이 모르는 신조어·고유명사는 직접 입력으로 처리
   - 의미는 하나만 고른다 (단수 선택)
 
-일관성: temperature=0으로 같은 검색어에는 최대한 같은 후보가 나오게 한다.
-같은 검색어의 후보를 DB(query_senses)에 저장해 재사용하는 캐싱은 DB 쪽에서 처리한다.
+일관성: temperature=0이어도 LLM 결과는 실행마다 조금씩 달라진다.
+그래서 처음 만든 후보를 DB(query_senses)에 저장하고 이후에는 그것만 쓴다 (load_sense_candidates).
 
 직접 실행해 보기:
     python -m qupict.sense 애플          # 검색어 하나, 터미널에서 직접 선택
@@ -166,6 +167,48 @@ def generate_sense_candidates(query: str) -> SenseCandidates:
 
 
 # ---------------------------------------------------------------------------
+# DB 캐싱: 같은 검색어면 LLM을 다시 부르지 않고 저장된 후보를 쓴다
+# ---------------------------------------------------------------------------
+
+def load_sense_candidates(query: str) -> tuple[SenseCandidates, str]:
+    """의미 후보를 가져온다. DB에 있으면 DB 것을, 없으면 LLM으로 만들어 DB에 저장한다.
+
+    왜 필요한가: LLM은 temperature=0이어도 같은 검색어에 연관어를 조금씩 다르게 낸다.
+    그러면 배제어(2단계 규칙 필터 기준)가 실행할 때마다 바뀌어 실험을 재현할 수 없다.
+    처음 만든 후보를 DB(query_senses)에 저장해 두고 계속 쓰면 기준이 고정되고 LLM 비용도 0이 된다.
+
+    돌려주는 값: (후보 목록, 출처) — 출처는 "DB", "LLM → DB 저장", "LLM (DB 없음)" 중 하나
+
+      - DATABASE_URL이 비어 있으면 DB 없이 LLM만 쓴다 (DB를 안 띄운 팀원도 실행 가능)
+      - DB 연결에 실패해도 멈추지 않고 LLM으로 계속한다 (경고만 출력)
+      - LLM이 후보를 하나도 못 만들면 저장하지 않는다 (다음 실행 때 다시 시도하도록)
+    """
+    query = query.strip()
+    if not settings.database_url:
+        return generate_sense_candidates(query), "LLM (DB 없음)"
+
+    from qupict import db  # DB 패키지(psycopg)가 없는 환경에서도 이 파일을 import할 수 있게 여기서 불러온다
+
+    try:
+        cached = db.get_sense_candidates(query)
+    except Exception as e:
+        print(f"  [경고] DB에서 의미 후보를 읽지 못했습니다 ({type(e).__name__}). LLM으로 만듭니다.")
+        return generate_sense_candidates(query), "LLM (DB 오류)"
+    if cached is not None:
+        return cached, "DB"
+
+    candidates = generate_sense_candidates(query)
+    if not candidates.senses:
+        return candidates, "LLM (후보 없음, 저장 안 함)"
+    try:
+        db.save_sense_candidates(candidates)
+    except Exception as e:
+        print(f"  [경고] 의미 후보를 DB에 저장하지 못했습니다 ({type(e).__name__}).")
+        return candidates, "LLM (DB 저장 실패)"
+    return candidates, "LLM → DB 저장"
+
+
+# ---------------------------------------------------------------------------
 # "기타" 직접 입력 → 의미 정의
 # ---------------------------------------------------------------------------
 
@@ -274,29 +317,47 @@ def select_sense_by_name(candidates: SenseCandidates, name: str) -> SelectedSens
     return None
 
 
-def select_for_target(candidates: SenseCandidates, target: dict) -> SelectedSense:
+def select_for_target(
+    candidates: SenseCandidates,
+    target: dict,
+    known_custom: Sense | None = None,
+) -> SelectedSense:
     """targets.yaml 항목 하나로 의미를 고른다 (일괄 수집용).
 
     1) target["sense"] 이름으로 후보를 찾는다.
     2) 못 찾으면 "직접 입력"으로 처리한다. 설명은 target["description"], 없으면 sense 이름.
        (예: "베라"는 LLM이 배스킨라빈스를 몰라서 후보가 없으므로 이 경로로 간다)
-    3) target에 definition / aliases / related_terms가 적혀 있으면 LLM 값 대신 그 값을 쓴다.
-       LLM이 지어낸 정보(예: 방송인 강남 → 별칭 "조남식", 정의 "본명 조성민")를
-       사람이 확인한 값으로 바로잡는 용도다. 빈 리스트 []를 적으면 "LLM 값을 쓰지 않는다"는 뜻이다.
+       - 의미 이름은 targets.yaml의 sense 그대로 쓴다 (LLM이 붙인 이름은 실행마다 달라질 수 있어서,
+         같은 대상이 DB에 다른 topic으로 두 번 생기지 않게 한다)
+       - known_custom: 이전 실행에서 만들어 DB에 저장해 둔 직접 입력 의미 → LLM을 다시 부르지 않는다
+    3) target에 definition / aliases / related_terms가 적혀 있으면 LLM 값 대신 그 값을 쓴다 (apply_target_overrides).
     """
     query = candidates.query
     selected = select_sense_by_name(candidates, target["sense"])
     if selected is None:
-        description = target.get("description") or target["sense"]
-        selected = select_custom_sense(candidates, build_custom_sense(query, description))
+        if known_custom is not None:
+            custom = known_custom
+        else:
+            description = target.get("description") or target["sense"]
+            custom = build_custom_sense(query, description)
+        custom = custom.model_copy(update={"name": str(target["sense"]).strip(), "is_custom": True})
+        selected = select_custom_sense(candidates, custom)
+    return apply_target_overrides(selected, target)
 
+
+def apply_target_overrides(selected: SelectedSense, target: dict) -> SelectedSense:
+    """targets.yaml에 사람이 적은 definition / aliases / related_terms로 LLM 값을 바꾼다.
+
+    LLM이 지어낸 정보(예: 방송인 강남 → 별칭 "조남식", 정의 "본명 조성민")를
+    사람이 확인한 값으로 바로잡는 용도다. 빈 리스트 []를 적으면 "LLM 값을 쓰지 않는다"는 뜻이다.
+    """
     overrides: dict = {k: unique_terms(target[k]) for k in ("aliases", "related_terms") if k in target}
     if target.get("definition"):
         overrides["definition"] = str(target["definition"]).strip()
     if not overrides:
         return selected
     fixed = selected.sense.model_copy(update=overrides)
-    return _make_selection(query, fixed, selected.other_senses)
+    return _make_selection(selected.query, fixed, selected.other_senses)
 
 
 # ---------------------------------------------------------------------------
@@ -331,8 +392,8 @@ def _print_all_targets() -> None:
     """targets.yaml의 모든 대상을 처리해 선택 결과를 보여 준다. (python -m qupict.sense --targets)"""
     from qupict.config import load_targets
 
-    # 같은 검색어(예: 눈-날씨 / 눈-신체)는 같은 후보 목록에서 골라야 비교가 되므로 한 번만 만든다.
-    # (LLM 결과는 실행마다 조금씩 달라진다. 실제 파이프라인에서는 DB 캐싱이 이 역할을 한다.)
+    # 같은 검색어(예: 눈-날씨 / 눈-신체)는 같은 후보 목록에서 골라야 비교가 되므로 한 번만 가져온다.
+    # (DB가 있으면 DB 캐시가, 없으면 이 dict가 그 역할을 한다)
     candidates_by_query: dict[str, SenseCandidates] = {}
     for target in load_targets():
         query = target["query"]
@@ -340,7 +401,8 @@ def _print_all_targets() -> None:
             print(f"\n### {query}: 건너뜀 (targets.yaml의 sense가 아직 TODO)")
             continue
         if query not in candidates_by_query:
-            candidates_by_query[query] = generate_sense_candidates(query)
+            candidates_by_query[query], source = load_sense_candidates(query)
+            print(f"\n[{query}] 의미 후보 출처: {source}")
         selected = select_for_target(candidates_by_query[query], target)
         s = selected.sense
         print(f"\n### {query} → {s.name}{' (직접 입력)' if s.is_custom else ''}")
@@ -357,6 +419,7 @@ if __name__ == "__main__":
         _print_all_targets()
         sys.exit(0)
     q = sys.argv[1] if len(sys.argv) > 1 else input("검색어> ").strip()
-    cands = generate_sense_candidates(q)
+    cands, source = load_sense_candidates(q)
+    print(f"의미 후보 출처: {source}")
     selected = choose_sense_interactively(cands)
     print(json.dumps(selected.model_dump(), ensure_ascii=False, indent=2))

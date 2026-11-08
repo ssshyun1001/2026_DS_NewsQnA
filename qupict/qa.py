@@ -9,11 +9,18 @@
 """
 from __future__ import annotations
 
+import re
+
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
 from qupict.llm import get_chat_model
 from qupict.schemas import Answer, Article
+
+NO_ARTICLE_CONTEXT = (
+    "(이번 질문과 관련성 있는 기사를 수집된 뉴스에서 찾지 못했습니다. "
+    "참고할 기사가 없습니다.)"
+)
 
 _SYSTEM_PROMPT = """\
 당신은 신뢰할 수 있는 뉴스 기반 답변 에이전트입니다.
@@ -46,6 +53,8 @@ _SYSTEM_PROMPT = """\
    직전에 다른 답을 했더라도, 사용자가 정정을 요구했다고 해서 근거 없이 말을
    바꾸지 마세요.
 8. 답변은 한국어로, 간결하고 자연스럽게 작성하세요.
+9. [참고 기사]에서 "[기사 이미지]"로 시작하는 부분은 기사 본문이 아니라 기사에 실린 사진을 글로 옮긴
+   설명입니다. 이 내용을 근거로 쓸 때는 "(기사 N, 이미지)"로 표시하세요.
 """
 
 _prompt = ChatPromptTemplate.from_messages(
@@ -84,11 +93,51 @@ def generate_answer(question: str, articles: list[Article]) -> Answer:
             article.to_context_block(i + 1) for i, article in enumerate(articles)
         )
     else:
-        context = (
-            "(이번 질문과 관련성 있는 기사를 수집된 뉴스에서 찾지 못했습니다. "
-            "참고할 기사가 없습니다.)"
-        )
+        context = NO_ARTICLE_CONTEXT
 
     answer_text = _get_chain().invoke({"question": question, "context": context})
 
     return Answer(question=question, answer=answer_text, sources=articles)
+
+
+def build_chunk_context(hits: list) -> tuple[str, list[Article], list[str]]:
+    """검색된 청크(db.ChunkHit)를 기사별로 묶어 [참고 기사] 글을 만든다.
+
+    같은 기사의 청크는 한 번호(기사 N) 아래에 모은다 → 답변의 (기사 N)과 출처 목록 번호가 맞는다.
+    돌려주는 값: (참고 기사 글, 출처 기사 목록, 기사별 근거 종류)
+    """
+    groups: dict[str, list] = {}
+    for hit in hits:                                   # 유사도 높은 기사부터 번호를 붙인다
+        groups.setdefault(hit.article.link, []).append(hit)
+
+    blocks, sources, kinds = [], [], []
+    for n, chunk_hits in enumerate(groups.values(), start=1):
+        a = chunk_hits[0].article
+        date = a.pub_date.strftime("%Y-%m-%d") if a.pub_date else "알 수 없음"
+        body = "\n".join(f"- {h.content}" for h in chunk_hits)
+        blocks.append(f"[기사 {n}]\n제목: {a.title}\n언론사: {a.press or '알 수 없음'}\n발행일: {date}\n"
+                      f"URL: {a.link}\n관련 내용:\n{body}")
+        sources.append(a)
+        has_body = any(h.source == "body" for h in chunk_hits)
+        has_image = any(h.source == "image" for h in chunk_hits)
+        kinds.append("본문 + 이미지 설명" if has_body and has_image else "이미지 설명" if has_image else "본문")
+    return "\n\n".join(blocks), sources, kinds
+
+
+def generate_answer_from_chunks(question: str, hits: list) -> Answer:
+    """[DB 버전] 검색된 청크로 답변을 만든다. 출처에 근거 종류(본문 / 이미지 설명)를 함께 돌려준다."""
+    context, sources, kinds = build_chunk_context(hits) if hits else (NO_ARTICLE_CONTEXT, [], [])
+    answer_text = _get_chain().invoke({"question": question, "context": context})
+    return Answer(question=question, answer=answer_text, sources=sources, source_kinds=kinds,
+                  cited=cited_numbers(answer_text, len(sources)))
+
+
+_CITE_RE = re.compile(r"기사\s*(\d+(?:\s*[,，]\s*(?:기사\s*)?\d+)*)")
+
+
+def cited_numbers(answer_text: str, n_sources: int) -> list[int]:
+    """답변에서 인용한 기사 번호. "(기사 1, 기사 2)", "(기사 1, 2)", "(기사 3, 이미지)" 모두 찾는다."""
+    found: set[int] = set()
+    for group in _CITE_RE.findall(answer_text):
+        found.update(int(n) for n in re.findall(r"\d+", group))
+    return sorted(n for n in found if 1 <= n <= n_sources)

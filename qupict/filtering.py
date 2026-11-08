@@ -1,579 +1,329 @@
 """
-[2·3단계] 필터링 — 의미 기반 중복 제거 + 관련성 필터
+[2·3단계] 필터링 — 중복 제거 → 1차 규칙 필터 → 2차 LLM 검증
 
-## 중복 제거 (기존 app/deduplication.py)
+0단계에서 고른 의미(SelectedSense)를 기준으로, 수집한 기사가 그 대상을 실제로 다루는지 판정한다.
 
-기사 본문 임베딩의 코사인 유사도가 threshold 이상인 기사 쌍 중
-본문이 더 짧은 쪽을 제거해 대표 기사만 남긴다.
-임베딩은 한 번만 계산해 관련성 필터와 함께 쓴다.
+  [2단계] 중복 제거      같은 사안을 다룬 비슷한 기사는 대표 기사 1건만 남긴다 (임베딩 유사도)
+  [2단계] 1차 규칙 필터  분명히 무관한 기사만 규칙으로 걸러 LLM 호출을 줄인다      → stage = "rule"
+  [3단계] 2차 LLM 검증   나머지를 LLM이 관련 / 무관 / 보류로 판정하고 근거 한 줄을 남긴다 → stage = "llm"
 
-## 관련성 필터 — 제외 키워드(동음이의어) + 직접언급 보호
+  filter_articles(articles, selected)   메모리 버전 (run.py가 사용)
+  filter_topic(topic_id, selected)      DB 버전 (DB의 기사를 판정하고 결과를 article_topics에 저장)
+  rule_check(article, selected)         규칙 점수만 따로 (실험 A의 "방법 1-c"로도 씀)
 
-역할 분담을 명확히 나눴다:
+## 1차 규칙 필터 (기획안 방법 1-c)
 
-  [LLM 담당] 동음이의어(homonym)만 생성한다.
-    topic이 완전히 다른 의미/개체를 가리키는 경우만 잡는다.
-    예: "애플" -> 과일 사과, "강남" -> 지역 강남구, "당근" -> 채소 당근
-    같은 카테고리의 다른 기관/경쟁사(예: "서울대"의 제외어로 "서울시립대")는
-    LLM이 절대 생성하지 않는다 (recall을 해치는 주범이었기 때문).
+  점수 = 연관어 점수 − 배제어 점수     (단어마다 제목에 있으면 2점, 본문에만 있으면 1점)
+    연관어 = 고른 의미의 related_terms                 예: 방송인 강남 → 이상화, 예능, 유튜브
+    배제어 = 고르지 않은 의미의 연관어 (excluded_terms) 예: 지역 강남 → 강남역, 재건축, 압구정
 
-  [규칙 담당] "서울여대 검색 시 이화여대/숙명여대 등이 섞여 들어오는" 유형의
-    분리 검색 노이즈는 LLM이 예측하지 않고, 대신 "이 기사에 topic 문자열이
-    통째로 등장하는가"를 보는 규칙(직접 언급 보호, guard)에서 처리한다.
-    - topic을 정규화(공백/특수문자 제거)한 문자열이 기사에 부분 문자열로
-      그대로 포함되어 있으면 무조건 통과시킨다.
-    - 예: topic="서울여대"인 기사에 "서울"과 "여대"가 각각 등장해도,
-      "서울여대"라는 연속 문자열 자체가 없으면(예: "서울에 있는 이화여대")
-      보호 대상이 아니다. 단어 단위로 쪼개 느슨하게 매칭하는 완화는 두지 않는다.
+  무관 (rule)  기사에 검색어·별칭이 아예 없다          예: "서울여대" 검색에 걸린 성신여대 기사
+  무관 (rule)  점수 ≤ RULE_REJECT_SCORE (기본 -2)      다른 의미의 단어가 분명히 더 많다
+  나머지       → LLM으로 넘긴다
 
-필터링 단계:
-  0단계: 제외 키워드(동음이의어) LLM 생성, 세션당 1회
-  1단계: (직접 언급 보호) topic 문자열이 기사에 통째로 등장하면 무조건 통과
-    (임베딩/LLM 판정 생략)
-  2단계: (임베딩) 나머지 기사에 대해 제외어와의 코사인 유사도로 명확한
-    케이스는 즉시 컷/통과, 애매한 경계만 3단계로 넘긴다. 이때 제외어를
-    그대로 임베딩하지 않고, topic 단어를 제거한 맥락어만 임베딩한다 —
-    동음이의어(예: "당근" 회사 vs 채소)는 topic 단어 자체가 똑같이 겹치므로,
-    "당근 재배"를 그대로 임베딩하면 "당근"이라는 글자 때문에 진짜 관련
-    기사까지 유사도가 높게 나와 잘못 제외될 수 있기 때문이다.
-  3단계: (LLM 정밀 판정) 경계 구간 기사만 재판정.
+  규칙은 "분명히 아닌 것"만 거른다. 관련 판정은 규칙으로 하지 않는다 (단어만으로는 단순 언급과
+  실제 주제를 구분할 수 없어서). 기준값은 정답 라벨이 생기면 실험으로 조정한다.
+
+## 2차 LLM 검증
+
+  LLM에게 고른 의미(정의·별칭·연관어)와 고르지 않은 의미들을 함께 보여 주고 대조하게 한다.
+    관련  찾는 대상이 기사의 주요 소재다
+    무관  다른 의미의 기사이거나, 찾는 대상이 스쳐 지나가듯 언급만 된다
+    보류  주어진 내용만으로는 판단하기 어렵다 (Recall을 지키기 위해 바로 버리지 않는다)
+  LLM이 답하지 못한 기사는 판정하지 않고 남겨 둔다 (DB 버전은 다음 실행 때 다시 시도).
 """
 from __future__ import annotations
 
+import asyncio
 import re
+from dataclasses import dataclass, field
+from typing import Literal, Optional
 
 import numpy as np
 from pydantic import BaseModel, Field
 
 from qupict.config import settings
 from qupict.llm import get_chat_model, get_embeddings
-from qupict.schemas import Article
+from qupict.schemas import Article, SelectedSense
+
+RULE_REJECT_SCORE = -2          # 규칙 점수가 이 값 이하면 '무관' (정답 라벨이 생기면 실험으로 조정)
+LLM_BATCH_SIZE = 8              # LLM 한 번에 판정할 기사 수
+LLM_CONCURRENCY = 4             # 동시에 보내는 LLM 요청 수 (게이트웨이 한도: 60초 120회)
+LLM_BODY_CHARS = 800            # LLM에 보여 줄 본문 앞부분 길이
+EMBED_CHARS = 2000              # 중복 제거용 임베딩에 쓰는 본문 길이 (임베딩 입력 한도 안쪽, 비교에는 충분)
+
+STATUSES = ("관련", "무관", "보류")
+
+
+@dataclass
+class Verdict:
+    """기사 하나의 판정. (DB의 db.Judgment와 같은 내용)"""
+    link: str
+    status: str                  # '관련' | '무관' | '보류'
+    stage: str                   # 'rule' | 'llm'
+    reason: str = ""
+    model: Optional[str] = None  # LLM 판정이면 모델명
+
+
+@dataclass
+class FilterOutcome:
+    """필터링 결과 한 묶음."""
+    duplicates: dict[str, str] = field(default_factory=dict)  # {중복 기사 link: 대표 기사 link}
+    verdicts: list[Verdict] = field(default_factory=list)
+    unjudged: list[str] = field(default_factory=list)          # LLM이 답하지 못한 기사 link
+
+    def links_with(self, *statuses: str) -> set[str]:
+        return {v.link for v in self.verdicts if v.status in statuses}
+
+    def summary(self) -> str:
+        count = lambda stage, status: sum(1 for v in self.verdicts if v.stage == stage and v.status == status)
+        return (f"중복 {len(self.duplicates)}건 | 규칙 무관 {count('rule', '무관')}건 | "
+                f"LLM 관련 {count('llm', '관련')} · 무관 {count('llm', '무관')} · 보류 {count('llm', '보류')}건"
+                + (f" | 판정 못 함 {len(self.unjudged)}건" if self.unjudged else ""))
+
 
 # ---------------------------------------------------------------------------
-# 중복 제거 (기존 app/deduplication.py)
+# [2단계] 중복 제거
 # ---------------------------------------------------------------------------
-def _cosine_similarity_matrix(vectors: np.ndarray) -> np.ndarray:
-    norm = np.linalg.norm(vectors, axis=1, keepdims=True)
-    norm[norm == 0] = 1e-10
-    normalized = vectors / norm
-    return normalized @ normalized.T
-
 
 async def embed_articles(articles: list[Article]) -> list[Article]:
-    """기사 본문을 임베딩하여 Article.embedding에 채운다.
-
-    이미 embedding이 채워진 기사는 다시 계산하지 않는다
-    (relevance filter 단계에서 이미 채워졌을 수 있으므로).
-    """
-    if not articles:
-        return articles
-
+    """기사 임베딩을 채운다. 이미 있는 기사(DB에 저장된 것 포함)는 다시 계산하지 않는다."""
     to_embed = [a for a in articles if a.embedding is None]
-    if not to_embed:
-        return articles
-
-    texts = [f"{a.title}\n{a.content}" for a in to_embed]
-    vectors = await get_embeddings().aembed_documents(texts)
-    for article, vec in zip(to_embed, vectors):
-        article.embedding = vec
+    if to_embed:
+        texts = [f"{a.title}\n{a.content[:EMBED_CHARS]}" for a in to_embed]
+        vectors = await get_embeddings().aembed_documents(texts)
+        for article, vec in zip(to_embed, vectors):
+            article.embedding = vec
     return articles
 
 
-def deduplicate_articles(
-    articles: list[Article], threshold: float | None = None
-) -> list[Article]:
-    """
-    코사인 유사도 threshold 이상인 기사 그룹에서 대표 기사 1개만 남긴다.
-    대표 기사는 본문 길이가 가장 긴 기사를 선택한다 (정보량이 가장 많다고 가정).
-    """
-    threshold = threshold if threshold is not None else settings.dedup_similarity_threshold
-    embedded = [a for a in articles if a.embedding is not None]
-    if len(embedded) <= 1:
-        return articles
+def _unit(vectors: np.ndarray) -> np.ndarray:
+    norm = np.linalg.norm(vectors, axis=1, keepdims=True)
+    norm[norm == 0] = 1e-10
+    return vectors / norm
 
-    vectors = np.array([a.embedding for a in embedded])
-    sim_matrix = _cosine_similarity_matrix(vectors)
-    n = len(embedded)
-    kept = [True] * n
 
-    for i in range(n):
-        if not kept[i]:
-            continue
-        for j in range(i + 1, n):
-            if not kept[j]:
+def find_duplicates(
+    articles: list[Article],
+    existing: list[Article] = (),
+    threshold: float | None = None,
+) -> dict[str, str]:
+    """임베딩 유사도가 threshold 이상인 기사를 중복으로 묶는다. {중복 기사 link: 대표 기사 link}
+
+    - 대표 기사는 본문이 가장 긴 기사 (정보가 가장 많다고 본다)
+    - existing: 이미 판정을 마친 대표 기사들 (DB 버전에서 새 기사만 처리할 때).
+      이 기사들은 항상 대표로 남는다. 새 기사가 이 중 하나와 비슷하면 새 기사가 중복이 된다.
+      (이미 판정한 기사를 중복으로 바꾸면 판정을 다시 해야 하므로)
+    """
+    threshold = settings.dedup_similarity_threshold if threshold is None else threshold
+    reps: list[Article] = [a for a in existing if a.embedding is not None]
+    duplicates: dict[str, str] = {}
+    # 긴 기사부터 대표 후보로 본다 → 비슷한 기사 무리에서 가장 긴 기사가 대표가 된다
+    for article in sorted((a for a in articles if a.embedding is not None), key=lambda a: -len(a.content)):
+        if reps:
+            sims = _unit(np.array([r.embedding for r in reps])) @ _unit(np.array([article.embedding]))[0]
+            best = int(np.argmax(sims))
+            if sims[best] >= threshold:
+                duplicates[article.link] = reps[best].link
                 continue
-            if sim_matrix[i, j] >= threshold:
-                if len(embedded[i].content) >= len(embedded[j].content):
-                    kept[j] = False
-                else:
-                    kept[i] = False
-                    break
-
-    return [article for article, keep in zip(embedded, kept) if keep]
+        reps.append(article)
+    return duplicates
 
 
 # ---------------------------------------------------------------------------
-# 관련성 필터
+# [2단계] 1차 규칙 필터 (방법 1-c)
 # ---------------------------------------------------------------------------
 
-_DEFAULT_EXCLUSION_LOW = 0.20
-_DEFAULT_EXCLUSION_HIGH = 0.35
-_LLM_BATCH_SIZE = 10
+def _normalize(text: str | None) -> str:
+    """대소문자·공백·특수문자를 없앤다. "Apple Inc." → "appleinc", "M.I.B" → "mib" """
+    return re.sub(r"[^0-9a-z가-힣]", "", (text or "").lower())
 
 
-
-# ---------------------------------------------------------------------------
-# 0단계: 제외 키워드(동음이의어) 자동 생성 — LLM은 이 유형만 담당한다
-# ---------------------------------------------------------------------------
-
-class _ExclusionTerms(BaseModel):
-    exclusion_terms: list[str] = Field(default_factory=list)
-
-
-_HOMONYM_SYSTEM_PROMPT = """\
-당신은 뉴스 검색어의 동음이의어를 구분하기 위한 제외 표현을 생성합니다.
-
-topic과 validation_terms를 함께 보고 사용자가 의도한 대상을 추론하세요.
-사용자가 의도한 대상과 의미가 명확하게 다른 동음이의어 표현만 exclusion_terms로 생성하세요.
-
-규칙:
-1. 동일 대상을 가리키는 정식 명칭, 약어, 이전 명칭, 별칭, 영문명, 서비스명은 절대 넣지 마세요.
-2. 단순히 같은 지역, 업종 또는 범주에 속하는 다른 기관이나 경쟁 대상을 넣지 마세요.
-   - 대학 검색에서 다른 대학 이름을 넣지 마세요.
-   - 기업 검색에서 경쟁 기업 이름을 넣지 마세요.
-   - 관련 기사에서 함께 등장할 가능성이 있는 대상은 넣지 마세요.
-3. topic 전체나 다른 고유명사의 일부 단어만 넣지 마세요.
-   - `서울대`의 제외어로 `서울`, `대학교`를 넣지 마세요.
-4. 사용자가 의도한 대상과 의미가 완전히 다른 동음이의어만 생성하세요.
-   - 기업 애플과 과일 사과
-   - 지역 강남과 방송인 강남
-   - 기업 당근과 채소 당근
-5. 동일 개체인지 확실하지 않거나 관련 기사에 함께 등장할 가능성이 있다면 넣지 마세요.
-6. 확실한 동음이의어가 없으면 빈 리스트를 반환하세요.
-7. 최대 6개까지 생성하고 JSON만 출력하세요.
-
-예시 1
-Input:
-{{
-"topic": "애플",
-"validation_terms": ["기업", "아이폰", "IT"]
-}}
-Output:
-{{
-"exclusion_terms": [
-"사과 재배",
-"사과 농가",
-"사과 가격",
-"사과 품종",
-"사과 수확"
-]
-}}
-
-예시 2
-Input:
-{{
-"topic": "서울대",
-"validation_terms": ["서울대학교", "국립대학교", "대학 연구"]
-}}
-Output:
-{{
-"exclusion_terms": []
-}}
-설명:
-서울과기대, 서울시립대, 서울여자대학교는 다른 대학이지만 서울대학교 관련 기사에
-함께 등장할 수 있으므로 제외어로 사용하지 않습니다. (이런 "동종 카테고리" 노이즈는
-LLM이 아니라 별도의 규칙으로 처리합니다.)
-
-예시 3
-Input:
-{{
-"topic": "당근",
-"validation_terms": ["회사"]
-}}
-Output:
-{{
-"exclusion_terms": [
-"당근 재배",
-"당근 농가",
-"당근 가격",
-"당근 효능",
-"당근 요리법"
-]
-}}
-설명:
-"당근마켓"은 topic "당근"의 이전 정식 명칭(서비스명)이며 같은 회사를 가리키므로
-절대 제외어에 넣지 않습니다. "당근"과 이름이 비슷한 다른 회사(경쟁사 등)도
-넣지 않습니다. 오직 채소 "당근"(먹는 작물)이라는 완전히 다른 의미의 동음이의어만
-제외어로 생성합니다.
-"""
-
-_HOMONYM_FALLBACK_SYSTEM_PROMPT = """\
-당신은 뉴스 검색어의 동음이의어를 구분하기 위한 제외 표현을 생성합니다.
-직전 시도에서는 topic에 대해 확실한 동음이의어를 찾지 못했습니다.
-
-이번에는 확신이 낮아도 괜찮으니, topic과 의미가 다른 대상으로 뉴스에 등장할
-가능성이 있는 표현을 최소 1개는 반드시 제시하세요. 다만 아래 규칙은 그대로
-지켜야 합니다.
-
-규칙:
-1. 동일 대상을 가리키는 정식 명칭, 약어, 이전 명칭, 별칭, 영문명, 서비스명은 절대 넣지 마세요.
-2. 같은 지역, 업종 또는 범주에 속하는 다른 기관이나 경쟁 대상을 넣지 마세요.
-3. topic 전체나 다른 고유명사의 일부 단어만 넣지 마세요.
-4. topic과 validation_terms를 이어붙인 표현(예: "topic validation_term",
-   "validation_term topic")은 넣지 마세요. 이는 의도한 대상 자체를 가리키는
-   말이지 다른 개체가 아닙니다.
-5. 확신이 낮더라도 최소 1개의 후보는 반드시 JSON으로 출력하세요.
-"""
-
-_homonym_llm = None
+@dataclass
+class RuleResult:
+    score: int
+    mentioned: bool              # 검색어나 별칭이 기사에 있는가
+    related_hits: list[str]      # 기사에서 찾은 연관어
+    excluded_hits: list[str]     # 기사에서 찾은 배제어
 
 
-def _get_homonym_chain():
-    global _homonym_llm
-    if _homonym_llm is None:
-        llm = get_chat_model(temperature=0)
-        _homonym_llm = llm.with_structured_output(_ExclusionTerms)
-    return _homonym_llm
+def _term_score(terms: list[str], title: str, body: str) -> tuple[int, list[str]]:
+    score, hits = 0, []
+    for term in terms:
+        t = _normalize(term)
+        if not t:
+            continue
+        if t in title:
+            score += 2
+            hits.append(term)
+        elif t in body:
+            score += 1
+            hits.append(term)
+    return score, hits
 
 
-async def _try_generate_homonym_terms(
-    topic: str,
-    validation_terms: list[str],
-    system_prompt: str,
-) -> list[str]:
-    user_prompt = (
-        '{"topic": "%s", "validation_terms": %s}' % (topic, list(validation_terms))
-    )
-    try:
-        result: _ExclusionTerms = await _get_homonym_chain().ainvoke(
-            [("system", system_prompt), ("human", user_prompt)]
-        )
-        return [t.strip() for t in result.exclusion_terms if t.strip()]
-    except Exception:
-        return []
+def rule_check(article: Article, selected: SelectedSense) -> RuleResult:
+    """규칙 점수 = 연관어 점수 − 배제어 점수 (제목 2점, 본문 1점)."""
+    title, body = _normalize(article.title), _normalize(article.content)
+    mentioned = any(_normalize(t) and _normalize(t) in title + body for t in selected.match_terms)
+    plus, related_hits = _term_score(selected.sense.related_terms, title, body)
+    minus, excluded_hits = _term_score(selected.excluded_terms, title, body)
+    return RuleResult(plus - minus, mentioned, related_hits, excluded_hits)
 
 
-async def generate_exclusion_terms(
-    topic: str,
-    validation_terms: list[str] | None = None,
-) -> list[str]:
-    """topic의 동음이의어 제외어만 LLM으로 생성한다.
-
-    "서울여대 vs 이화여대"류의 동종 카테고리 혼동은 여기서 다루지 않는다.
-    그 문제는 filter_by_relevance() 안의 직접 언급 보호 규칙(topic 문자열이
-    기사에 통째로 등장하는지 확인)이 맡는다 (LLM 예측 없이도 recall을
-    지킬 수 있기 때문).
-
-    LLM 출력 후처리:
-      topic과 validation_terms를 이어붙인 표현(예: topic="강남",
-      validation_terms=["방송인"] -> "방송인 강남", "강남 방송인")은
-      "다른 개체"가 아니라 오히려 사용자가 의도한 대상 그 자체를 가리키는
-      말이다. 프롬프트에서 이런 조합을 만들지 말라고 지시하지만, LLM이
-      가끔 이를 어기고 생성하므로 사후에 한 번 더 걸러낸다.
-
-    최소 1개 보장(best-effort):
-      제외어가 하나도 없으면 필터가 사실상 아무 일도 하지 않으므로, 1차
-      시도 결과가 (사후 필터링 후) 비어 있으면 더 관대한 프롬프트로 한 번
-      더 시도한다. 그래도 비어 있으면 정말로 마땅한 후보가 없다는 뜻이므로
-      빈 리스트를 그대로 반환한다 (없는 동음이의어를 억지로 지어내지는 않는다).
-    """
-    validation_terms = validation_terms or []
-
-    raw_terms = await _try_generate_homonym_terms(topic, validation_terms, _HOMONYM_SYSTEM_PROMPT)
-    terms = _drop_target_description_terms(raw_terms, topic, validation_terms)
-    if terms:
-        return terms
-
-    raw_terms_retry = await _try_generate_homonym_terms(
-        topic, validation_terms, _HOMONYM_FALLBACK_SYSTEM_PROMPT
-    )
-    return _drop_target_description_terms(raw_terms_retry, topic, validation_terms)
-
-
-def _drop_target_description_terms(
-    terms: list[str],
-    topic: str,
-    validation_terms: list[str],
-) -> list[str]:
-    """topic과 validation_terms를 이어붙인 조합과 일치하는 항목을 제거한다.
-
-    예: topic="강남", validation_terms=["방송인"]일 때
-        "방송인 강남", "강남 방송인" -> 제거 (같은 대상을 가리키는 표현)
-        "강남구", "강남역" -> 유지 (실제로 다른 개체를 가리키는 동음이의어)
-    """
-    normalized_topic = _normalize_for_match(topic)
-    normalized_validations = [
-        _normalize_for_match(v) for v in validation_terms if _normalize_for_match(v)
-    ]
-
-    target_combos = {normalized_topic}
-    for v in normalized_validations:
-        target_combos.add(normalized_topic + v)
-        target_combos.add(v + normalized_topic)
-
-    return [t for t in terms if _normalize_for_match(t) not in target_combos]
+def rule_verdict(article: Article, selected: SelectedSense) -> Verdict | None:
+    """분명히 무관하면 Verdict('무관', 'rule'), 아니면 None (→ LLM으로)."""
+    r = rule_check(article, selected)
+    if not r.mentioned:
+        return Verdict(article.link, "무관", "rule", f"검색어·별칭({', '.join(selected.match_terms)})이 기사에 없음")
+    if r.score <= RULE_REJECT_SCORE:
+        return Verdict(article.link, "무관", "rule",
+                       f"다른 의미 단어가 더 많음 (점수 {r.score}: {', '.join(r.excluded_hits[:4])})")
+    return None
 
 
 # ---------------------------------------------------------------------------
-# 직접 언급 보호(guard): topic 문자열 정확 일치
+# [3단계] 2차 LLM 검증
 # ---------------------------------------------------------------------------
 
-def _normalize_for_match(text: str | None) -> str:
-    if not text:
-        return ""
-    text = re.sub(r"<[^>]+>", " ", text).lower()
-    return re.sub(r"[^0-9a-z가-힣]", "", text)
+class _LLMVerdict(BaseModel):
+    # 필드 순서가 중요하다: LLM은 이 순서대로 답을 쓴다. 판정(status)을 먼저 쓰게 하면
+    # 근거와 판정이 엇갈리는 경우가 있었다 (실제: 근거는 "지역 의미로 쓰임, 무관 쪽"인데 판정은 '관련').
+    # 근거를 먼저 쓰고 그에 맞춰 판정하게 한다.
+    index: int = Field(description="기사 번호")
+    reason: str = Field(description="판단 근거 한 줄 (40자 이내, 근거가 된 단어나 내용)")
+    status: Literal["관련", "무관", "보류"] = Field(description="위 근거에 따른 판정")
 
 
-def _mentions_topic_directly(article: Article, topic: str) -> bool:
-    """기사에 topic 문자열 전체가 그대로(붙어 있는 하나의 이름으로) 등장하는지 판정한다.
-
-    예: topic="서울여대"인 기사에서 "서울"과 "여대"가 각각 등장하더라도,
-    "서울여대"라는 이름 자체가 없으면 직접 언급으로 인정하지 않는다
-    (예: "서울에 있는 이화여대..." 기사는 "서울"과 "여대"는 포함하지만
-    topic의 풀네임 "서울여대" 자체는 없으므로 보호 대상이 아니다).
-
-    단어를 쪼개 부분적으로 겹치는지 보는 게 아니라, topic 문자열(정규화:
-    공백/특수문자 제거, 소문자화)이 기사 안에 그대로 들어있는지만 확인하는
-    단순한 규칙이다.
-    """
-    normalized_topic = _normalize_for_match(topic)
-    if not normalized_topic:
-        return False
-
-    article_text = _normalize_for_match(f"{article.title} {article.content}")
-    return normalized_topic in article_text
+class _LLMVerdictBatch(BaseModel):
+    verdicts: list[_LLMVerdict]
 
 
-# ---------------------------------------------------------------------------
-# 제외어 임베딩용 전처리: topic 단어 제거 (표면 글자 낚임 방지)
-# ---------------------------------------------------------------------------
+_VERIFY_SYSTEM_PROMPT = """\
+너는 뉴스 기사가 사용자가 고른 대상을 실제로 다루는지 판정한다.
 
-def _strip_topic_words(text: str, topic: str) -> str:
-    """text에서 topic 단어(부분 문자열)를 제거하고 남은 맥락어만 반환한다.
+[찾는 대상]
+검색어: {query}
+의미: {name} — {definition}
+다른 표기: {aliases}
+관련 단어: {related}
 
-    동음이의어(예: topic="당근")의 경우, 제외어 문자열("당근 재배")을
-    그대로 임베딩하면 "의미"가 아니라 "글자가 같다"는 이유만으로 진짜
-    관련 기사(회사 '당근')와도 유사도가 높게 나와 잘못 제외되는 문제가
-    있다. topic 단어를 지우고 남은 맥락어("재배")만 임베딩하면, "채소로서의
-    맥락"만 순수하게 담을 수 있어 이 문제를 줄일 수 있다.
-    """
-    if not topic:
-        return text
-    stripped = re.sub(re.escape(topic), " ", text, flags=re.IGNORECASE)
-    return re.sub(r"\s+", " ", stripped).strip()
-
-
-def _build_context_only_query(exclusion_terms: list[str], topic: str) -> str:
-    """제외어 목록에서 topic 단어를 제거한 맥락어만 모아 임베딩용 쿼리 문자열을 만든다.
-
-    topic을 제거했을 때 완전히 빈 문자열이 되는 항목(예: 제외어 자체가
-    topic 단어 하나뿐인 경우)은 정보 손실을 피하기 위해 원본 그대로 남긴다.
-    """
-    context_terms = []
-    for term in exclusion_terms:
-        stripped = _strip_topic_words(term, topic)
-        context_terms.append(stripped if stripped else term)
-    return " ".join(context_terms)
-
-
-# ---------------------------------------------------------------------------
-# 임베딩 유사도
-# ---------------------------------------------------------------------------
-
-def _cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
-    a_norm = a / (np.linalg.norm(a) or 1e-10)
-    b_norm = b / (np.linalg.norm(b) or 1e-10)
-    return float(np.dot(a_norm, b_norm))
-
-
-# ---------------------------------------------------------------------------
-# LLM 경계 판정
-# ---------------------------------------------------------------------------
-
-class _ArticleJudgment(BaseModel):
-    index: int = Field(description="입력에서 주어진 기사 번호")
-    is_relevant: bool = Field(
-        description="이 기사가 실제로 topic을 다루면 true, "
-                    "제외 기준(exclusion_terms)에 해당하는 다른 개체를 다루면 false"
-    )
-
-
-class _JudgmentBatch(BaseModel):
-    judgments: list[_ArticleJudgment]
-
-
-_SYSTEM_PROMPT = """너는 뉴스 기사가 '{topic}'을 실제로 다루는지 판정하는 필터다.
-
-각 기사는 1차 임베딩 필터에서 '애매하다'고 판정된 경계 사례들이다. 즉,
-'{topic}'과 혼동되는 다음 대상들 중 하나를 다루고 있을 가능성이 있는 기사들이다:
-{exclusion_terms}
+[헷갈리기 쉬운 다른 의미 — 이 의미의 기사는 '무관']
+{others}
 
 판정 기준:
-- 기사가 실제로 '{topic}'에 대한 내용이면 -> is_relevant: true
-- 기사가 위에 나열된 혼동 대상(동음이의어)에 대한 내용이면 -> is_relevant: false
-- 기사에 '{topic}'과 혼동 대상이 함께 언급되더라도, 기사의 실제 주제가
-  '{topic}'이면 관련 있다고 판단하라.
+- 관련: 찾는 대상이 기사의 주요 소재이거나, 기사에서 의미 있게 다뤄진다.
+- 무관: 다른 의미의 기사이거나, 찾는 대상이 한두 줄 스쳐 지나가듯 언급만 된다.
+- 보류: 주어진 내용만으로는 판단하기 어렵다. (예: 대상이 실제로 관여하는지 불분명)
 
-신중하게 판단하라.
-"""
-
-_USER_PROMPT_TEMPLATE = """아래 기사들을 판정하라.
-
-{articles_block}
+규칙:
+- 검색어 글자가 들어 있다는 이유만으로 '관련'이라고 하지 마라. 어떤 의미로 쓰였는지 봐라.
+- reason은 한국어 한 줄(40자 이내)로, 판단 근거가 된 단어나 내용을 적어라.
+- 입력된 모든 기사 번호에 대해 하나씩 답하라.
 """
 
 
-def _build_articles_block(articles: list[Article], indices: list[int]) -> str:
-    lines = []
-    for idx, article in zip(indices, articles):
-        snippet = article.content[:500]
-        lines.append(f"[{idx}] 제목: {article.title}\n본문: {snippet}\n")
-    return "\n".join(lines)
+def _verify_prompt(selected: SelectedSense) -> str:
+    s = selected.sense
+    others = "\n".join(f"- {o.name}: {o.definition} (관련 단어: {', '.join(o.related_terms[:6])})"
+                       for o in selected.other_senses) or "- (없음)"
+    return _VERIFY_SYSTEM_PROMPT.format(
+        query=selected.query, name=s.name, definition=s.definition,
+        aliases=", ".join(s.aliases) or "(없음)", related=", ".join(s.related_terms) or "(없음)",
+        others=others,
+    )
 
 
-async def _llm_judge_borderline(
-    topic: str,
-    exclusion_terms: list[str],
-    articles: list[Article],
-    indices: list[int],
-) -> dict[int, bool]:
-    llm = get_chat_model(temperature=0)
-    structured_llm = llm.with_structured_output(_JudgmentBatch)
-
-    results: dict[int, bool] = {}
-    for start in range(0, len(articles), _LLM_BATCH_SIZE):
-        batch_articles = articles[start : start + _LLM_BATCH_SIZE]
-        batch_indices = indices[start : start + _LLM_BATCH_SIZE]
-
-        system = _SYSTEM_PROMPT.format(
-            topic=topic,
-            exclusion_terms=", ".join(exclusion_terms),
-        )
-        user = _USER_PROMPT_TEMPLATE.format(
-            articles_block=_build_articles_block(batch_articles, batch_indices)
-        )
-        try:
-            result: _JudgmentBatch = await structured_llm.ainvoke(
-                [("system", system), ("human", user)]
-            )
-            for j in result.judgments:
-                results[j.index] = j.is_relevant
-        except Exception:
-            for idx in batch_indices:
-                results[idx] = True
-
-    return results
+def _articles_block(articles: list[Article]) -> str:
+    return "\n\n".join(
+        f"[{i}] 제목: {a.title}\n요약: {a.description}\n본문: {a.content[:LLM_BODY_CHARS]}"
+        for i, a in enumerate(articles)
+    )
 
 
-# ---------------------------------------------------------------------------
-# 메인 진입점
-# ---------------------------------------------------------------------------
-
-async def filter_by_direct_mention(articles: list[Article], topic: str) -> list[Article]:
-    """topic 문자열이 기사에 통째로 있는 기사만 남기는 독립적인 필터.
-
-    V1(동음이의어 제외어 필터)과는 완전히 다른 문제를 푼다:
-      V1: "강남구" vs "방송인 강남"처럼 topic과 철자가 같은데 의미가 다른
-          동음이의어를 구분하는 문제.
-      이 함수: "서울여대"를 검색했는데 "서울"과 "여대"가 각각 매칭돼서
-          "이화여대" 같은 철자가 다른 유사 기관 기사가 섞여 들어오는 문제.
-          이 경우 두 대상은 애초에 철자 자체가 다르므로(동음이의어가 아님)
-          임베딩/LLM 판정이 필요 없고, "topic 문자열이 실제로 있는가"만
-          보면 충분하다.
-
-    동음이의어 제외어나 임베딩은 전혀 쓰지 않는다. topic 문자열이 없는 기사는
-    무조건 제외되므로, topic을 표현만 살짝 바꿔 쓴(paraphrase) 관련 기사까지
-    걸러낼 수 있다는 점에 유의해야 한다 — 그 트레이드오프를 감수하는 필터다.
-    """
-    return [a for a in articles if _mentions_topic_directly(a, topic)]
-
-
-async def filter_by_relevance(
-    articles: list[Article],
-    topic: str,
-    validation_terms: list[str] | None = None,
-    exclusion_terms: list[str] | None = None,
-    exclusion_low_threshold: float | None = None,
-    exclusion_high_threshold: float | None = None,
-    apply_direct_mention_guard: bool = True,
-) -> list[Article]:
-    """0단계(제외어 자동 생성) + 직접 언급 보호(topic 문자열 정확 일치)
-    + 임베딩 + LLM 경계 판정.
-
-    validation_terms는 exclusion_terms를 자동 생성할 때(동음이의어 판정
-    정확도용)만 쓰이고, exclusion_terms를 직접 넘기면 무시된다.
-
-    apply_direct_mention_guard=True(기본값, 실서비스에서 항상 이 값을 씀):
-      topic 문자열이 기사에 통째로 등장하면 제외어 판정과 무관하게 무조건
-      통과시킨다.
-    apply_direct_mention_guard=False:
-      이 가드를 건너뛰고 순수하게 제외어(동음이의어) 기반 필터링만 적용한다.
-      eval_filter.py에서 "제외어 필터 자체의 효과(V1)"와 "직접 언급 보호를
-      추가했을 때의 효과(V2)"를 분리해서 측정하기 위한 용도다.
-    """
+async def llm_verify(articles: list[Article], selected: SelectedSense) -> tuple[list[Verdict], list[str]]:
+    """LLM으로 관련 / 무관 / 보류를 판정한다. (판정 목록, 판정 못 한 기사 link 목록)"""
     if not articles:
-        return articles
+        return [], []
+    llm = get_chat_model(temperature=0).with_structured_output(_LLMVerdictBatch)
+    system = _verify_prompt(selected)
+    semaphore = asyncio.Semaphore(LLM_CONCURRENCY)
 
-    embedded = [a for a in articles if a.embedding is not None]
-    if len(embedded) != len(articles):
-        return articles
+    async def judge(batch: list[Article]) -> list[Verdict]:
+        async with semaphore:
+            try:
+                result: _LLMVerdictBatch = await llm.ainvoke(
+                    [("system", system), ("human", f"아래 기사들을 판정하라.\n\n{_articles_block(batch)}")]
+                )
+            except Exception as e:
+                print(f"  [경고] LLM 판정 실패 ({type(e).__name__}) — 기사 {len(batch)}건은 판정하지 않음")
+                return []
+        verdicts, seen = [], set()
+        for v in result.verdicts:
+            if 0 <= v.index < len(batch) and v.index not in seen:   # 없는 번호·중복 답은 무시
+                seen.add(v.index)
+                verdicts.append(Verdict(batch[v.index].link, v.status, "llm",
+                                        v.reason.strip()[:200], settings.chat_model))
+        return verdicts
 
-    if exclusion_terms is None:
-        exclusion_terms = await generate_exclusion_terms(topic, validation_terms)
-    normalized_exclusions = [t.strip() for t in exclusion_terms if t.strip()]
+    batches = [articles[i:i + LLM_BATCH_SIZE] for i in range(0, len(articles), LLM_BATCH_SIZE)]
+    verdicts = [v for vs in await asyncio.gather(*(judge(b) for b in batches)) for v in vs]
+    judged = {v.link for v in verdicts}
+    return verdicts, [a.link for a in articles if a.link not in judged]
 
-    kept: list[Article] = []
-    remaining: list[Article] = []
 
-    for article in embedded:
-        # 직접 언급 보호: topic 문자열이 통째로 등장하면, 제외어 유무와
-        # 무관하게 무조건 통과시킨다. (apply_direct_mention_guard=False면
-        # 이 가드 자체를 적용하지 않는다.)
-        if apply_direct_mention_guard and _mentions_topic_directly(article, topic):
-            kept.append(article)
+# ---------------------------------------------------------------------------
+# 전체 흐름
+# ---------------------------------------------------------------------------
+
+async def filter_articles(
+    articles: list[Article],
+    selected: SelectedSense,
+    existing: list[Article] = (),
+) -> FilterOutcome:
+    """[메모리 버전] 중복 제거 → 규칙 → LLM. 기사 목록은 바꾸지 않고 판정 결과만 돌려준다."""
+    await embed_articles(articles)
+    duplicates = find_duplicates(articles, existing)
+    candidates = [a for a in articles if a.link not in duplicates]
+
+    rule_verdicts, to_llm = [], []
+    for a in candidates:
+        v = rule_verdict(a, selected)
+        if v:
+            rule_verdicts.append(v)
         else:
-            remaining.append(article)
+            to_llm.append(a)
 
-    if not normalized_exclusions:
-        # 동음이의어 제외어가 없으면 나머지는 그대로 통과 (걸러낼 기준이 없음).
-        kept.extend(remaining)
-        return kept
+    llm_verdicts, unjudged = await llm_verify(to_llm, selected)
+    return FilterOutcome(duplicates, rule_verdicts + llm_verdicts, unjudged)
 
-    excl_low = exclusion_low_threshold if exclusion_low_threshold is not None else getattr(
-        settings, "exclusion_low_threshold", _DEFAULT_EXCLUSION_LOW
-    )
-    excl_high = exclusion_high_threshold if exclusion_high_threshold is not None else getattr(
-        settings, "exclusion_high_threshold", _DEFAULT_EXCLUSION_HIGH
-    )
 
-    neg_vec = np.array(
-        await get_embeddings().aembed_query(
-            _build_context_only_query(normalized_exclusions, topic)
-        )
-    )
+async def filter_topic(
+    topic_id: int,
+    selected: SelectedSense,
+    period_days: int | None = None,
+    redo: bool = False,
+) -> FilterOutcome:
+    """[DB 버전] topic의 아직 판정하지 않은 기사를 필터링하고 결과를 article_topics에 저장한다.
 
-    borderline: list[Article] = []
-    borderline_indices: list[int] = []
+    - 새로 들어온 기사만 처리한다. 이미 판정한 대표 기사와 비슷한 새 기사는 중복으로 표시한다.
+    - 기사 임베딩은 DB에 저장해 두고 다시 계산하지 않는다.
+    - redo=True: 규칙·프롬프트를 바꿔서 처음부터 다시 판정할 때 (정답 라벨은 지워지지 않는다)
+    """
+    from qupict import db
 
-    for i, article in enumerate(remaining):
-        art_vec = np.array(article.embedding)
-        sim_neg = _cosine_sim(neg_vec, art_vec)
+    if redo:
+        db.reset_topic_filter(topic_id)
+    new = db.get_topic_articles(topic_id, period_days=period_days, unjudged_only=True)
+    if not new:
+        return FilterOutcome()
+    existing = db.get_topic_articles(topic_id, statuses=STATUSES, include_duplicates=False)
 
-        if sim_neg >= excl_high:
-            continue  # 명확히 혼동 개체 -> 즉시 제외
-        elif sim_neg < excl_low:
-            kept.append(article)  # 명확히 무관한 혼동 -> 통과
-        else:
-            borderline.append(article)
-            borderline_indices.append(i)
-
-    if borderline:
-        judgments = await _llm_judge_borderline(
-            topic, normalized_exclusions, borderline, borderline_indices
-        )
-        for article, idx in zip(borderline, borderline_indices):
-            if judgments.get(idx, True):
-                kept.append(article)
-
-    return kept
+    missing = [a for a in new + existing if a.embedding is None]   # 임베딩을 새로 계산할 기사
+    await embed_articles(existing)
+    outcome = await filter_articles(new, selected, existing)
+    db.save_article_embeddings(missing)
+    db.save_duplicates(topic_id, outcome.duplicates)
+    db.save_judgments(topic_id, [db.Judgment(v.link, v.status, v.stage, v.reason, v.model)
+                                 for v in outcome.verdicts])
+    return outcome
