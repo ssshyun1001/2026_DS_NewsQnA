@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field
 from experiments.common import print_table, save_results
 from experiments.qa_set import QAItem, load_qa
 from qupict import db
-from qupict.llm import get_chat_model
+from qupict.llm import get_structured_model
 from qupict.schemas import Answer
 
 METHODS = ["llm_only", "basic_rag", "qupict"]
@@ -96,7 +96,7 @@ _GRADE_PROMPT = """\
 
 def grade(item: QAItem, answer_text: str, evidence_texts: list[str]) -> _Grade | None:
     evidence = "\n\n".join(f"[근거 기사 {i}]\n{t[:EVIDENCE_CHARS]}" for i, t in enumerate(evidence_texts, 1))
-    llm = get_chat_model(temperature=0).with_structured_output(_Grade)
+    llm = get_structured_model(_Grade)
     messages = [("system", _GRADE_PROMPT),
                 ("human", f"질문: {item.question}\n정답: {item.answer}\n\n{evidence}\n\n[채점할 답변]\n{answer_text}")]
     for attempt in range(GRADE_ATTEMPTS):      # 가끔 한 번씩 실패한다 (실제: 같은 채점이 재시도에서 성공)

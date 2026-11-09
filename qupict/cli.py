@@ -1,7 +1,7 @@
 """
 터미널 입력 도우미 — 실행 파일 3개(run.py · admin.py · evaluate.py)가 같이 쓴다
 
-  setup_console()      Windows 콘솔에서 한글이 깨지지 않게 (실행 파일 맨 위에서 한 번)
+  setup_console()      Windows 콘솔 준비: 한글 깨짐 방지 + asyncio 루프 설정 (실행 파일 맨 위, asyncio.run 전에 한 번)
   read_line(prompt)    빈 입력·한글 조합 중 깨진 입력을 다시 받는다
   read_period_days()   기간(일)을 1 이상의 정수로 받는다
   choose_number(prompt, count)   1~count 중 하나를 받아 0부터 시작하는 번호로 돌려준다
@@ -23,6 +23,13 @@ def setup_console() -> None:
             sys.stdout.reconfigure(encoding="utf-8")
         except Exception:
             pass
+        # Windows 기본 루프(Proactor)는 상대 서버가 먼저 끊은 연결을 닫을 때
+        # "Exception in callback _ProactorBasePipeTransport._call_connection_lost ... WinError 10054"를
+        # 찍는다 (크롤링 중 언론사 서버가 끊으면 자주 남, 동작에는 영향 없음). Selector 루프는 이 문제가 없다.
+        import asyncio
+        policy = getattr(asyncio, "WindowsSelectorEventLoopPolicy", None)
+        if policy is not None:
+            asyncio.set_event_loop_policy(policy())
 
 
 def _looks_corrupted(text: str) -> bool:

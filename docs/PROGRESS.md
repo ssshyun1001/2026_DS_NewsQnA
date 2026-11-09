@@ -1,4 +1,4 @@
-# QuPicT 진행 상황 정리 (2026-11-07)
+# QuPicT 진행 상황 정리 (2026-11-09)
 
 팀원 공유용 문서입니다. 지금까지 한 일, 내 컴퓨터에서 실행하는 방법, 정해야 할 것을 정리했습니다.
 관련 PR: [#1 폴더 구조 정리 + 0단계 검색어 의미 선택](https://github.com/ssshyun1001/2026_DS_NewsQnA/pull/1)
@@ -12,16 +12,44 @@
 | 폴더 구조 정리 | 전체 | ✅ 완료 (기존 코드 내용은 그대로, 위치와 import만 변경) |
 | LLM 연결 | `qupict/llm.py` | ✅ 학교 팩트챗 Gateway로 연결 완료 |
 | 네이버 뉴스 API | `qupict/collect.py` | ✅ 연결 확인 (NCP API HUB) |
-| 0단계 의미 선택 | `qupict/sense.py` | ✅ 구현 + 실제 9개 검색어로 확인 + **DB 캐싱 연결** |
+| 0단계 의미 선택 | `qupict/sense.py` | ✅ 구현 + 실제 9개 검색어로 확인 + **DB 캐싱 연결**. 의미·연관어는 **LLM 후보만** 사용 (`targets.yaml` 삭제) |
 | DB | `schema.sql`, `qupict/db.py` | ✅ 테이블 6개 + 단계별 저장·조회 함수 + 점검 스크립트 (아래 7) |
-| 1단계 수집 개편 | `qupict/collect.py` | ✅ 의미 기반 검색 + 본문·언론사·이미지 수집 |
+| 1단계 수집 개편 | `qupict/collect.py` | ✅ 의미 기반 검색(**"검색어 + 연관어"·별칭만**, 검색어 단독 검색 안 함) + 본문·언론사·이미지 수집 |
 | 2·3단계 필터링 개편 | `qupict/filtering.py` | ✅ 중복 제거 → 규칙 점수 → LLM 관련/무관/보류 + 근거, DB 저장 |
 | 4·5단계 인덱싱·검색·답변 | `indexing.py`, `retrieval.py`, `qa.py` | ✅ 청크·이미지 설명·임베딩 저장, pgvector 검색, 청크 기반 답변 |
 | 실행 파일 | `run.py` · `admin.py` · `evaluate.py` | ✅ 용도별로 분리: 서비스(질문하기) / 서비스 DB 관리(일괄 수집·판정·인덱싱·현황) / 평가(라벨·실험) |
-| 실험 코드 (7단계) | `experiments/` | ✅ 실험 A·B·C + 질문 세트 도구 (`exp-a` · `make-qa` · `exp-b` · `exp-c`), 강남으로 시험 실행 |
-| 오프라인 테스트 | `tests/offline/` | ✅ 9개 묶음, `python tests/run_offline.py` (크레딧 0, DB 없이도 됨) |
+| 정답 평가셋 (JSON) | `evalset/` | ✅ 라벨링 도구(`build_labeled_set.py`) + **실험 A를 정답 JSON으로 평가** (`exp_a_filtering.py`, DB 안 씀) |
+| 실험 코드 (7단계) | `experiments/` | ✅ 실험 B·C + 질문 세트 도구 (`make-qa` · `exp-b` · `exp-c`), 강남으로 시험 실행 |
+| 오프라인 테스트 | `tests/offline/` | ✅ 11개 묶음, `python tests/run_offline.py` (크레딧 0, DB 없이도 됨) |
+
+최근 변경 사항은 바로 아래 **1-1**에 모아 두었습니다.
 
 **데이터 수집 전에 만들 수 있는 코드는 모두 만들었습니다.** 남은 일은 **모여서 12개 대상 수집 + 정답 라벨링 + 질문 세트 만들기**, 그리고 실험 실행입니다 (아래 3-6, 12).
+
+### 1-1. 최근 변경 (2026-11-09)
+
+**정답 라벨링 → JSON 평가셋 (`evalset/`)**
+- `python evalset/build_labeled_set.py`: 한 번 실행하면 **검색어를 계속 받아** 라벨링하고, 검색어에 `q`를 넣으면 끝납니다.
+  - 흐름: 검색어 → 기간(Enter = 30일) → LLM 의미 후보에서 고르기 → 수집 → 중복 제거(대표 기사만) → 최신 대표 기사부터 **1 관련 / 2 무관** (s 건너뛰기, q 이 검색어 그만)
+  - 결과는 모두 **`evalset/labeled_set.json` 하나**에 쌓입니다. 라벨마다 바로 저장하고, 다시 실행하면 같은 파일 뒤에 이어서 씁니다 (이미 붙인 기사는 다시 안 물어봄, 검색어 × 의미당 150건까지).
+  - 항목 형식: `title`, `url`, `description`, `content`, `query`, `sense`(고른 의미 + 별칭·연관어·배제어·고르지 않은 의미), `label`(true/false)
+  - `old/build_labeled_set.py`를 옮긴 것입니다. 라벨은 DB에 쓰지 않습니다.
+- **실험 A를 `evalset/exp_a_filtering.py`로 옮기고 정답 JSON으로 평가**합니다 (`python evaluate.py exp-a`도 같은 실험, 자세히는 10장).
+
+**검색 방식 (1단계)**
+- **검색어 단독 검색을 뺐습니다.** "검색어 + 연관어"(연관어 전부, 최대 8개)와 별칭만 검색합니다. 연관어·별칭이 하나도 없을 때만 검색어 단독.
+- 이유: "강남"을 그대로 섞어 검색하면 기사가 많은 지역 강남이 상한을 채워서 방송인 강남 기사가 라벨 목표(150건) 안에 잘 안 들어왔습니다 (예전: 방송인 강남 300건 중 100건이 "강남" 단독 결과 → 지금 0건). 서비스도 같은 방식입니다.
+
+**`targets.yaml` 삭제 — 의미·연관어는 LLM 후보만**
+- 사람이 적은 정의·별칭·연관어로 LLM 값을 덮어쓰던 기능을 없앴습니다. 모든 곳(서비스·관리·라벨링·실험)이 LLM 의미 후보(DB `query_senses`에 캐시)만 씁니다.
+- 대상 목록은 **DB에 저장된 topic**입니다. 새 대상은 `python admin.py collect 강남`(의미 고르기 → 수집 → 중복 제거)으로 추가하고, `collect-all` / `filter-all` / `index-all`은 저장된 topic 전부를 처리합니다. 일괄 명령은 시작할 때 topic 기준을 LLM 후보 값으로 다시 맞춥니다.
+- 실험 A의 1-b 검증어(예전 "검증 키워드" 재현용)는 `evalset/exp_a_filtering.py`의 `VALIDATION_TERMS`로 옮겼습니다.
+- 남은 한계: LLM이 지어낸 별칭(예: 방송인 강남 → "전형수")도 그대로 쓰입니다.
+
+**고친 버그**
+- **LLM 형식 응답이 전부 실패하던 문제**: 지금 채팅 모델(`claude-fable-5-1`)은 게이트웨이에서 도구 호출 강제(`tool_choice`)를 지원하지 않아 400 에러가 났고, 코드가 에러를 삼켜 "의미 후보 없음"·"판정 못 함"이 됐습니다 (DB에 후보가 캐시된 강남·애플만 정상이었음). → `qupict/llm.py`의 `get_structured_model()`(`json_schema` 방식)로 통일 (의미 후보, 직접 입력 의미, LLM 판정, 실험 C 채점, 질문 세트). **이전에 `filter-all`을 돌렸다면 판정 못 한 기사가 남아 있을 수 있으니 다시 실행하세요.**
+- **임베딩 토큰 한도 초과**: 기사 279건을 한 요청에 보내 `Requested 351651 tokens, max 300000` 에러 → 한 요청에 100건씩 나눠 보냄 (`EMBED_BATCH_SIZE`).
+- **Windows `WinError 10054` 로그**: 크롤링 중 언론사 서버가 연결을 끊으면 `Exception in callback _ProactorBasePipeTransport...`가 찍히던 문제 → `setup_console()`에서 Windows asyncio 루프를 Selector 방식으로 바꿈 (동작에는 영향 없던 로그).
 
 ---
 
@@ -30,15 +58,14 @@
 ```text
 2026_DS_NewsQnA/
 ├── run.py              서비스 실행 파일: python run.py 강남 30 (질문하기만)
-├── admin.py            서비스 DB 관리: collect-all · filter-all · index-all · status · init-db
+├── admin.py            서비스 DB 관리: collect · collect-all · filter-all · index-all · status · init-db
 ├── evaluate.py         평가: label · make-qa · exp-a · exp-b · exp-c · sim
-├── targets.yaml        평가용 수집 대상 9개 + 고를 의미
 ├── schema.sql          DB 테이블 6개 (python admin.py init-db)
 ├── docker-compose.yml  로컬 PostgreSQL + pgvector (docker compose up -d)
 ├── requirements.txt
 ├── .env.example        API 키 설정 예시 (.env로 복사해서 사용)
 ├── qupict/             파이프라인 코드: 단계 하나 = 파일 하나
-│   ├── config.py       설정값, targets.yaml 읽기
+│   ├── config.py       설정값
 │   ├── schemas.py      단계 사이에 주고받는 데이터 형태
 │   ├── llm.py          LLM·임베딩 연결 (여기 한 곳에서만 만듦)
 │   ├── db.py           DB 연결 + 단계별 저장·조회 함수
@@ -48,7 +75,11 @@
 │   ├── indexing.py     [4단계] 이미지 설명 → 청크 → 임베딩 저장
 │   ├── retrieval.py    [5단계] pgvector 검색 (+HyDE·Multi-Query), FAISS는 비교 실험용
 │   └── qa.py           [5단계] 답변 생성
-├── experiments/        [7단계] 실험 A·B·C, 질문 세트(qa_set.yaml), 유사도 확인, 결과(results/)
+├── evalset/            정답 JSON 평가셋 (DB 안 씀)
+│   ├── build_labeled_set.py  라벨링 → labeled_set.json (한 파일에 누적)
+│   ├── exp_a_filtering.py    [7단계] 실험 A: labeled_set.json으로 필터링 방법 비교
+│   └── results/              실험 A 결과 + LLM 판정 캐시(llm_cache.json)
+├── experiments/        [7단계] 실험 B·C, 질문 세트(qa_set.yaml), 유사도 확인, 결과(results/)
 ├── tests/
 │   ├── check_db.py     DB 점검 (python tests/check_db.py, 실제 DB 사용)
 │   ├── run_offline.py  오프라인 테스트 전체 실행 (크레딧 0)
@@ -101,11 +132,6 @@ python -m qupict.sense 애플
 ```
 → "기업 Apple / 과일 사과" 후보가 나오고 번호로 고를 수 있으면 성공입니다.
 
-```bash
-python -m qupict.sense --targets
-```
-→ `targets.yaml`의 대상들을 한 번에 처리해 결과를 보여 줍니다.
-
 ### 3-4. DB 띄우기 (Docker)
 
 > 팀 공용 DB(9-3)를 쓰면 1~3번은 건너뛰고 `pip install`과 점검(5번)만 하면 됩니다. 로컬 Docker는 혼자 실험할 때 씁니다.
@@ -157,7 +183,8 @@ docker exec -it qupict-postgres psql -U qupict -d qupict
 | --- | --- | --- |
 | `run.py` | **서비스** 사용자 (질문하고 답 받기) | 서비스 DB |
 | `admin.py` | 서비스 DB 관리 (12개 대상 미리 채우기, 현황) | 서비스 DB |
-| `evaluate.py` | 평가 (정답 라벨, 질문 세트, 실험 A·B·C) | 지금은 서비스 DB → **정답 JSON으로 바꿀 예정** |
+| `evaluate.py` | 평가 (정답 라벨, 질문 세트, 실험 A·B·C) | 실험 A는 **정답 JSON**(`evalset/labeled_set.json`), 나머지는 아직 서비스 DB |
+| `evalset/build_labeled_set.py` | 정답 라벨링 (JSON) | 정답 JSON |
 
 **서비스 (`run.py`)**
 
@@ -170,16 +197,18 @@ docker exec -it qupict-postgres psql -U qupict -d qupict
 
 | 명령 | 하는 일 |
 | --- | --- |
-| `python admin.py collect-all` | `targets.yaml` 대상 전부 수집 → 중복 제거 (0·1·2단계). 대상당 최대 **300건** (`--max`), 끝나면 대표 기사 수를 알려 줌 |
+| `python admin.py collect 강남` | **새 대상 추가**: LLM 의미 후보에서 고르기 → topic 저장 → 수집 → 중복 제거 (0·1·2단계). 대상당 최대 **300건** (`--max`), 끝나면 대표 기사 수를 알려 줌 |
+| `python admin.py collect-all` | DB에 저장된 대상(topic) 전부 다시 수집 → 중복 제거. 새 기사만 크롤링 |
 | `python admin.py filter-all` | 전부 필터링 (2·3단계). `--redo`: 판정을 지우고 처음부터 (정답 라벨은 유지) |
 | `python evaluate.py label` | **대상당 최신 대표 기사 150건에 정답 라벨** (1 관련 / 2 무관 / 3 보류 / s 건너뛰기 / b 이전 / q 끝). `--limit`로 목표 변경. 중복 제거는 임베딩만 써서 LLM 비용 없음, `filter-all` 전에 해도 됨 |
 | `python admin.py index-all` | 전부 인덱싱 (4단계). `--no-images`: 이미지 설명 없이 (LLM 비용 0) |
 | `python admin.py status` | topic별 현황: 기사·중복·판정·라벨·청크 수 |
 | `python admin.py init-db` | DB 테이블 만들기 |
 
+- **대상 = DB에 저장된 topic**입니다 (예전 `targets.yaml`은 지웠습니다). 새 대상은 `collect 검색어`로 추가하고, 일괄 명령(`*-all`)은 저장된 topic 전부를 처리합니다.
+- **의미·별칭·연관어는 LLM이 만든 의미 후보만 씁니다** (사람이 적은 값으로 덮어쓰지 않음). 일괄 명령은 시작할 때 topic의 기준을 LLM 후보 값으로 다시 맞춥니다.
 - 일괄 명령은 모두 `--target 강남`처럼 **검색어 하나만** 할 수 있습니다.
 - 모든 명령은 **아직 안 한 것만** 처리합니다 → 중간에 끊겨도 다시 실행하면 이어서 하고, 비용이 다시 들지 않습니다.
-- `ask`에서 고른 의미가 이미 DB에 topic으로 있으면 **저장된 기준(사람이 고친 정의·별칭 포함)** 을 그대로 씁니다.
 - 답변의 출처에는 **답변이 실제로 인용한 기사만** 보여 줍니다 (`Answer.cited`, 실험 C의 출처 정확도용).
 - **라벨 기준: 대상당 중복 제거 후 최신 대표 기사 150건.** `label`은 이미 붙인 라벨 수를 빼고 최신 기사부터 남은 개수만 보여 주고, 150건을 채운 대상은 목록에서 빠집니다. 건너뛴(s) 기사는 다음 실행 때 다시 나오니, 판단이 어려운 기사는 3(보류)으로 표시하세요.
 - 150건이 남도록 `collect-all`은 대상당 **최대 300건**을 모읍니다 (검색어마다 최신순 최대 300건까지 쪽을 넘겨 받음, 강남 30일 기준 후보 약 700건). 수집 결과에 "⚠ 라벨 목표 150건보다 N건 적음"이 나오면 안내대로 `--max` 또는 `--days`를 늘려 다시 실행하세요 (이미 있는 기사는 다시 크롤링하지 않음).
@@ -189,11 +218,19 @@ docker exec -it qupict-postgres psql -U qupict -d qupict
 
 ### 3-6. 모이는 날 순서
 
+정답 라벨은 **JSON 평가셋**으로 붙입니다 (실험 A가 이 파일로 평가):
+
 ```bash
-python admin.py collect-all
+python evalset/build_labeled_set.py   # 검색어마다 의미 고르기 → 150건 라벨 → 다음 검색어 … q로 끝
 ```
 ```bash
-python evaluate.py label
+python evaluate.py exp-a              # 라벨이 쌓이는 중간에 돌려도 됨 (LLM 판정은 캐시)
+```
+
+서비스 DB 채우기 (질문 답변·실험 B·C용):
+
+```bash
+python admin.py collect 강남      # 대상마다 한 번 (의미를 골라 추가). 같은 검색어의 다른 의미도 다시 실행해 추가
 ```
 ```bash
 python admin.py filter-all
@@ -202,7 +239,8 @@ python admin.py filter-all
 python admin.py status
 ```
 
-1. **collect-all**: 12개 항목 × 최대 300건 → 중복 제거. 네이버 검색은 무료, 처음 보는 검색어만 의미 후보 LLM 호출 (약 0.3 크레딧씩), 중복 제거는 임베딩만 (거의 0). 대상마다 "대표 기사 N건"이 150 이상인지 확인
+0. **라벨링 (JSON)**: 사람마다 다른 검색어를 맡아 `build_labeled_set.py`로 라벨링 → 각자 만든 `labeled_set.json`을 합치거나 한 사람이 이어서 작업. `evaluate.py label`(DB에 라벨 저장)은 예전 방식이라 실험 A에는 쓰이지 않습니다
+1. **collect**: 대상마다 의미를 골라 추가 → 최대 300건 수집 → 중복 제거. 이후 다시 모을 때는 `collect-all`. 네이버 검색은 무료, 처음 보는 검색어만 의미 후보 LLM 호출 (약 0.3 크레딧씩), 중복 제거는 임베딩만 (거의 0). 대상마다 "대표 기사 N건"이 150 이상인지 확인
 2. **label**: 대상당 최신 대표 기사 150건을 사람이 나눠서 라벨링 (12개 × 150 = 1,800건) — topic마다 번호를 골라서 하므로 **사람마다 다른 topic**을 맡으면 됩니다. 중복 제거는 LLM 비용이 없고, 시스템 판정 없이 라벨을 붙이므로 정답이 시스템에 끌려가지 않습니다
 3. **filter-all**: 중복이 아닌 대표 기사 전부를 규칙·LLM으로 판정 (100건당 약 10~15 크레딧 → 대상당 대표 기사 약 200~250건이면 12개 합쳐 약 250~450 크레딧 예상). 라벨과 판정은 따로 저장되므로 label과 순서를 바꿔도 됩니다
 4. **status**로 남은 라벨 수 확인
@@ -239,10 +277,13 @@ python admin.py status
 
 | 모델 | 1회당 | 메모 |
 | --- | --- | --- |
-| `claude-haiku-5-5` | 약 0.31 | **기본값**. 가장 빠르고(2~3초) 결과가 깔끔 |
+| `claude-haiku-5-5` | 약 0.31 | 가장 빠르고(2~3초) 결과가 깔끔 |
 | `gpt-5.6-luna` | 약 0.36 | 사용 가능 |
 | `gemini-3.7-flash` | 약 1.44 | 느리고(9초) 비쌈 — 사용하지 않음 |
 | `text-embedding-3-small` | 약 0 | 임베딩은 거의 무료 |
+
+- 지금 `.env`의 채팅 모델은 `claude-fable-5-1`입니다. 게이트웨이의 Claude 모델은 도구 호출 강제(`tool_choice`)를 지원하지 않으므로, 형식 있는 응답은 꼭 `get_structured_model()`(`json_schema` 방식)으로 만드세요.
+- 임베딩은 한 요청에 100건씩 나눠 보냅니다 (게이트웨이 한도: 요청당 30만 토큰).
 
 **예상 사용량**: 파이프라인 1회(9개 대상 × 기사 100건) 약 50~100 크레딧.
 **주의**: 5단계 답변은 기사 본문을 많이 넣어서 1회 3~5 크레딧 — 실험에서 답변을 수백 번 만들면 500~1,000 크레딧이 들 수 있습니다. 답변 결과는 저장해서 재사용하고, 실험은 몰아서 하지 않는 게 좋습니다.
@@ -259,7 +300,7 @@ python admin.py status
     없으면 LLM이 의미 후보 생성 (자주 쓰이는 순, 최대 3개) → DB에 저장
       1. 기업 Apple   별칭 [Apple Inc.]  연관어 [아이폰, 맥북, 팀 쿡, iOS …]
       2. 과일 사과     연관어 [과수원, 농가, 수확, 사과값 …]
-  → 하나 선택 (번호 / targets.yaml 이름 / "기타" 직접 입력)
+  → 하나 선택 (번호 / "기타" 직접 입력)
   → 결과(SelectedSense)
       기사에서 찾을 표기 = 검색어 + 별칭          → 1단계 수집
       배제어 = 고르지 않은 의미의 연관어          → 2단계 규칙 필터
@@ -278,10 +319,10 @@ python admin.py status
 | `DATABASE_URL` 없음 / DB 연결 실패 | 멈추지 않고 LLM만 사용 (경고 출력) |
 
 - 실제 확인 (팀 공용 DB, "애플" 3번): 1회차 LLM → DB 저장, 2·3회차 DB에서 읽음. LLM 호출 1번, 세 번 모두 같은 결과
-- `run.py`, `python -m qupict.sense`, `--targets` 모두 이 함수를 씁니다. DB 없이 LLM만 부르려면 `generate_sense_candidates`
+- `run.py`, `admin.py`, `python -m qupict.sense`, 라벨링 스크립트 모두 이 함수를 씁니다. DB 없이 LLM만 부르려면 `generate_sense_candidates`
 - 후보를 **다시 만들고 싶을 때**: 지금은 DB의 해당 검색어 행을 지워야 합니다 (같은 이름은 덮어쓰지만, 이름이 바뀐 옛 후보는 남아서 섞이기 때문)
 
-### 실제 결과 (`python -m qupict.sense --targets`)
+### 실제 결과 (예전 `targets.yaml` 기준 기록, 지금은 사람이 고친 값 없이 LLM 후보만 씀)
 
 **① 한 가지 의미를 찾는 검색어**
 
@@ -311,13 +352,13 @@ python admin.py status
 
 | 문제 | 예시 | 대응 |
 | --- | --- | --- |
-| 정보를 지어냄 | 방송인 강남 → 별칭 "조남식", 정의 "본명 조성민", 연관어 "비와이" | `targets.yaml`에 사람이 확인한 `definition` / `aliases` / `related_terms`를 적으면 LLM 값 대신 사용 |
+| 정보를 지어냄 | 방송인 강남 → 별칭 "조남식"·"전형수", 정의 "본명 조성민", 연관어 "비와이" | (예전: `targets.yaml`로 사람 값 덮어쓰기 → **지금은 지움**, LLM 값을 그대로 씀. 남은 한계) |
 | 모르는 단어에 억지 후보 | 베라 → "인물 베라 (확실하지 않음)", 연관어 없음 | **연관어 없는 후보는 버림** → 후보가 없으면 직접 입력으로 |
 | 한자·외국 문자 | "出荷", "積雪" | **한자가 섞인 단어는 제거** (iOS, HBM 같은 영문은 유지) |
 | 검색어 일부가 연관어로 | 서울여대 → "여대" (성신여대 기사까지 점수를 받게 됨) | **검색어 안에 포함된 단어는 연관어에서 제거** |
 | 두 의미에 같은 단어 | 기업 Apple·과일 사과 둘 다 "가격" | 양쪽 모두에서 제거 (원래 있던 규칙) |
 | 직접 입력이 LLM 후보와 같은 의미 | 직접 입력 "보건용 마스크" ↔ LLM 후보 "얼굴 마스크" → '방역', '황사'가 배제어가 됨 | **연관어가 2개 이상 겹치는 후보는 같은 의미로 보고 배제어에서 제외** |
-| 너무 넓은 별칭 | 삼전 → '삼성' (삼성 라이온즈 기사까지 들어옴) | `targets.yaml`에 별칭 고정 |
+| 너무 넓은 별칭 | 삼전 → '삼성' (삼성 라이온즈 기사까지 들어옴) | (예전: `targets.yaml`로 별칭 고정 → **지금은 지움**. 남은 한계) |
 | 같은 입력에도 결과가 조금씩 다름 | temperature=0인데도 연관어가 실행마다 다름 | **DB에 첫 결과를 저장해 재사용** (`load_sense_candidates`) ✅ |
 
 **남은 한계**: 배제어에 "인물", "출연" 같은 일반 단어가 섞일 수 있습니다 (예: 베라). 2단계 규칙 필터는 단어 하나로 바로 떨어뜨리지 않고 점수로 판단하고 3단계 LLM 검증도 있지만, 9개 대상은 사람이 결과를 한 번씩 확인하는 게 좋습니다.
@@ -332,9 +373,10 @@ python admin.py status
 
 | 순서 | 검색어 | 예: 눈 → 신체 기관 눈 | 이유 |
 | --- | --- | --- | --- |
-| 1 | 검색어 + 연관어 3개 | 눈 시력, 눈 안과, 눈 각막 | 의미가 좁혀진 검색. "눈"만 검색하면 날씨 기사가 결과를 다 채움 |
-| 2 | 별칭 | 안구, 시력 | 같은 대상의 다른 이름 |
-| 3 | 검색어 단독 | 눈 | 연관어가 없는 관련 기사도 놓치지 않기 (섞이는 다른 의미는 2·3단계가 거름) |
+| 1 | 검색어 + 연관어 (전부, 최대 8개) | 눈 시력, 눈 안과, 눈 각막, ... | 고른 의미로 좁힌 검색 |
+| 2 | 별칭 | 안구 | 같은 대상의 다른 이름 |
+
+**검색어 단독("눈", "강남")은 검색하지 않습니다.** 섞어서 검색하면 기사가 많은 다른 의미(날씨 눈, 지역 강남)가 상한을 채워서, 고른 의미의 기사가 라벨 목표(150건) 안에 잘 들어오지 않았습니다 (예: 강남 → 방송인 강남 300건 중 100건이 "강남" 단독 결과). 고른 의미에 연관어·별칭이 하나도 없을 때만 검색어 단독으로 검색합니다.
 
 검색어마다 최신순으로 최대 300건(100건씩 3쪽, 기간 밖으로 나가면 일찍 멈춤)을 받은 뒤 **검색어별로 돌아가며 하나씩** 뽑아 상한(`ask` 100건, `collect-all` 300건)을 채웁니다. 첫 검색어 결과만으로 상한이 차는 것을 막습니다.
 
@@ -381,7 +423,7 @@ print(result.summary())   # 검색 30건 → DB 재사용 12건 + 새로 저장 
 
 - **고친 기존 버그:** EUC-KR로 된 언론사 페이지를 UTF-8로 읽어 **본문 글자가 깨진 채** 저장되던 문제 → 페이지 문자셋을 판별해서 읽도록 수정 (깨진 본문 0건 확인)
 - **남은 한계:** 일부 언론사는 본문 앞에 "홈 > 방송/TV" 같은 메뉴 글자가 섞입니다. 필요하면 언론사별 본문 위치를 추가하면 됩니다.
-- 검색어 단독("눈") 결과에는 다른 의미 기사(미국 하원, 운세 등)가 섞여 들어옵니다. **이걸 걸러 내는 게 2·3단계의 역할**이고, 실험 A의 Baseline(API 결과 그대로)이 됩니다.
+- "검색어 + 연관어"로 좁혀도 다른 의미 기사가 섞여 들어옵니다 (예: "강남 방송"에 지역 강남 기사). **이걸 걸러 내는 게 2·3단계의 역할**이고, 실험 A의 Baseline(API 결과 그대로)이 됩니다.
 
 ## 7. 2·3단계: 필터링 (`qupict/filtering.py`)
 
@@ -564,11 +606,11 @@ python tests/check_db.py
 
 ---
 
-## 10. 7단계: 실험 (`experiments/`)
+## 10. 7단계: 실험 (`evalset/` 실험 A, `experiments/` 실험 B·C)
 
 | 명령 | 실험 | 비교 | 지표 | 필요한 것 |
 | --- | --- | --- | --- | --- |
-| `python evaluate.py exp-a` | A. 필터링 | baseline / 1-a 별칭 / 1-b 검증어 / 1-c 규칙 점수 / 2-b LLM만 / **제안(규칙+LLM)** | Precision·Recall·F1·Accuracy·무관 유입률·LLM 호출 수 | 정답 라벨 |
+| `python evaluate.py exp-a` (= `python evalset/exp_a_filtering.py`) | A. 필터링 | baseline / 1-a 별칭 / 1-b 검증어 / 1-c 규칙 점수 / 2-b LLM만 / **제안(규칙+LLM)** | Precision·Recall·F1·Accuracy·무관 유입률·LLM 호출 수 | **정답 JSON** (`evalset/labeled_set.json`, DB 안 씀) |
 | `python evaluate.py make-qa` | B·C 질문 세트 | — | — | 관련 기사 |
 | `python evaluate.py exp-b` | B. 검색 | base / HyDE / Multi-Query / both (`--faiss`: 예전 FAISS도) | Recall@5·MRR·검색 시간 | 질문 세트 + `index-all` |
 | `python evaluate.py exp-c` | C. 답변 | LLM 단독 / 기본 RAG(필터 없음) / **QuPicT** | 정답률·근거 일치율·환각 비율·출처 정확도 (LLM 채점) | 질문 세트 + `index-all` |
@@ -576,7 +618,8 @@ python tests/check_db.py
 
 - 모두 `--target 강남`처럼 검색어 하나만 할 수 있고, 결과는 `experiments/results/`에 `실험_날짜시각.json/.csv`로 저장됩니다 (CSV는 엑셀에서 바로 열림).
 - **실험 A**: 정답 '보류'는 지표에서 빼고, 시스템 판정 '보류'는 관련으로 셉니다 (서비스가 보류 기사도 답변에 쓰므로). 1-c는 기준값별 결과도 같이 저장 → 규칙 기준값 정할 때 사용. 2-b는 규칙으로 걸러진 기사만 LLM을 추가로 부르고 캐시에 저장 (다시 돌려도 비용 0).
-- **1-b 검증어**: `targets.yaml`의 `validation_term` (예: 강남 → "방송인"). 제가 넣은 값이니 **팀 확인 필요**.
+- **실험 A는 `evalset/`으로 옮겼고 정답 JSON으로 평가합니다.** 기준(의미·연관어·배제어)은 라벨링 때 JSON에 저장한 값을 쓰고, 규칙·LLM 판정을 그 자리에서 다시 계산합니다. LLM 판정은 `evalset/results/llm_cache.json`에 캐시 (다시 돌려도 비용 0), 결과는 `evalset/results/`.
+- **1-b 검증어**: `evalset/exp_a_filtering.py`의 `VALIDATION_TERMS` (키: 검색어 × 라벨링 때 고른 의미 이름, 예: 강남 → "방송인"). 예전 방식 재현에만 쓰고 의미 기준에는 쓰지 않습니다. 의미 이름이 다르면 그 topic은 1-b를 건너뜁니다. **팀 확인 필요**.
 - **질문 세트**: `experiments/qa_set.yaml` (git에 올려 팀이 같이 씀). 지금은 강남 질문 3개가 예시로 들어 있습니다.
 - **실험 C 채점**: LLM이 정답 근거 기사만 보고 주장별로 판정 (근거를 먼저 쓰고 판정). 결과 JSON에 주장별 판정이 남아 있어 **일부를 사람이 검수**하면 됩니다. 출처 정확도는 "정답 근거로 지정한 기사"만 맞다고 보므로 같은 내용의 다른 기사를 인용하면 낮게 나올 수 있습니다.
 - **비용**: 실험 C는 질문 1개당 LLM 약 10번 → `--limit`로 나눠 돌리기.
@@ -599,7 +642,7 @@ python tests/check_db.py
 
 ## 11. 정해야 할 것
 
-- [ ] **실험 A 1-b 검증어** — `targets.yaml`의 `validation_term` 12개가 적당한지 (예: 강남 → "방송인", 애플 → "아이폰")
+- [ ] **실험 A 1-b 검증어** — `evalset/exp_a_filtering.py`의 `VALIDATION_TERMS` 12개가 적당한지 (예: 강남 → "방송인", 애플 → "아이폰")
 - [ ] **유사도 기준 0.5 유지 여부** — 질문 세트가 생기면 실험 B로 0.4·0.45·0.5 비교 후 결정
 
 - [x] **이미지 파일 DB 저장 안 함** — 4단계에서 관련 기사의 이미지만 그때 받아서 LLM에 보냄 (Supabase 용량 절약). DB 변경 없음
@@ -621,10 +664,11 @@ python tests/check_db.py
 ## 12. 다음 작업
 
 1. ~~`filtering.py` 개편~~ ✅, ~~`sense.py` 의미 후보 캐시 연결~~ ✅
-2. **12개 대상 일괄 수집 + 정답 라벨링** (팀이 같이 모여서)
+2. **12개 대상 정답 라벨링** (`evalset/build_labeled_set.py`, 팀이 같이 모여서)
 3. ~~`indexing.py`, `retrieval.py`~~ ✅
 4. ~~`run.py` DB 버전 + 일괄 명령~~ ✅ → 실행 파일 3개로 분리 ✅ (`run.py` 서비스 / `admin.py` DB 관리 / `evaluate.py` 평가)
 5. ~~실험 코드~~ ✅ (A·B·C + 질문 세트 도구), ~~테스트 저장소로 옮기기~~ ✅
-6. **(모여서)** `collect-all` → `label` (중복 제거 포함) → `filter-all` → `make-qa` → `index-all`
-7. **실험 실행** `exp-a` → `exp-b` → `exp-c` → 결과 정리 (README 성능 평가 갱신)
-8. (나중에) 웹사이트·대시보드
+6. **(모여서)** `evalset/build_labeled_set.py`로 라벨링 → `exp-a` / 서비스 DB: `collect 검색어` (대상마다) → `filter-all` → `make-qa` → `index-all`
+7. 실험 B·C도 정답 JSON 기준으로 옮길지 결정
+8. **실험 실행** `exp-a` → `exp-b` → `exp-c` → 결과 정리 (README 성능 평가 갱신)
+9. (나중에) 웹사이트·대시보드

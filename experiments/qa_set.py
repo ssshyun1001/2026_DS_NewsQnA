@@ -77,9 +77,9 @@ _DRAFT_PROMPT = """\
 
 
 def draft_qa(title: str, content: str, target: str) -> tuple[str, str] | None:
-    from qupict.llm import get_chat_model
+    from qupict.llm import get_structured_model
     try:
-        llm = get_chat_model(temperature=0).with_structured_output(_QADraft)
+        llm = get_structured_model(_QADraft)
         d: _QADraft = llm.invoke([("system", _DRAFT_PROMPT.format(target=target)),
                                   ("human", f"제목: {title}\n본문: {content[:2500]}")])
         return d.question.strip(), d.answer.strip()

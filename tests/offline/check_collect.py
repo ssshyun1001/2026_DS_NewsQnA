@@ -11,9 +11,11 @@ from qupict.schemas import NewsMeta, SelectedSense, Sense
 
 # 1) 검색어 만들기
 sel = SelectedSense(query="눈", sense=Sense(name="신체 눈", definition="d", aliases=["안구"], related_terms=["안과", "시력", "각막", "백내장"]))
-assert collect.build_search_terms(sel) == ["눈 안과", "눈 시력", "눈 각막", "안구", "눈"], collect.build_search_terms(sel)
+assert collect.build_search_terms(sel) == ["눈 안과", "눈 시력", "눈 각막", "눈 백내장", "안구"], collect.build_search_terms(sel)
 g = SelectedSense(query="강남", sense=Sense(name="방송인 강남", definition="d", aliases=[], related_terms=["이상화"]))
-assert collect.build_search_terms(g) == ["강남 이상화", "강남"]
+assert collect.build_search_terms(g) == ["강남 이상화"]                      # 검색어 단독은 검색하지 않음
+empty = SelectedSense(query="베라", sense=Sense(name="x", definition="d"))
+assert collect.build_search_terms(empty) == ["베라"]                          # 좁힐 단어가 없을 때만 단독
 print("1 ok: 검색어", collect.build_search_terms(sel))
 
 # 2) 섞기: 돌아가며, 중복 링크 제거, 상한

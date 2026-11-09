@@ -1,5 +1,5 @@
 """
-0단계: 의미 후보 정리·선택·targets.yaml 덮어쓰기
+0단계: 의미 후보 정리·선택
 
 LLM·네이버·DB를 실제로 부르지 않는다 (크레딧 0). 실행: python tests/run_offline.py
 """
@@ -41,7 +41,7 @@ assert sel.match_terms == ["애플", "Apple"]
 assert [s.name for s in sel.other_senses] == ["과일 사과", "애플 TV"]
 print("1 ok: 애플 후보 정리 + 배제어", sel.excluded_terms)
 
-# 2) 이름으로 찾기 (targets.yaml)
+# 2) 이름으로 찾기 (DB topic에 저장된 의미 이름)
 assert sense.select_sense_by_name(c, "기업Apple").sense.name == "기업 Apple"   # 공백 무시
 assert sense.select_sense_by_name(c, "사과").sense.name == "과일 사과"          # 별칭
 assert sense.select_sense_by_name(c, "Apple TV") is None                       # 없음
@@ -98,33 +98,6 @@ assert sw.senses[0].aliases == ["서울여자대학교", "SWU"]                 
 sense._candidates_llm = fake_llm([Sense(name="인물 베라(확실하지 않음)", definition="?", related_terms=[])])
 assert sense.generate_sense_candidates("베라").senses == []                   # → 직접 입력 경로
 print("7 ok: 새 정리 규칙")
-
-# 8) select_for_target: 매칭 / 직접 입력 / 별칭 덮어쓰기
-sense._candidates_llm = fake_llm([
-    Sense(name="지역 강남", definition="d", aliases=["강남구"], related_terms=["강남역", "재건축"]),
-    Sense(name="방송인 강남", definition="d", aliases=["조남식"], related_terms=["예능", "유튜브"]),
-])
-g = sense.generate_sense_candidates("강남")
-t1 = sense.select_for_target(g, {"query": "강남", "sense": "방송인 강남", "aliases": []})
-assert t1.sense.name == "방송인 강남" and t1.sense.aliases == [] and t1.match_terms == ["강남"]
-assert t1.excluded_terms == ["강남역", "재건축"]
-t2 = sense.select_for_target(g, {"query": "강남", "sense": "방송인 강남"})
-assert t2.sense.aliases == ["조남식"]                                          # 덮어쓰기 없으면 LLM 값 유지
-t3 = sense.select_for_target(g, {"query": "강남", "sense": "방송인 강남", "related_terms": ["예능", "MIB"]})
-assert t3.sense.related_terms == ["예능", "MIB"] and t3.sense.aliases == ["조남식"]
-
-sense._candidates_llm = fake_llm([])
-b = sense.generate_sense_candidates("베라")
-sense._custom_llm = fake_llm(); seen = {}
-def _custom_invoke(msgs): seen["human"] = msgs[1][1]; return Sense(name="배스킨라빈스", definition="아이스크림", aliases=["베라킹"], related_terms=["아이스크림"])
-sense._custom_llm.invoke.side_effect = _custom_invoke
-t4 = sense.select_for_target(b, {"query": "베라", "sense": "배스킨라빈스", "description": "아이스크림 브랜드 배스킨라빈스", "aliases": ["배스킨라빈스", "배라"]})
-assert "아이스크림 브랜드 배스킨라빈스" in seen["human"]                          # description이 LLM에 전달됨
-assert t4.sense.is_custom and t4.sense.aliases == ["배스킨라빈스", "배라"]         # 사람이 적은 별칭으로 교체
-assert t4.match_terms == ["베라", "배스킨라빈스", "배라"]
-t5 = sense.select_for_target(g, {"query": "강남", "sense": "방송인 강남", "definition": " 가수 겸 방송인 강남 "})
-assert t5.sense.definition == "가수 겸 방송인 강남" and t5.sense.aliases == ["조남식"]
-print("8 ok: select_for_target")
 
 # 9) 직접 입력이 LLM 후보와 같은 의미면 그 후보를 배제어에 쓰지 않음
 cands = sense.SenseCandidates(query="마스크", senses=[

@@ -57,7 +57,7 @@ class FakeLLM:
         vs.append(F._LLMVerdict(index=99, status="관련", reason="없는 번호"))
         return F._LLMVerdictBatch(verdicts=vs)
 fake = FakeLLM()
-F.get_chat_model = lambda temperature=0: fake
+F.get_structured_model = lambda schema, temperature=0: fake
 F.LLM_BATCH_SIZE = 3
 items = [A(f"l{i}", f"강남 기사 {i}") for i in range(7)]       # 3 + 3 + 1
 verdicts, unjudged = asyncio.run(F.llm_verify(items, gangnam))
@@ -66,13 +66,13 @@ assert {v.link for v in verdicts} == {"l0", "l2", "l3", "l5", "l6"} and unjudged
 assert all(v.stage == "llm" and v.model for v in verdicts)
 system = fake.calls[0][0][1]
 assert "방송인 강남" in system and "지역 강남" in system and "강남역" in system   # 다른 의미와 대조
-fake2 = FakeLLM(fail_on=1); F.get_chat_model = lambda temperature=0: fake2
+fake2 = FakeLLM(fail_on=1); F.get_structured_model = lambda schema, temperature=0: fake2
 verdicts, unjudged = asyncio.run(F.llm_verify(items, gangnam))
 assert set(unjudged) >= {"l3", "l4", "l5"}                     # 실패한 배치는 판정하지 않음
 print("4 ok: LLM 검증 (배치, 누락, 범위 밖, 실패)")
 
 # 5) 전체 흐름(메모리): 중복 → 규칙 → LLM
-F.get_chat_model = lambda temperature=0: FakeLLM()
+F.get_structured_model = lambda schema, temperature=0: FakeLLM()
 F.LLM_BATCH_SIZE = 8
 class FakeEmb:
     async def aembed_documents(self, texts): return [[float(len(t) % 7), 1.0, 0.0] for t in texts]

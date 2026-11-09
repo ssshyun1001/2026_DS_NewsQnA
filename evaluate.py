@@ -3,7 +3,7 @@ QuPicT 평가 실행 파일 — 정답 라벨, 질문 세트, 실험 A·B·C (�
 
     python evaluate.py label   [--target 강남] [--limit 150]  최신 대표 기사 150건에 정답 라벨 (관련 / 무관 / 보류)
     python evaluate.py make-qa [--target 강남] [--suggest]    실험 B·C용 질문 세트 만들기 (experiments/qa_set.yaml)
-    python evaluate.py exp-a   [--target 강남]                실험 A: 필터링 방법 비교 (정답 라벨 필요)
+    python evaluate.py exp-a   [--target 강남]                실험 A: 필터링 방법 비교 (정답 JSON evalset/labeled_set.json 기준)
     python evaluate.py exp-b   [--target 강남] [--faiss]      실험 B: 검색 방식 비교 (Recall@5, MRR)
     python evaluate.py exp-c   [--target 강남] [--limit 10]   실험 C: LLM 단독 vs 기본 RAG vs QuPicT 답변 채점
     python evaluate.py sim     [--target 강남] ["질문"]       유사도 확인: 기준값 없이 청크 유사도 보기
@@ -52,7 +52,7 @@ def cmd_label(query: str | None, limit: int | None = None) -> None:
     topics = [t for t in topic_status()
               if t.to_label > t.labeled and t.labeled < limit and (query is None or t.query == query)]
     if not topics:
-        print(f"라벨을 붙일 기사가 없습니다. 모든 대상이 {limit}건을 채웠거나, 아직 python admin.py collect-all을 안 했습니다.")
+        print(f"라벨을 붙일 기사가 없습니다. 모든 대상이 {limit}건을 채웠거나, 아직 python admin.py collect로 대상을 추가하지 않았습니다.")
         return
     for i, t in enumerate(topics, 1):
         print(f"  {i}. {t.query} → {t.sense_name}  (라벨 {t.labeled}/{limit}, 대표 기사 {t.to_label}건)")
@@ -147,7 +147,7 @@ def cmd_make_qa(query: str | None, suggest: bool) -> None:
 def cmd_sim(query: str | None, question: str | None) -> None:
     """유사도 확인. 질문이 있으면 그 질문 하나, 없으면 질문 세트 전체 (experiments/similarity.py)"""
     from experiments import similarity
-    from qupict.pipeline import pick_targets, target_label
+    from qupict.pipeline import stored_topics, topic_label
 
     if not question:
         similarity.main_qa(query)
@@ -155,12 +155,12 @@ def cmd_sim(query: str | None, question: str | None) -> None:
     if not query:
         print('질문 하나를 볼 때는 --target 이 필요합니다. 예: python evaluate.py sim --target 강남 "질문"')
         return
-    targets = pick_targets(query)
-    if len(targets) > 1:                         # 눈·후드·마스크처럼 의미가 여러 개인 검색어
-        for i, t in enumerate(targets, 1):
-            print(f"  {i}. {target_label(t)}")
-    target = targets[0] if len(targets) == 1 else targets[choose_number("번호> ", len(targets))]
-    similarity.main_question(target["query"], str(target["sense"]).strip(), question)
+    records = stored_topics(query)
+    if len(records) > 1:                         # 눈·후드·마스크처럼 의미가 여러 개인 검색어
+        for i, r in enumerate(records, 1):
+            print(f"  {i}. {topic_label(r)}")
+    record = records[0] if len(records) == 1 else records[choose_number("번호> ", len(records))]
+    similarity.main_question(record.selected.query, record.selected.sense.name, question)
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +179,7 @@ def _parser() -> argparse.ArgumentParser:
     mq.add_argument("--target")
     mq.add_argument("--suggest", action="store_true", help="LLM이 질문·정답 초안을 써 줌")
 
-    ea = sub.add_parser("exp-a", help="실험 A: 필터링 방법 비교")
+    ea = sub.add_parser("exp-a", help="실험 A: 필터링 방법 비교 (정답 JSON 기준)")
     ea.add_argument("--target")
     eb = sub.add_parser("exp-b", help="실험 B: 검색 방식 비교")
     eb.add_argument("--target")
@@ -201,7 +201,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "make-qa":
         cmd_make_qa(args.target, args.suggest)
     elif args.command == "exp-a":
-        from experiments.exp_a_filtering import main as exp_a
+        from evalset.exp_a_filtering import main as exp_a
         exp_a(args.target)
     elif args.command == "exp-b":
         from experiments.exp_b_retrieval import main as exp_b

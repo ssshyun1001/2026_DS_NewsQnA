@@ -12,8 +12,9 @@
   후보가 2개 이상  → 사용자가 하나 선택       → select_sense(...)
   후보가 1개       → 자동 선택               → select_sense(..., 0)
   후보가 0개 / "기타" → 사용자가 직접 설명 입력 → build_custom_sense(...) → select_custom_sense(...)
-  targets.yaml 일괄 처리 → 미리 적어 둔 의미 이름으로 찾기 → select_for_target(...)
-                          (못 찾으면 직접 입력, 사람이 확인한 별칭·연관어가 있으면 그 값으로 교체)
+  DB에 저장된 topic 다시 처리 → 의미 이름으로 후보 찾기 → select_sense_by_name(...)
+
+의미·별칭·연관어는 LLM이 만든 후보만 쓴다 (사람이 적은 값으로 덮어쓰지 않는다).
 
 팀에서 정한 규칙:
   - 후보는 자주 쓰이는 순 TOP3, 나머지는 "기타(직접 입력)"로 처리
@@ -26,7 +27,6 @@
 
 직접 실행해 보기:
     python -m qupict.sense 애플          # 검색어 하나, 터미널에서 직접 선택
-    python -m qupict.sense --targets     # targets.yaml 전체를 일괄 처리
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ import sys
 from pydantic import BaseModel, Field
 
 from qupict.config import settings
-from qupict.llm import get_chat_model
+from qupict.llm import get_structured_model
 from qupict.schemas import SelectedSense, Sense, SenseCandidates, unique_terms
 
 MAX_CANDIDATES = 3
@@ -80,8 +80,7 @@ _candidates_llm = None
 def _get_candidates_llm():
     global _candidates_llm
     if _candidates_llm is None:
-        llm = get_chat_model(temperature=0)
-        _candidates_llm = llm.with_structured_output(_SenseList)
+        _candidates_llm = get_structured_model(_SenseList)
     return _candidates_llm
 
 
@@ -228,8 +227,7 @@ _custom_llm = None
 def _get_custom_llm():
     global _custom_llm
     if _custom_llm is None:
-        llm = get_chat_model(temperature=0)
-        _custom_llm = llm.with_structured_output(Sense)
+        _custom_llm = get_structured_model(Sense)
     return _custom_llm
 
 
@@ -294,7 +292,7 @@ def _normalize(text: str) -> str:
 
 
 def select_sense_by_name(candidates: SenseCandidates, name: str) -> SelectedSense | None:
-    """targets.yaml에 적어 둔 의미 이름으로 후보를 찾는다. 못 찾으면 None.
+    """의미 이름(예: DB topic에 저장된 이름)으로 후보를 찾는다. 못 찾으면 None.
 
     LLM이 붙인 이름이 매번 글자까지 똑같지는 않으므로 (예: "기업 Apple" / "기업Apple"),
     공백·괄호를 무시하고 비교한다. 정확히 같은 이름 → 별칭 → 이름 일부 포함 순서로 찾는다.
@@ -315,49 +313,6 @@ def select_sense_by_name(candidates: SenseCandidates, name: str) -> SelectedSens
     if len(partial) == 1:                              # 3) 이름 일부 포함 (하나만 걸릴 때만)
         return select_sense(candidates, partial[0])
     return None
-
-
-def select_for_target(
-    candidates: SenseCandidates,
-    target: dict,
-    known_custom: Sense | None = None,
-) -> SelectedSense:
-    """targets.yaml 항목 하나로 의미를 고른다 (일괄 수집용).
-
-    1) target["sense"] 이름으로 후보를 찾는다.
-    2) 못 찾으면 "직접 입력"으로 처리한다. 설명은 target["description"], 없으면 sense 이름.
-       (예: "베라"는 LLM이 배스킨라빈스를 몰라서 후보가 없으므로 이 경로로 간다)
-       - 의미 이름은 targets.yaml의 sense 그대로 쓴다 (LLM이 붙인 이름은 실행마다 달라질 수 있어서,
-         같은 대상이 DB에 다른 topic으로 두 번 생기지 않게 한다)
-       - known_custom: 이전 실행에서 만들어 DB에 저장해 둔 직접 입력 의미 → LLM을 다시 부르지 않는다
-    3) target에 definition / aliases / related_terms가 적혀 있으면 LLM 값 대신 그 값을 쓴다 (apply_target_overrides).
-    """
-    query = candidates.query
-    selected = select_sense_by_name(candidates, target["sense"])
-    if selected is None:
-        if known_custom is not None:
-            custom = known_custom
-        else:
-            description = target.get("description") or target["sense"]
-            custom = build_custom_sense(query, description)
-        custom = custom.model_copy(update={"name": str(target["sense"]).strip(), "is_custom": True})
-        selected = select_custom_sense(candidates, custom)
-    return apply_target_overrides(selected, target)
-
-
-def apply_target_overrides(selected: SelectedSense, target: dict) -> SelectedSense:
-    """targets.yaml에 사람이 적은 definition / aliases / related_terms로 LLM 값을 바꾼다.
-
-    LLM이 지어낸 정보(예: 방송인 강남 → 별칭 "조남식", 정의 "본명 조성민")를
-    사람이 확인한 값으로 바로잡는 용도다. 빈 리스트 []를 적으면 "LLM 값을 쓰지 않는다"는 뜻이다.
-    """
-    overrides: dict = {k: unique_terms(target[k]) for k in ("aliases", "related_terms") if k in target}
-    if target.get("definition"):
-        overrides["definition"] = str(target["definition"]).strip()
-    if not overrides:
-        return selected
-    fixed = selected.sense.model_copy(update=overrides)
-    return _make_selection(selected.query, fixed, selected.other_senses)
 
 
 # ---------------------------------------------------------------------------
@@ -388,36 +343,9 @@ def choose_sense_interactively(candidates: SenseCandidates) -> SelectedSense:
         print(f"0~{len(candidates.senses)} 사이 번호를 입력하세요.")
 
 
-def _print_all_targets() -> None:
-    """targets.yaml의 모든 대상을 처리해 선택 결과를 보여 준다. (python -m qupict.sense --targets)"""
-    from qupict.config import load_targets
-
-    # 같은 검색어(예: 눈-날씨 / 눈-신체)는 같은 후보 목록에서 골라야 비교가 되므로 한 번만 가져온다.
-    # (DB가 있으면 DB 캐시가, 없으면 이 dict가 그 역할을 한다)
-    candidates_by_query: dict[str, SenseCandidates] = {}
-    for target in load_targets():
-        query = target["query"]
-        if str(target["sense"]).startswith("TODO"):
-            print(f"\n### {query}: 건너뜀 (targets.yaml의 sense가 아직 TODO)")
-            continue
-        if query not in candidates_by_query:
-            candidates_by_query[query], source = load_sense_candidates(query)
-            print(f"\n[{query}] 의미 후보 출처: {source}")
-        selected = select_for_target(candidates_by_query[query], target)
-        s = selected.sense
-        print(f"\n### {query} → {s.name}{' (직접 입력)' if s.is_custom else ''}")
-        print(f"  정의: {s.definition}")
-        print(f"  기사에서 찾을 표기: {selected.match_terms}")
-        print(f"  연관어: {s.related_terms}")
-        print(f"  배제어: {selected.excluded_terms}")
-
-
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
-    if len(sys.argv) > 1 and sys.argv[1] == "--targets":
-        _print_all_targets()
-        sys.exit(0)
     q = sys.argv[1] if len(sys.argv) > 1 else input("검색어> ").strip()
     cands, source = load_sense_candidates(q)
     print(f"의미 후보 출처: {source}")

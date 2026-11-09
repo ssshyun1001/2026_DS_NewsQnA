@@ -179,26 +179,6 @@ def run_ask_memory(selected: SelectedSense, period_days: int, max_articles: int 
     run_qa_loop(session.topic, answer)
 
 
-def _use_stored_criteria(selected: SelectedSense) -> SelectedSense:
-    """같은 검색어·의미의 topic이 이미 DB에 있으면 저장된 기준을 그대로 쓴다 (DB·메모리 버전 모두).
-
-    캐시된 LLM 후보에는 지어낸 정보가 남아 있을 수 있다 (실제: 방송인 강남 → "본명 전형수").
-    그대로 쓰면 그 이름으로 검색하고 판정도 흔들린다. targets.yaml로 사람이 고쳐 둔 기준을 우선한다.
-    """
-    if not settings.database_url:
-        return selected
-    try:
-        from qupict import db
-        record = db.get_topic(selected.query, selected.sense.name)
-    except Exception as e:
-        print(f"  [경고] DB에서 저장된 기준을 읽지 못했습니다 ({type(e).__name__}). 고른 의미 그대로 씁니다.")
-        return selected
-    if record is None:
-        return selected
-    print(f"[0단계] DB에 저장된 기준을 사용 → 정의: {record.selected.sense.definition}")
-    return record.selected
-
-
 def cmd_ask(words: list[str], memory: bool, max_articles: int = 100) -> None:
     validate_settings()
     period_days = int(words.pop()) if words and words[-1].isdigit() else None
@@ -208,7 +188,7 @@ def cmd_ask(words: list[str], memory: bool, max_articles: int = 100) -> None:
     if not memory and not settings.database_url:
         print("DATABASE_URL이 없어 DB 없이(메모리 버전으로) 실행합니다.")
         memory = True
-    selected = _use_stored_criteria(_choose_sense(topic))
+    selected = _choose_sense(topic)
     if memory:
         run_ask_memory(selected, period_days, max_articles)
     else:
