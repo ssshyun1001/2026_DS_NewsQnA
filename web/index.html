@@ -58,6 +58,10 @@
   .q { justify-self: end; background: var(--accent); color: #fff; padding: 8px 14px; border-radius: 14px 14px 4px 14px; max-width: 85%; }
   .a { background: var(--log); padding: 12px 14px; border-radius: 14px 14px 14px 4px; white-space: pre-wrap; }
   .a .cite { color: var(--accent); font-weight: 600; }
+  .a.waiting { color: var(--muted); }
+  .caret { display: inline-block; width: 7px; height: 1em; background: var(--accent); vertical-align: -2px;
+           margin-left: 1px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
   .srcs { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; white-space: normal; }
   .srcs a { color: var(--accent); text-decoration: none; } .srcs a:hover { text-decoration: underline; }
   .srcs li { margin-bottom: 4px; } .srcs ol { margin: 4px 0 0; padding-left: 0; list-style: none; }
@@ -108,6 +112,7 @@
   <!-- 4. 질문 -->
   <section id="c-qa" class="card hidden">
     <h2><span class="step">4</span>질문하기 <span id="qa-label" class="muted" style="font-weight:400"></span></h2>
+    <p id="qa-note" class="note"></p>
     <div id="chat" class="chat"></div>
     <form id="f-ask" class="row">
       <div class="field"><input id="question" type="text" placeholder="예: 최근 어떤 방송에 출연했어?" required></div>
@@ -118,7 +123,18 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-const state = { query: "", sessionId: null };
+// ready: 뉴스 준비가 끝나면 세션 id로 풀리는 약속(Promise). 준비 중에 적은 질문은 이것을 기다렸다가 보낸다.
+// chain: 질문을 적은 순서대로 하나씩 답하게 잇는 줄.
+const state = { query: "", sessionId: null, jobId: null, ready: null, chain: Promise.resolve() };
+
+function newReady() {
+  let resolve, reject;
+  state.ready = new Promise((res, rej) => { resolve = res; reject = rej; });
+  state.ready.catch(() => {});        // 아무 질문도 기다리지 않을 때 실패가 콘솔 오류로 남지 않게
+  state.ready.resolve = resolve; state.ready.reject = reject;
+  state.chain = Promise.resolve();
+  state.sessionId = null;
+}
 
 async function api(path, body) {
   const res = await fetch(path, body === undefined ? {} : {
@@ -145,7 +161,7 @@ $("f-query").addEventListener("submit", async (e) => {
   e.preventDefault();
   const query = $("query").value.trim();
   if (!query) return;
-  state.query = query; state.sessionId = null;
+  state.query = query; state.sessionId = null; state.jobId = null;   // 진행 중이던 작업 확인은 멈춘다
   ["c-sense", "c-job", "c-qa"].forEach(id => $(id).classList.add("hidden"));
   $("b-query").disabled = true;
   busy($("s-query"), "의미 후보를 찾는 중…");
@@ -189,25 +205,36 @@ $("f-sense").addEventListener("submit", async (e) => {
   };
   if (v === "custom" && !body.custom_description.trim()) { $("custom").focus(); return; }
   $("b-sense").disabled = true;
-  $("c-job").classList.remove("hidden"); $("c-qa").classList.add("hidden");
+  $("c-job").classList.remove("hidden");
   $("log").textContent = "";
   busy($("s-job"), "작업을 시작하는 중…");
+  // 질문 칸은 준비가 끝나기 전부터 연다: 수집하는 동안 질문을 적어 두면 준비가 끝나는 대로 차례로 답한다
+  newReady();
+  $("chat").innerHTML = "";
+  $("qa-label").textContent = "";
+  $("qa-note").textContent = "뉴스를 준비하는 동안 질문을 미리 적어 두세요. 준비가 끝나면 적은 순서대로 답합니다.";
+  $("c-qa").classList.remove("hidden");
   try {
-    const { job_id } = await api("/api/prepare", body);
+    const { job_id, label } = await api("/api/prepare", body);
+    state.jobId = job_id;
+    $("qa-label").textContent = label;
     poll(job_id);
   } catch (err) {
     setStatus($("s-job"), err.message, "err");
     $("b-sense").disabled = false;
+    state.ready.reject(err);
   }
 });
 
 async function poll(jobId) {
+  if (jobId !== state.jobId) return;          // 새 검색어·새 준비를 시작했으면 이전 작업은 더 보지 않는다
   try {
     const j = await api(`/api/jobs/${jobId}`);
+    if (jobId !== state.jobId) return;
     $("log").textContent = j.logs.join("\n");
     $("log").scrollTop = $("log").scrollHeight;
     if (j.status === "running") {
-      busy($("s-job"), "처리 중… 기사 수에 따라 몇 분 걸릴 수 있습니다.");
+      busy($("s-job"), "처리 중… 기사 수에 따라 몇 분 걸릴 수 있습니다. 그동안 아래에서 질문을 적어 둘 수 있어요.");
       setTimeout(() => poll(jobId), 1500);
       return;
     }
@@ -216,38 +243,90 @@ async function poll(jobId) {
       setStatus($("s-job"), "준비 완료", "ok");
       state.sessionId = j.session_id;
       $("qa-label").textContent = j.label;
-      $("chat").innerHTML = "";
-      $("c-qa").classList.remove("hidden");
+      $("qa-note").textContent = "";
+      state.ready.resolve(j.session_id);       // 미리 적어 둔 질문이 이제 차례로 나간다
       $("question").focus();
     } else {
-      setStatus($("s-job"), j.error || "작업이 실패했습니다.", "err");
+      const msg = j.error || "작업이 실패했습니다.";
+      setStatus($("s-job"), msg, "err");
+      $("qa-note").textContent = "뉴스 준비에 실패해 질문에 답할 수 없습니다. 의미·기간을 바꿔 다시 준비해 주세요.";
+      state.ready.reject(new Error(msg));
     }
   } catch (err) {
     setStatus($("s-job"), err.message, "err");
     $("b-sense").disabled = false;
+    state.ready.reject(err);
   }
 }
 
-// 3) 질문
-$("f-ask").addEventListener("submit", async (e) => {
+// 3) 질문: 적은 순서대로 하나씩 (준비 중이면 준비가 끝날 때까지 기다렸다가)
+$("f-ask").addEventListener("submit", (e) => {
   e.preventDefault();
   const question = $("question").value.trim();
-  if (!question || !state.sessionId) return;
+  if (!question || !state.ready) return;
   $("question").value = "";
-  $("b-ask").disabled = true;
   const q = document.createElement("div"); q.className = "q"; q.textContent = question;
-  const a = document.createElement("div"); a.className = "a"; a.innerHTML = `<span class="spinner"></span> 근거를 찾고 답변을 만드는 중…`;
+  const a = document.createElement("div"); a.className = "a waiting";
+  a.innerHTML = state.sessionId ? `<span class="spinner"></span> 차례를 기다리는 중…`
+                                : `⏳ 뉴스 준비가 끝나면 답합니다.`;
   $("chat").append(q, a);
   a.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  try {
-    const r = await api("/api/ask", { session_id: state.sessionId, question });
-    a.innerHTML = esc(r.answer).replace(/\(기사\s*\d+(?:\s*,\s*\d+)*\)/g, m => `<span class="cite">${m}</span>`) + renderSources(r);
-  } catch (err) {
-    a.innerHTML = `<span class="status err">${esc(err.message)}</span>`;
-  } finally {
-    $("b-ask").disabled = false; $("question").focus();
-  }
+  const ready = state.ready;
+  state.chain = state.chain.then(async () => {
+    let sessionId;
+    try { sessionId = await ready; }
+    catch (err) { a.className = "a"; a.innerHTML = `<span class="status err">답할 수 없습니다: ${esc(err.message)}</span>`; return; }
+    await askStream(sessionId, question, a);
+  });
+  $("question").focus();
 });
+
+const citeHtml = (text) => esc(text).replace(/\(기사\s*\d+(?:\s*,\s*\d+)*\)/g, m => `<span class="cite">${m}</span>`);
+
+// 답변을 만들어지는 대로 받는다 (/api/ask/stream: 한 줄에 JSON 하나)
+async function askStream(sessionId, question, a) {
+  a.className = "a waiting";
+  a.innerHTML = `<span class="spinner"></span> 근거를 찾고 답변을 만드는 중…`;
+  try {
+    const res = await fetch("/api/ask/stream", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, question }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(typeof data.detail === "string" ? data.detail : `오류 ${res.status}`);
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "", text = "", finished = false;
+    while (!finished) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+        if (!line) continue;
+        const ev = JSON.parse(line);
+        if (ev.type === "token") {
+          text += ev.text;
+          a.className = "a";
+          a.innerHTML = citeHtml(text) + `<span class="caret"></span>`;
+        } else if (ev.type === "done") {
+          a.className = "a";
+          a.innerHTML = citeHtml(ev.answer) + renderSources(ev);
+          finished = true;
+        } else if (ev.type === "error") {
+          throw new Error(ev.message);
+        }
+      }
+    }
+    if (!finished) throw new Error("답변 연결이 끊겼습니다. 다시 질문해 주세요.");
+  } catch (err) {
+    a.className = "a";
+    a.innerHTML = `<span class="status err">${esc(err.message)}</span>`;
+  }
+}
 
 function renderSources(r) {
   if (!r.sources.length) return `<div class="srcs muted">출처: 관련성 있는 기사를 찾지 못해 이번 답변에는 뉴스 출처가 없습니다.</div>`;

@@ -33,7 +33,10 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -41,6 +44,8 @@ import aiohttp
 from bs4 import BeautifulSoup, Tag, UnicodeDammit
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from qupict import timing
+from qupict.concurrency import timed_call
 from qupict.config import settings
 from qupict.schemas import Article, ArticleImage, NewsMeta, SelectedSense, unique_terms
 
@@ -316,35 +321,105 @@ async def _get_html(session: aiohttp.ClientSession, url: str) -> str | None:
         return None
 
 
+# ---------------------------------------------------------------------------
+# HTML 해석을 여러 프로세스에서
+#
+# 측정(2026-11-10, 기사 91건): 크롤링 시간의 대부분은 네트워크가 아니라 BeautifulSoup 해석이다
+#   (한 건 평균 77ms, 91건 합 7.0초. 다운로드는 동시에 되므로 2~3초면 끝남).
+# 파이썬은 한 프로세스 안에서 계산을 한 번에 하나만 하므로(GIL) 스레드로 옮기면 오히려 느려졌다
+#   (측정: 7.0초 → 12.1초). 그래서 프로세스 여러 개(CPU 코어)에 나눠 해석한다.
+# 해석 함수(parse_article_html)는 그대로라 결과는 예전과 같다.
+#
+# 주의: Windows는 새 프로세스가 실행 파일을 다시 읽는다. crawl_articles를 부르는 실행 파일은
+#   if __name__ == "__main__": 안에서 실행해야 한다 (run.py · admin.py · evaluate.py는 이미 그렇다).
+#   프로세스를 못 쓰는 상황이면 자동으로 예전처럼 이 프로세스에서 해석한다.
+# ---------------------------------------------------------------------------
+
+PARSE_PROCESSES = min(8, os.cpu_count() or 1)   # 0 또는 1이면 프로세스를 쓰지 않는다 (예전 방식)
+_parse_pool: ProcessPoolExecutor | None = None
+
+
+def _get_parse_pool() -> ProcessPoolExecutor | None:
+    global _parse_pool
+    if _parse_pool is None and PARSE_PROCESSES > 1:
+        _parse_pool = ProcessPoolExecutor(max_workers=PARSE_PROCESSES)
+    return _parse_pool
+
+
+_parse_pool_warmed = False
+
+
+def warm_up_parser() -> None:
+    """해석용 프로세스를 미리 띄워 둔다 (프로세스 시작에 약 1초). 검색하는 동안 불러 두면 기다림이 겹친다.
+    여러 번 불러도 처음 한 번만 띄운다."""
+    global _parse_pool_warmed
+    pool = _get_parse_pool()
+    if pool is None or _parse_pool_warmed:
+        return
+    _parse_pool_warmed = True
+    try:
+        for _ in range(PARSE_PROCESSES):
+            pool.submit(parse_article_html, "")
+    except (BrokenProcessPool, RuntimeError):
+        _disable_parse_pool()
+
+
+def _disable_parse_pool() -> None:
+    global _parse_pool, PARSE_PROCESSES
+    PARSE_PROCESSES = 0
+    if _parse_pool is not None:
+        _parse_pool.shutdown(wait=False, cancel_futures=True)
+    _parse_pool = None
+
+
+async def _parse_html(html: str) -> tuple[str, list[ArticleImage], str | None]:
+    pool = _get_parse_pool()
+    if pool is not None:
+        try:
+            return await asyncio.get_running_loop().run_in_executor(pool, parse_article_html, html)
+        except (BrokenProcessPool, RuntimeError):
+            _disable_parse_pool()       # 프로세스를 못 쓰면 이후로는 예전 방식으로
+    return parse_article_html(html)
+
+
 async def _fetch_and_parse(
     session: aiohttp.ClientSession, meta: NewsMeta, semaphore: asyncio.Semaphore
 ) -> Article | None:
     urls = [u for u in (meta.naver_link, meta.link) if u]
-    async with semaphore:
-        for url in urls:
+    for url in urls:
+        async with semaphore:                   # 동시 다운로드 수만 제한한다 (해석하는 동안 자리를 비켜 줌)
             html = await _get_html(session, url)
-            if not html:
-                continue
-            content, images, press = parse_article_html(html)
-            if len(content) >= _MIN_CONTENT_LENGTH:
-                return Article(
-                    title=meta.title,
-                    link=meta.link,
-                    press=press or meta.press,
-                    pub_date=meta.pub_date,
-                    content=content[:_MAX_CONTENT_LENGTH],
-                    description=meta.description,
-                    search_term=meta.search_term,
-                    images=images,
-                    collected_at=datetime.now(timezone.utc),
-                )
+        if not html:
+            continue
+        content, images, press = await _parse_html(html)
+        if len(content) >= _MIN_CONTENT_LENGTH:
+            return Article(
+                title=meta.title,
+                link=meta.link,
+                press=press or meta.press,
+                pub_date=meta.pub_date,
+                content=content[:_MAX_CONTENT_LENGTH],
+                description=meta.description,
+                search_term=meta.search_term,
+                images=images,
+                collected_at=datetime.now(timezone.utc),
+            )
     return None
 
 
-async def crawl_articles(metas: list[NewsMeta], concurrency: int = 8) -> list[Article]:
-    """기사 정보 목록을 받아 병렬로 본문을 가져온다. 본문을 못 가져온 기사는 빠진다."""
+# 동시에 내려받는 기사 수. 측정(2026-11-10, 처음 받는 기사 100건): 10% 정도가 3초 넘게 걸린다
+#   (처음 접속하는 언론사 사이트의 주소 찾기·연결 재시도로 보임. 같은 기사를 두 번째 받으면 0.3초 안쪽).
+#   동시 8개면 느린 다운로드가 자리를 막아 나머지가 줄을 선다 → 24개로. 해석은 별도 프로세스라 부딪히지 않는다.
+CRAWL_CONCURRENCY = 24
+CRAWL_PER_HOST = 8          # 한 사이트에 동시에 여는 연결 수 (네이버 뉴스에는 예전과 같은 8개까지만)
+
+
+async def crawl_articles(metas: list[NewsMeta], concurrency: int = CRAWL_CONCURRENCY) -> list[Article]:
+    """기사 정보 목록을 받아 병렬로 본문을 가져온다. 본문을 못 가져온 기사는 빠진다. (결과는 metas 순서)"""
+    warm_up_parser()
     semaphore = asyncio.Semaphore(concurrency)
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(limit_per_host=CRAWL_PER_HOST)
+    async with aiohttp.ClientSession(connector=connector) as session:
         results = await asyncio.gather(*(_fetch_and_parse(session, m, semaphore) for m in metas))
     return [a for a in results if a is not None]
 
@@ -450,12 +525,25 @@ async def collect_to_db(
     """
     from qupict import db
 
-    topic_id = db.save_topic(selected)
-    metas = await search_news(selected, period_days, max_articles)
-    new_metas = db.link_known_articles(topic_id, metas)
-    articles = await crawl_articles(new_metas)
-    db.save_articles(topic_id, articles)
-    db.mark_topic_collected(topic_id)
+    warm_up_parser()        # 해석용 프로세스는 검색하는 동안 미리 띄운다
+    # topic 저장(DB 연결 약 1.6초)과 네이버 검색은 서로 상관없어서 동시에 한다
+    with timing.timed("topic 저장(DB) + 검색(네이버 API), 동시") as t:
+        (topic_id, topic_sec), metas = await asyncio.gather(
+            asyncio.to_thread(timed_call, db.save_topic, selected),
+            search_news(selected, period_days, max_articles),
+        )
+        t.note = (f"topic 저장 {topic_sec:.2f}초, 검색어 {len(build_search_terms(selected))}개 → "
+                  f"기사 {len(metas)}건")
+    with timing.timed("이미 있는 기사 연결(DB)") as t:
+        new_metas = db.link_known_articles(topic_id, metas)
+        t.note = f"재사용 {len(metas) - len(new_metas)}건"
+    with timing.timed("본문 크롤링") as t:
+        articles = await crawl_articles(new_metas)
+        t.note = f"성공 {len(articles)} / 시도 {len(new_metas)}건"
+    with timing.timed("기사 저장(DB)") as t:
+        db.save_articles(topic_id, articles)
+        db.mark_topic_collected(topic_id)
+        t.note = f"{len(articles)}건"
     return CollectResult(
         topic_id=topic_id,
         searched=len(metas),

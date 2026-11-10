@@ -42,13 +42,17 @@ from typing import Literal, Optional
 import numpy as np
 from pydantic import BaseModel, Field
 
+from qupict import timing
 from qupict.config import settings
-from qupict.llm import get_embeddings, get_structured_model
+from qupict.concurrency import run_parallel
+from qupict.llm import aembed_in_batches, get_embeddings, get_structured_model
 from qupict.schemas import Article, SelectedSense
 
 RULE_REJECT_SCORE = -2          # 규칙 점수가 이 값 이하면 '무관' (정답 라벨이 생기면 실험으로 조정)
 LLM_BATCH_SIZE = 8              # LLM 한 번에 판정할 기사 수
-LLM_CONCURRENCY = 4             # 동시에 보내는 LLM 요청 수 (게이트웨이 한도: 60초 120회)
+# 동시에 보내는 LLM 요청 수 (게이트웨이 한도: 60초 120회). 4 → 8: 기사 100건이면 요청 13번 안팎이라
+# 8개씩 보내도 1분에 수십 번 수준. 배치 나누는 방식은 그대로라 각 요청의 입력(= 판정 결과)은 예전과 같다.
+LLM_CONCURRENCY = 8
 LLM_BODY_CHARS = 800            # LLM에 보여 줄 본문 앞부분 길이
 EMBED_CHARS = 2000              # 중복 제거용 임베딩에 쓰는 본문 길이 (임베딩 입력 한도 안쪽, 비교에는 충분)
 
@@ -91,7 +95,7 @@ async def embed_articles(articles: list[Article]) -> list[Article]:
     to_embed = [a for a in articles if a.embedding is None]
     if to_embed:
         texts = [f"{a.title}\n{a.content[:EMBED_CHARS]}" for a in to_embed]
-        vectors = await get_embeddings().aembed_documents(texts)
+        vectors = await aembed_in_batches(get_embeddings(), texts)   # 100건씩 나눈 요청을 동시에
         for article, vec in zip(to_embed, vectors):
             article.embedding = vec
     return articles
@@ -290,19 +294,29 @@ async def filter_articles(
 ) -> FilterOutcome:
     """[메모리 버전] 중복 제거 → 규칙 → LLM. 기사 목록은 바꾸지 않고 판정 결과만 돌려준다.
     keep: 중복으로 바꾸지 않을 기사 link (정답 라벨 붙은 기사, find_duplicates 참고)"""
-    await embed_articles(articles)
-    duplicates = find_duplicates(articles, existing, keep=keep)
+    with timing.timed("새 기사 임베딩") as t:
+        t.note = f"{sum(a.embedding is None for a in articles)}건 계산"
+        await embed_articles(articles)
+    with timing.timed("중복 비교") as t:
+        duplicates = find_duplicates(articles, existing, keep=keep)
+        t.note = f"기사 {len(articles)}건 vs 대표 {len(existing)}건 → 중복 {len(duplicates)}건"
     candidates = [a for a in articles if a.link not in duplicates]
 
     rule_verdicts, to_llm = [], []
-    for a in candidates:
-        v = rule_verdict(a, selected)
-        if v:
-            rule_verdicts.append(v)
-        else:
-            to_llm.append(a)
+    with timing.timed("1차 규칙 필터") as t:
+        for a in candidates:
+            v = rule_verdict(a, selected)
+            if v:
+                rule_verdicts.append(v)
+            else:
+                to_llm.append(a)
+        t.note = f"무관 {len(rule_verdicts)}건, LLM으로 {len(to_llm)}건"
 
-    llm_verdicts, unjudged = await llm_verify(to_llm, selected)
+    with timing.timed("2차 LLM 판정") as t:
+        llm_verdicts, unjudged = await llm_verify(to_llm, selected)
+        batches = -(-len(to_llm) // LLM_BATCH_SIZE)
+        t.note = (f"{len(to_llm)}건, 요청 {batches}번 (배치 {LLM_BATCH_SIZE}, 동시 {LLM_CONCURRENCY})"
+                  f"{f', 실패 {len(unjudged)}건' if unjudged else ''}")
     return FilterOutcome(duplicates, rule_verdicts + llm_verdicts, unjudged)
 
 
@@ -355,18 +369,35 @@ async def filter_topic(
     """
     from qupict import db
 
-    if redo:
-        db.reset_topic_filter(topic_id)
-    new = db.get_topic_articles(topic_id, period_days=period_days, unjudged_only=True)
-    if not new:
-        return FilterOutcome()
-    existing = db.get_topic_articles(topic_id, statuses=STATUSES, include_duplicates=False)
+    with timing.timed("판정할 기사 불러오기(DB)") as t:
+        if redo:
+            await asyncio.to_thread(db.reset_topic_filter, topic_id)
+        # 세 조회는 서로 상관없어서 동시에 한다 (DB 연결 1.6초씩 3번 → 한 번 정도). 읽는 내용은 예전과 같다
+        new, existing, keep = await asyncio.to_thread(
+            run_parallel,
+            lambda: db.get_topic_articles(topic_id, period_days=period_days, unjudged_only=True),
+            lambda: db.get_topic_articles(topic_id, statuses=STATUSES, include_duplicates=False),
+            lambda: _labeled_links(topic_id),
+        )
+        t.note = f"새 기사 {len(new)}건"
+        if not new:
+            return FilterOutcome()
+        t.note += f", 판정된 대표 {len(existing)}건"
 
     missing = [a for a in new + existing if a.embedding is None]   # 임베딩을 새로 계산할 기사
-    await embed_articles(existing)
-    outcome = await filter_articles(new, selected, existing, keep=_labeled_links(topic_id))
-    db.save_article_embeddings(missing)
-    db.save_duplicates(topic_id, outcome.duplicates)
-    db.save_judgments(topic_id, [db.Judgment(v.link, v.status, v.stage, v.reason, v.model)
-                                 for v in outcome.verdicts])
+    with timing.timed("기사 임베딩(기존 · 새, 동시)") as t:
+        t.note = f"{len(missing)}건 계산"
+        # 예전처럼 기존 기사 / 새 기사를 따로 요청하되(같은 요청 묶음 → 같은 임베딩 값) 두 요청을 동시에 보낸다.
+        # 한 요청으로 합치면 묶음이 달라져 값이 아주 조금 달라질 수 있다 (indexing.build_article_chunks 참고)
+        await asyncio.gather(embed_articles(existing), embed_articles(new))
+    outcome = await filter_articles(new, selected, existing, keep=keep)
+    with timing.timed("판정 저장(DB, 동시)"):
+        # 세 저장은 서로 다른 칸·행을 고친다 (기사 임베딩 / 중복 기사 행 / 판정한 대표 기사 행) → 동시에 해도 결과가 같다
+        await asyncio.to_thread(
+            run_parallel,
+            lambda: db.save_article_embeddings(missing),
+            lambda: db.save_duplicates(topic_id, outcome.duplicates),
+            lambda: db.save_judgments(topic_id, [db.Judgment(v.link, v.status, v.stage, v.reason, v.model)
+                                                 for v in outcome.verdicts]),
+        )
     return outcome

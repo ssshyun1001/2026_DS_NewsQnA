@@ -42,6 +42,7 @@ def save_desc(iid, d, m=None):
     saved["desc"].append(iid); desc_store.setdefault(link_of[iid], []).append((iid, I.image_chunk_text("", d)))
 db.get_images_to_describe = lambda tid, statuses=("관련",): [i for i in imgs if i.image_id not in {x for v in desc_store.values() for x, _ in v}]
 db.save_image_description = save_desc
+db.save_image_descriptions = lambda items, m=None: [save_desc(i, d) for i, d in items]
 I.described_images = lambda links: {l: desc_store[l] for l in links if l in desc_store}
 all_articles = [Article(title="제목A", link="A", content="본문 하나. 본문 둘."), Article(title="제목B", link="B", content=""),
                 Article(title="제목C", link="C", content="")]
@@ -51,6 +52,7 @@ db.get_articles_without_chunks = lambda tid, statuses=("관련",): [a for a in a
 def save_chunks(link, chunks, model=None):
     saved["chunks"][link] = [(c.source, c.image_id) for c in chunks]; no_chunks.discard(link)
 db.save_chunks = save_chunks
+db.save_chunks_many = lambda items, model=None: [save_chunks(l, c) for l, c in items]
 real_describe = I.describe_image
 async def fake_describe(image, title, link=""): return None if image.url == "u4" else f"설명({image.url})"
 I.describe_image = fake_describe

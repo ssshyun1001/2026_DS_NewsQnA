@@ -9,7 +9,10 @@ QuPicT 웹 서비스 — run.py의 질문 서비스를 브라우저 화면으로
     1) 검색어 + 기간 입력          → POST /api/senses        [0단계] 의미 후보 (DB 캐시 또는 LLM)
     2) 의미 고르기 (또는 직접 입력) → POST /api/prepare       [1~4단계] 수집·필터·인덱싱 (백그라운드 작업)
     3) 진행 상황 보기               → GET  /api/jobs/{id}     단계별 로그를 몇 초마다 확인
-    4) 질문하기                     → POST /api/ask           [5단계] 검색 · 답변
+    4) 질문하기                     → POST /api/ask/stream    [5단계] 검색 · 답변 (만들어지는 대로 한 줄씩 보냄)
+                                       POST /api/ask           같은 답변을 다 만든 뒤 한 번에 (예전 방식)
+
+준비하는 동안에도 질문 칸이 열려 있다. 미리 적은 질문은 화면이 기억해 두었다가 준비가 끝나면 차례로 보낸다.
 
 세션(준비한 뉴스)은 서버 메모리에만 있다 → 서버를 끄면 사라진다. DB 버전은 DB에 쌓인 것을 다시 쓰므로
 같은 검색어를 다시 준비하면 이미 한 일은 건너뛰어 빠르다.
@@ -18,15 +21,17 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
+import queue
 import threading
 import traceback
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Iterator, Optional
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from qupict.cli import setup_console
@@ -56,10 +61,11 @@ class Job:
 
 @dataclass
 class Session:
-    """준비가 끝난 뉴스. 질문이 오면 answer_fn으로 답한다."""
+    """준비가 끝난 뉴스. 질문이 오면 answer_fn(질문, on_token)으로 답한다.
+    on_token을 주면 답변 글 조각이 만들어질 때마다 불린다 (스트리밍). None이면 다 만든 뒤 한 번에."""
     label: str
     mode: str                          # "DB" / "메모리"
-    answer_fn: Callable[[str], Answer]
+    answer_fn: Callable[[str, Optional[Callable[[str], None]]], Answer]
 
 
 _candidates: dict[str, SenseCandidates] = {}   # 검색어 → 의미 후보 (선택할 때 다시 쓴다)
@@ -160,9 +166,9 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
             if news is None:
                 raise RuntimeError("질문에 쓸 기사가 없습니다. 다른 검색어·의미·기간으로 다시 시도해 주세요.")
 
-            def answer_fn(question: str) -> Answer:
+            def answer_fn(question: str, on_token=None) -> Answer:
                 relevant = retrieve_relevant_articles(news.store, news.articles, question, topic=news.topic)
-                return generate_answer(question, relevant)
+                return generate_answer(question, relevant, on_token=on_token)
         else:
             from qupict.qa import generate_answer_from_chunks
             from qupict.retrieval import search_topic
@@ -170,9 +176,9 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
 
             topic_id = asyncio.run(prepare_topic(selected, req.period_days, req.max_articles, log=log))
 
-            def answer_fn(question: str) -> Answer:
+            def answer_fn(question: str, on_token=None) -> Answer:
                 hits = search_topic(topic_id, question, selected, period_days=req.period_days)
-                return generate_answer_from_chunks(question, hits)
+                return generate_answer_from_chunks(question, hits, on_token=on_token)
 
         session_id = uuid.uuid4().hex
         with _lock:
@@ -219,14 +225,56 @@ def job_status(job_id: str) -> dict:
 # [5단계] 질문 · 답변
 # ---------------------------------------------------------------------------
 
-@app.post("/api/ask")
-def ask(req: AskRequest) -> dict:
-    session = _sessions.get(req.session_id)
+def _get_session(session_id: str) -> Session:
+    session = _sessions.get(session_id)
     if session is None:
         raise HTTPException(404, "세션이 없습니다 (서버를 다시 켰다면 뉴스를 다시 준비해 주세요).")
-    answer = session.answer_fn(req.question.strip())
+    return session
 
-    # 답변에서 실제로 인용한 기사만 보여 준다 (번호는 답변 속 "(기사 N)"과 같게 유지) — run.print_answer와 같은 규칙
+
+@app.post("/api/ask")
+def ask(req: AskRequest) -> dict:
+    """답변을 다 만든 뒤 한 번에 돌려준다 (예전 방식. 화면은 /api/ask/stream을 쓴다)."""
+    answer = _get_session(req.session_id).answer_fn(req.question.strip(), None)
+    return _answer_payload(answer)
+
+
+@app.post("/api/ask/stream")
+def ask_stream(req: AskRequest) -> StreamingResponse:
+    """답변을 만들어지는 대로 보낸다. 한 줄에 JSON 하나 (NDJSON):
+
+        {"type": "token", "text": "강남은 "}            답변 글 조각 (여러 번)
+        {"type": "done", "answer": ..., "sources": ...}  마지막: /api/ask와 같은 내용 (완성된 답변 + 출처)
+        {"type": "error", "message": "..."}              실패
+
+    완성된 답변 글은 /api/ask와 같다. 사용자는 첫 글자를 훨씬 빨리 본다.
+    """
+    session = _get_session(req.session_id)
+    question = req.question.strip()
+    events: queue.Queue = queue.Queue()
+
+    def work() -> None:          # 답변 만들기는 별도 스레드에서, 조각이 생길 때마다 events에 넣는다
+        try:
+            answer = session.answer_fn(question, lambda text: events.put({"type": "token", "text": text}))
+            events.put({"type": "done", **_answer_payload(answer)})
+        except Exception as e:
+            traceback.print_exc()
+            events.put({"type": "error", "message": str(e) or type(e).__name__})
+
+    def lines() -> Iterator[str]:
+        while True:
+            event = events.get()
+            yield json.dumps(event, ensure_ascii=False) + "\n"
+            if event["type"] != "token":
+                return
+
+    threading.Thread(target=work, daemon=True).start()
+    return StreamingResponse(lines(), media_type="application/x-ndjson")
+
+
+def _answer_payload(answer: Answer) -> dict:
+    """답변 → 화면에 보낼 내용. 답변에서 실제로 인용한 기사만 출처로 보여 준다
+    (번호는 답변 속 "(기사 N)"과 같게 유지) — run.print_answer와 같은 규칙"""
     shown = answer.cited or list(range(1, len(answer.sources) + 1))
     sources = []
     for i in shown:
@@ -258,6 +306,9 @@ def main() -> None:
     p.add_argument("--port", type=int, default=8000)
     args = p.parse_args()
     print(f"브라우저에서 http://{'localhost' if args.host in ('127.0.0.1', '0.0.0.0') else args.host}:{args.port} 을 여세요.")
+    from qupict import collect, db
+    db.warm_up()                # DB 연결(첫 연결 약 1.4초)을 서버를 켤 때 미리 열어 둔다 → 첫 요청이 빨라짐
+    collect.warm_up_parser()    # 크롤링 해석용 프로세스(띄우는 데 약 2초)도 미리 띄워 둔다
     uvicorn.run(app, host=args.host, port=args.port)
 
 

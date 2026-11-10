@@ -13,6 +13,7 @@ LLM·임베딩 클라이언트를 만드는 곳 (프로젝트 전체에서 여�
 """
 from __future__ import annotations
 
+import asyncio
 import warnings
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -51,6 +52,21 @@ def get_structured_model(schema, temperature: float = 0):
 
 # json_schema 방식으로 부를 때마다 langchain이 찍는 경고 (스트리밍을 쓰지 않으므로 상관없음)
 warnings.filterwarnings("ignore", message="Streaming with Pydantic response_format not yet supported")
+
+
+async def aembed_in_batches(embeddings, texts: list[str], batch_size: int = EMBED_BATCH_SIZE) -> list[list[float]]:
+    """texts를 batch_size개씩 나눠 임베딩 요청을 동시에 보낸다. 결과는 texts 순서 그대로.
+
+    langchain의 aembed_documents도 chunk_size(=EMBED_BATCH_SIZE)개씩 나누지만, 나눈 요청을 하나씩 차례로 보낸다.
+    여기서는 같은 크기·같은 순서로 나눈 요청을 한꺼번에 보낸다.
+    → 요청마다 들어가는 글 묶음이 예전과 같아서 임베딩 값도 같다 (임베딩 API는 같이 보낸 글이 달라지면
+      값이 아주 조금 달라진다). 요청당 크기(게이트웨이 한도)도 그대로고, 기다림만 준다.
+    """
+    if not texts:
+        return []
+    batches = [texts[i:i + batch_size] for i in range(0, len(texts), batch_size)]
+    results = await asyncio.gather(*(embeddings.aembed_documents(b) for b in batches))
+    return [vec for batch in results for vec in batch]
 
 
 def get_embeddings() -> OpenAIEmbeddings:

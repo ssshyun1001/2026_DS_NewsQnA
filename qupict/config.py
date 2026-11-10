@@ -36,7 +36,7 @@ class Settings:
     database_url: str = os.getenv("DATABASE_URL", "")
 
     # Pipeline tuning
-    dedup_similarity_threshold: float = _get_float("DEDUP_SIMILARITY_THRESHOLD", 0.90)
+    dedup_similarity_threshold: float = _get_float("DEDUP_SIMILARITY_THRESHOLD", 0.6)
     top_k_articles: int = _get_int("TOP_K_ARTICLES", 10)
     max_crawl_articles: int = _get_int("MAX_CRAWL_ARTICLES", 150)
     crawl_timeout_seconds: int = _get_int("CRAWL_TIMEOUT_SECONDS", 10)
@@ -45,6 +45,11 @@ class Settings:
     #   실제 값 참고: 방송인 강남 질문에서 관련 청크가 0.48~0.70 → 0.5면 상위 일부만 남는다.
     #   근거가 하나도 안 남으면 답변은 "관련 뉴스를 찾지 못했습니다"로 끝난다.
     relevance_similarity_threshold: float = _get_float("RELEVANCE_SIMILARITY_THRESHOLD", 0.50)
+    # 서비스(run.py · web.py)의 [4단계] 인덱싱에서 이미지 설명(VLM)을 새로 만들지. 기본: 끔 (0)
+    #   측정(2026-11-10, "삼성" 기사 100건): 이미지 39장 설명에 60초 = 준비 시간 89초 중 67%.
+    #   VLM을 아직 쓰지 않으므로 끈다. 꺼도 이미 만들어 둔 이미지 설명은 청크에 그대로 들어간다.
+    #   다시 켜려면 .env에 DESCRIBE_IMAGES=1 (admin.py index-all은 이 설정과 상관없이 --no-images로 정한다)
+    describe_images: bool = _get_int("DESCRIBE_IMAGES", 0) == 1
 
 
 
