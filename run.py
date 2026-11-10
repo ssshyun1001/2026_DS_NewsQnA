@@ -5,6 +5,7 @@ QuPicT 서비스 실행 파일 — 사용자가 검색어로 뉴스를 모으고
     python run.py                         검색어·기간을 입력받기
     python run.py 애플 30 --max 30        수집할 최대 기사 수 (기본 100)
     python run.py 애플 30 --memory        DB 없이 메모리에서 (예전 방식, FAISS 검색)
+    python run.py 애플 30 --timing        단계별 걸린 시간 표 보기 (속도 측정, qupict/timing.py)
 
 흐름 (실제 일은 qupict/의 단계 파일이 한다)
     [0단계] 의미 선택     qupict/sense.py
@@ -26,6 +27,7 @@ import sys
 from dataclasses import dataclass
 from typing import Callable
 
+from qupict import timing
 from qupict.cli import read_line, read_period_days, setup_console
 from qupict.config import settings, validate_settings
 from qupict.schemas import Answer, Article, SelectedSense
@@ -47,11 +49,17 @@ MOVED_COMMANDS = {
 # 답변 출력 · 질문 반복
 # ---------------------------------------------------------------------------
 
-def print_answer(answer: Answer) -> None:
+def print_answer_header(question: str) -> None:
     print("\n" + "=" * 60)
-    print("질문:", answer.question)
+    print("질문:", question)
     print("-" * 60)
-    print(answer.answer)
+
+
+def print_answer(answer: Answer, streamed: bool = False) -> None:
+    """streamed=True: 머리(질문)와 답변 글은 스트리밍하면서 이미 찍었으니 출처부터 찍는다."""
+    if not streamed:
+        print_answer_header(answer.question)
+        print(answer.answer)
     print("-" * 60)
     if answer.sources:
         # 답변에서 실제로 인용한 기사만 보여 준다 (번호는 답변 속 "(기사 N)"과 같게 유지)
@@ -68,14 +76,17 @@ def print_answer(answer: Answer) -> None:
     print("=" * 60)
 
 
-def run_qa_loop(label: str, answer_fn: Callable[[str], Answer]) -> None:
+def run_qa_loop(label: str, answer_fn: Callable[[str], Answer], streamed: bool = False) -> None:
+    """streamed=True: answer_fn이 질문 머리와 답변 글을 스트리밍으로 직접 찍는다."""
     print(f"\n'{label}' 뉴스에 대해 자유롭게 질문하세요. (종료: {'/'.join(sorted(_EXIT_COMMANDS))})\n")
     while True:
         question = read_line("질문> ")
         if question.lower() in _EXIT_COMMANDS:
             print("질문을 마칩니다.")
             break
-        print_answer(answer_fn(question))
+        timing.reset()
+        print_answer(answer_fn(question), streamed=streamed)
+        timing.report(f"질문 답변 — {question[:20]}")
 
 
 def _choose_sense(topic: str) -> SelectedSense:
@@ -93,22 +104,35 @@ def _choose_sense(topic: str) -> SelectedSense:
 # DB 버전 (기본)
 # ---------------------------------------------------------------------------
 
-async def prepare_topic(selected: SelectedSense, period_days: int, max_articles: int = 100) -> int:
-    """[1~4단계] 수집 → 필터 → 인덱싱을 DB에 쌓고 topic id를 돌려준다. 이미 한 일은 건너뛴다."""
+async def prepare_topic(selected: SelectedSense, period_days: int, max_articles: int = 100,
+                        log: Callable[[str], None] = print) -> int:
+    """[1~4단계] 수집 → 필터 → 인덱싱을 DB에 쌓고 topic id를 돌려준다. 이미 한 일은 건너뛴다.
+    log: 진행 상황을 한 줄씩 받을 함수 (기본 = 터미널에 출력. web.py는 화면에 보여 줄 목록에 쌓는다)"""
     from qupict import db
     from qupict.collect import build_search_terms, collect_to_db
     from qupict.filtering import filter_topic
     from qupict.indexing import index_topic
 
-    print(f"[1단계] 검색어 → {build_search_terms(selected)} (최근 {period_days}일)")
-    collected = await collect_to_db(selected, period_days, max_articles)
-    print(f"[1단계] 수집 → {collected.summary()}")
-    filtered = await filter_topic(collected.topic_id, selected)
-    print(f"[2·3단계] 필터링 (새 기사만) → {filtered.summary()}")
-    indexed = await index_topic(collected.topic_id)
-    print(f"[4단계] 인덱싱 (새 기사만) → {indexed.summary()}")
-    usable = db.get_topic_articles(collected.topic_id, period_days=period_days, statuses=("관련", "보류"))
-    print(f"→ 최근 {period_days}일 기사 중 질문에 쓸 수 있는 기사(관련·보류): {len(usable)}건")
+    timing.reset()
+    log(f"[1단계] 검색어 → {build_search_terms(selected)} (최근 {period_days}일)")
+    with timing.timed("[1단계] 수집"):
+        collected = await collect_to_db(selected, period_days, max_articles)
+    log(f"[1단계] 수집 → {collected.summary()}")
+    with timing.timed("[2·3단계] 필터링"):
+        filtered = await filter_topic(collected.topic_id, selected)
+    log(f"[2·3단계] 필터링 (새 기사만) → {filtered.summary()}")
+    # 질문 가능 기사 세기는 판정만 보므로(인덱싱 결과와 무관) 인덱싱하는 동안 동시에 해 둔다
+    usable_task = asyncio.create_task(asyncio.to_thread(
+        db.get_topic_articles, collected.topic_id, period_days=period_days, statuses=("관련", "보류")))
+    # 이미지 설명(VLM)은 설정(DESCRIBE_IMAGES)으로 켤 때만 새로 만든다 (기본 끔: 준비 시간의 대부분을 차지해서)
+    with timing.timed("[4단계] 인덱싱"):
+        indexed = await index_topic(collected.topic_id, describe_images=settings.describe_images)
+    log(f"[4단계] 인덱싱 (새 기사만) → {indexed.summary()}"
+        + ("" if settings.describe_images else " · 이미지 설명은 꺼 둠"))
+    with timing.timed("질문 가능 기사 세기(DB, 인덱싱과 동시)"):
+        usable = await usable_task
+    log(f"→ 최근 {period_days}일 기사 중 질문에 쓸 수 있는 기사(관련·보류): {len(usable)}건")
+    timing.report("수집 → 필터링 → 인덱싱")
     return collected.topic_id
 
 
@@ -119,10 +143,16 @@ def run_ask_db(selected: SelectedSense, period_days: int, max_articles: int = 10
     topic_id = asyncio.run(prepare_topic(selected, period_days, max_articles))
 
     def answer(question: str) -> Answer:
-        hits = search_topic(topic_id, question, selected, period_days=period_days)
-        return generate_answer_from_chunks(question, hits)
+        with timing.timed("[5단계] 근거 검색") as t:
+            hits = search_topic(topic_id, question, selected, period_days=period_days)
+            t.note = f"기준 통과 청크 {len(hits)}개"
+        # 답변은 스트리밍: 만들어지는 글자를 바로 화면에 찍는다 (첫 글자가 빨리 보임, 완성된 답변은 같음)
+        print_answer_header(question)
+        result = generate_answer_from_chunks(question, hits, on_token=lambda s: print(s, end="", flush=True))
+        print()
+        return result
 
-    run_qa_loop(f"{selected.query} ({selected.sense.name})", answer)
+    run_qa_loop(f"{selected.query} ({selected.sense.name})", answer, streamed=True)
 
 
 # ---------------------------------------------------------------------------
@@ -140,27 +170,35 @@ class NewsSession:
     store: object  # FAISS
 
 
-async def collect_news(selected: SelectedSense, period_days: int, max_articles: int = 100) -> NewsSession | None:
-    """[메모리 버전] 고른 의미로 뉴스를 수집·필터링하고 FAISS 인메모리 벡터스토어를 만든다."""
+async def collect_news(selected: SelectedSense, period_days: int, max_articles: int = 100,
+                       log: Callable[[str], None] = print) -> NewsSession | None:
+    """[메모리 버전] 고른 의미로 뉴스를 수집·필터링하고 FAISS 인메모리 벡터스토어를 만든다.
+    log: 진행 상황을 한 줄씩 받을 함수 (기본 = 터미널에 출력. web.py는 화면에 보여 줄 목록에 쌓는다)"""
     from qupict.collect import build_search_terms, collect_articles
     from qupict.filtering import filter_articles
     from qupict.retrieval import build_in_memory_store
 
-    print(f"[1/4] 검색어 → {build_search_terms(selected)} (최근 {period_days}일)")
-    metas, articles = await collect_articles(selected, period_days, max_articles)
-    print(f"[2/4] 뉴스 수집 완료 → 검색 {len(metas)}건, 본문 확보 {len(articles)}건")
+    timing.reset()
+    log(f"[1/4] 검색어 → {build_search_terms(selected)} (최근 {period_days}일)")
+    with timing.timed("[1단계] 검색 + 본문 크롤링") as t:
+        metas, articles = await collect_articles(selected, period_days, max_articles)
+        t.note = f"검색 {len(metas)}건 → 본문 {len(articles)}건"
+    log(f"[2/4] 뉴스 수집 완료 → 검색 {len(metas)}건, 본문 확보 {len(articles)}건")
     if not articles:
-        print("기사 본문을 가져오지 못했습니다. 다른 검색어나 기간으로 다시 시도해주세요.")
+        log("기사 본문을 가져오지 못했습니다. 다른 검색어나 기간으로 다시 시도해주세요.")
         return None
-    outcome = await filter_articles(articles, selected)
-    print(f"[3/4] 필터링 완료 → {outcome.summary()}")
+    with timing.timed("[2·3단계] 필터링"):
+        outcome = await filter_articles(articles, selected)
+    log(f"[3/4] 필터링 완료 → {outcome.summary()}")
     keep = outcome.links_with(*ANSWER_STATUSES)
     filtered = [a for a in articles if a.link in keep]
     if not filtered:
-        print("관련 기사로 판정된 기사가 없습니다. 다른 검색어·의미·기간으로 다시 시도해주세요.")
+        log("관련 기사로 판정된 기사가 없습니다. 다른 검색어·의미·기간으로 다시 시도해주세요.")
         return None
-    store = build_in_memory_store(filtered)
-    print(f"[4/4] 인메모리 벡터스토어 구축 완료 → {len(filtered)}건(관련·보류)")
+    with timing.timed("[4단계] 인메모리 벡터스토어"):
+        store = build_in_memory_store(filtered)
+    log(f"[4/4] 인메모리 벡터스토어 구축 완료 → {len(filtered)}건(관련·보류)")
+    timing.report("수집 → 필터링 → 벡터스토어 (메모리 버전)")
     return NewsSession(topic=selected.query, articles=filtered, store=store)
 
 
@@ -173,7 +211,8 @@ def run_ask_memory(selected: SelectedSense, period_days: int, max_articles: int 
         return
 
     def answer(question: str) -> Answer:
-        relevant = retrieve_relevant_articles(session.store, session.articles, question, topic=session.topic)
+        with timing.timed("[5단계] 근거 검색"):
+            relevant = retrieve_relevant_articles(session.store, session.articles, question, topic=session.topic)
         return generate_answer(question, relevant)
 
     run_qa_loop(session.topic, answer)
@@ -188,6 +227,8 @@ def cmd_ask(words: list[str], memory: bool, max_articles: int = 100) -> None:
     if not memory and not settings.database_url:
         print("DATABASE_URL이 없어 DB 없이(메모리 버전으로) 실행합니다.")
         memory = True
+    from qupict.collect import warm_up_parser
+    warm_up_parser()        # 크롤링 해석용 프로세스(약 2초)를 의미를 고르는 동안 미리 띄워 둔다
     selected = _choose_sense(topic)
     if memory:
         run_ask_memory(selected, period_days, max_articles)
@@ -204,6 +245,7 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("words", nargs="*", help="검색어 [기간(일)]")
     p.add_argument("--memory", action="store_true", help="DB 없이 메모리에서 (예전 방식)")
     p.add_argument("--max", type=int, default=100, dest="max_articles", help="수집할 최대 기사 수 (기본 100)")
+    p.add_argument("--timing", action="store_true", help="단계별 걸린 시간을 표로 보여 주기 (속도 측정용)")
     return p
 
 
@@ -216,6 +258,8 @@ def main(argv: list[str] | None = None) -> None:
     if argv and argv[0] == "ask":                # 예전처럼 python run.py ask 애플 30 도 그대로 동작
         argv = argv[1:]
     args = _parser().parse_args(argv)
+    if args.timing:
+        timing.enable()
     cmd_ask(list(args.words), args.memory, args.max_articles)
 
 

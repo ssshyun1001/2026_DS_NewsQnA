@@ -24,7 +24,9 @@ from dataclasses import dataclass
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from qupict import timing
 from qupict.collect import download_images
+from qupict.concurrency import run_parallel, timed_call
 from qupict.config import settings
 from qupict.llm import get_chat_model, get_embeddings
 from qupict.schemas import Article, ArticleImage
@@ -32,7 +34,10 @@ from qupict.schemas import Article, ArticleImage
 INDEX_STATUSES = ("관련", "보류")   # 질문 답변에 쓰는 판정 (run.py의 ANSWER_STATUSES와 같게)
 CHUNK_CHARS = 500                   # 청크 하나의 목표 길이 (한국어 기사 2~4문장)
 MAX_IMAGES_PER_ARTICLE = 2          # 기사당 설명할 이미지 수 (LLM 비용 상한)
-IMAGE_CONCURRENCY = 4               # 동시에 보내는 이미지 설명 요청 수
+# 동시에 보내는 이미지 설명 요청 수. 4 → 8: 이미지 1장 설명에 수 초가 걸려서(측정: 8장 22초) 기다림이 대부분이다.
+# 게이트웨이 한도(60초 120회) 안쪽. 필터링 LLM 판정과는 단계가 달라 동시에 겹치지 않는다.
+IMAGE_CONCURRENCY = 8
+EMBED_CONCURRENCY = 8               # 청크 임베딩 요청(기사마다 1번)을 동시에 보내는 수
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +139,55 @@ async def embed_chunks(title: str, chunks: list[str]) -> list[list[float]]:
     return await get_embeddings().aembed_documents([f"{title}\n{c}" for c in chunks])
 
 
+async def build_article_chunks(articles: list[Article],
+                               image_chunks: dict[str, list[tuple[int, str]]]) -> dict[str, list]:
+    """기사들의 청크(본문 청크 + 이미지 청크)와 임베딩을 만든다. DB에 저장하지 않는다. {기사 link: [db.Chunk]}
+
+    image_chunks: {기사 link: [(image_id, 이미지 청크 내용)]} (described_images 결과)
+    청크가 하나도 없는 기사(본문·이미지 설명 모두 없음)는 결과에서 빠진다.
+
+    기사마다 임베딩 요청 1번(예전과 같은 묶음)을 동시에 EMBED_CONCURRENCY개씩 보낸다.
+    예전: 기사마다 요청 1번을 차례로 → 기사 수만큼 기다림.
+    모든 청크를 한 요청에 몰아 보내면 더 빠르지만, 임베딩 API는 한 요청에 같이 들어간 글이 달라지면
+    값이 아주 조금 달라진다 (측정: 최대 0.004). 결과를 예전과 똑같이 두려고 요청 묶음은 바꾸지 않았다.
+    """
+    from qupict import db
+
+    plans: list[tuple[Article, list[str], list[tuple[int, str]]]] = []
+    for article in articles:
+        bodies = split_into_chunks(article.content)
+        images = image_chunks.get(article.link, [])
+        if bodies or images:
+            plans.append((article, bodies, images))
+
+    semaphore = asyncio.Semaphore(EMBED_CONCURRENCY)
+
+    async def embed_one(article: Article, bodies: list[str], images: list[tuple[int, str]]) -> list[list[float]]:
+        async with semaphore:
+            return await embed_chunks(article.title, bodies + [text for _, text in images])
+
+    all_vectors = await asyncio.gather(*(embed_one(*plan) for plan in plans))
+    out: dict[str, list] = {}
+    for (article, bodies, images), vecs in zip(plans, all_vectors):
+        chunks = [db.Chunk(text, vec) for text, vec in zip(bodies, vecs)]
+        chunks += [db.Chunk(text, vec, source="image", image_id=image_id)
+                   for (image_id, text), vec in zip(images, vecs[len(bodies):])]
+        out[article.link] = chunks
+    return out
+
+
+async def describe_images_many(jobs: list[tuple[ArticleImage, str, str]]) -> list[str | None]:
+    """(이미지, 기사 제목, 기사 link) 목록을 동시에 IMAGE_CONCURRENCY개씩 설명한다. DB에 저장하지 않는다.
+    돌려주는 값: jobs와 같은 순서의 설명 (실패하면 None)"""
+    semaphore = asyncio.Semaphore(IMAGE_CONCURRENCY)
+
+    async def one(image: ArticleImage, title: str, link: str) -> str | None:
+        async with semaphore:
+            return await describe_image(image, title, link)
+
+    return list(await asyncio.gather(*(one(*job) for job in jobs)))
+
+
 # ---------------------------------------------------------------------------
 # DB 버전
 # ---------------------------------------------------------------------------
@@ -182,10 +236,18 @@ async def _describe_topic_images(topic_id: int, statuses: tuple[str, ...]) -> tu
     """
     from qupict import db
 
-    todo = db.get_images_to_describe(topic_id, statuses=statuses)
+    todo = await asyncio.to_thread(db.get_images_to_describe, topic_id, statuses=statuses)
     if not todo:
         return set(), 0, 0
-    already = {link: len(v) for link, v in described_images(list({i.article_link for i in todo})).items()}
+    # 이미 설명한 장수와 기사 제목은 서로 상관없는 DB 조회라 동시에 한다 (DB 연결 시간이 겹침)
+    # 제목은 판정(statuses)을 통과한 기사에서만 찾는다: 설명할 이미지(todo)가 모두 그 기사들의 것이라
+    # 결과는 topic 전체 기사를 불러오던 예전과 같고, 불러오는 양(본문·임베딩)만 준다.
+    described, judged = await asyncio.to_thread(
+        run_parallel,
+        lambda: described_images(list({i.article_link for i in todo})),
+        lambda: db.get_topic_articles(topic_id, statuses=statuses),
+    )
+    already = {link: len(v) for link, v in described.items()}
     per_article: dict[str, list] = {}
     for img in todo:                                    # get_images_to_describe는 기사 안 순서대로 준다
         picked = per_article.setdefault(img.article_link, [])
@@ -195,24 +257,17 @@ async def _describe_topic_images(topic_id: int, statuses: tuple[str, ...]) -> tu
     if not picked:
         return set(), 0, 0
 
-    titles = {a.link: a.title for a in db.get_topic_articles(topic_id)}
-    semaphore = asyncio.Semaphore(IMAGE_CONCURRENCY)
+    titles = {a.link: a.title for a in judged}
+    descriptions = await describe_images_many(
+        [(ArticleImage(url=img.url, caption=img.caption), titles.get(img.article_link, ""), img.article_link)
+         for img in picked])
 
-    async def one(img):
-        async with semaphore:
-            image = ArticleImage(url=img.url, caption=img.caption)
-            return img, await describe_image(image, titles.get(img.article_link, ""), img.article_link)
-
-    changed: set[str] = set()
-    done = failed = 0
-    for img, desc in await asyncio.gather(*(one(i) for i in picked)):
-        if desc is None:
-            failed += 1
-            continue
-        db.save_image_description(img.image_id, desc, settings.chat_model)
-        changed.add(img.article_link)
-        done += 1
-    return changed, done, failed
+    ok = [(img, desc) for img, desc in zip(picked, descriptions) if desc is not None]
+    # 설명 저장은 모아서 한 번에 (예전: 이미지마다 연결 1번)
+    await asyncio.to_thread(
+        db.save_image_descriptions, [(img.image_id, desc) for img, desc in ok], settings.chat_model)
+    changed = {img.article_link for img, _ in ok}
+    return changed, len(ok), len(picked) - len(ok)
 
 
 async def index_topic(
@@ -232,31 +287,38 @@ async def index_topic(
 
     result = IndexResult()
     changed: set[str] = set()
+
+    def load_targets() -> dict[str, Article]:
+        """청크를 만들 기본 대상. 이미지 설명과 상관없이 정해진다 (청크 유무·판정만 봄)."""
+        if rebuild:
+            return {a.link: a for a in db.get_topic_articles(topic_id, statuses=statuses)}
+        return {a.link: a for a in db.get_articles_without_chunks(topic_id, statuses=statuses)}
+
+    # 대상 기사 불러오기(DB)는 이미지 설명(LLM)을 기다리는 동안 동시에 해 둔다
+    targets_task = asyncio.create_task(asyncio.to_thread(timed_call, load_targets))
     if describe_images:
-        changed, result.images_described, result.images_failed = await _describe_topic_images(topic_id, statuses)
+        with timing.timed("이미지 설명(VLM)") as t:
+            changed, result.images_described, result.images_failed = await _describe_topic_images(topic_id, statuses)
+            t.note = f"설명 {result.images_described}장, 실패 {result.images_failed}장 (동시 {IMAGE_CONCURRENCY})"
 
-    if rebuild:
-        targets = {a.link: a for a in db.get_topic_articles(topic_id, statuses=statuses)}
-    else:
-        targets = {a.link: a for a in db.get_articles_without_chunks(topic_id, statuses=statuses)}
-    if changed - targets.keys():
-        for a in db.get_topic_articles(topic_id, statuses=statuses):
-            if a.link in changed:
-                targets.setdefault(a.link, a)
-    image_chunks = described_images(list(targets))
+    with timing.timed("청크 만들 기사 불러오기(DB)") as t:
+        targets, load_sec = await targets_task
+        if changed - targets.keys():
+            for a in db.get_topic_articles(topic_id, statuses=statuses):
+                if a.link in changed:
+                    targets.setdefault(a.link, a)
+        image_chunks = described_images(list(targets))
+        t.note = f"기사 {len(targets)}건 (대상 조회 {load_sec:.2f}초는 이미지 설명과 동시에)"
 
-    for article in targets.values():
-        bodies = split_into_chunks(article.content)
-        images = image_chunks.get(article.link, [])
-        texts = bodies + [text for _, text in images]
-        if not texts:
-            continue
-        vectors = await embed_chunks(article.title, texts)
-        chunks = [db.Chunk(text, vec) for text, vec in zip(bodies, vectors)]
-        chunks += [db.Chunk(text, vec, source="image", image_id=image_id)
-                   for (image_id, text), vec in zip(images, vectors[len(bodies):])]
-        db.save_chunks(article.link, chunks)
+    with timing.timed("청크 임베딩") as t:
+        built = await build_article_chunks(list(targets.values()), image_chunks)
+        t.note = f"기사 {len(built)}건, 청크 {sum(len(c) for c in built.values())}개 (기사별 요청을 동시에)"
+    with timing.timed("청크 저장(DB)") as t:
+        # 모든 기사의 청크를 모아서 한 번에 (예전: 기사마다 연결 1번 + 쿼리 3번)
+        await asyncio.to_thread(db.save_chunks_many, list(built.items()))
+        t.note = f"기사 {len(built)}건 (한 번에)"
+    for chunks in built.values():
         result.articles += 1
-        result.body_chunks += len(bodies)
-        result.image_chunks += len(images)
+        result.body_chunks += sum(c.source == "body" for c in chunks)
+        result.image_chunks += sum(c.source == "image" for c in chunks)
     return result

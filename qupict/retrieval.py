@@ -38,6 +38,8 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.vectorstores import FAISS
 
+from qupict import timing
+from qupict.concurrency import map_parallel, run_parallel, timed_call
 from qupict.llm import get_chat_model, get_embeddings
 from qupict.config import settings
 from qupict.schemas import Article, SelectedSense
@@ -145,11 +147,22 @@ def topic_context(selected: SelectedSense) -> str:
 
 def build_search_texts(question: str, context: str, use_hyde: bool = True,
                        use_multi_query: bool = True) -> list[str]:
-    """검색에 쓸 문장 목록: [원 질문(+HyDE 가상 문장), 변형 질문 …]"""
-    texts = [_build_search_text(question, context, use_hyde=use_hyde)]
-    if use_multi_query:
-        texts.extend(_generate_query_variants(question, context))
-    return texts
+    """검색에 쓸 문장 목록: [원 질문(+HyDE 가상 문장), 변형 질문 …]
+
+    HyDE와 Multi-Query는 서로의 결과가 필요 없으므로 두 LLM 호출을 동시에 보낸다.
+    (예전: HyDE가 끝나야 Multi-Query 시작 → 두 호출 시간의 합. 지금: 둘 중 긴 쪽만큼)
+    결과 목록과 순서는 예전과 같다.
+    """
+    if not use_multi_query:
+        with timing.timed("HyDE 가상 문장(LLM)" if use_hyde else "HyDE 끔"):
+            return [_build_search_text(question, context, use_hyde=use_hyde)]
+    with timing.timed("HyDE + Multi-Query(LLM, 동시)") as t:
+        (hyde, hyde_sec), (variants, mq_sec) = run_parallel(
+            lambda: timed_call(_build_search_text, question, context, use_hyde=use_hyde),
+            lambda: timed_call(_generate_query_variants, question, context),
+        )
+        t.note = f"HyDE {hyde_sec:.2f}초 · Multi-Query {mq_sec:.2f}초, 변형 {len(variants)}개"
+    return [hyde, *variants]
 
 
 # ---------------------------------------------------------------------------
@@ -173,8 +186,12 @@ def search_topic(
     """
     threshold = settings.relevance_similarity_threshold if similarity_threshold is None else similarity_threshold
     texts = build_search_texts(question, topic_context(selected), use_hyde, use_multi_query)
-    vectors = get_embeddings().embed_documents(texts)
-    hits = search_vectors(topic_id, vectors, k * 3, period_days, statuses)
+    with timing.timed("검색 문장 임베딩") as t:
+        vectors = get_embeddings().embed_documents(texts)
+        t.note = f"문장 {len(texts)}개"
+    with timing.timed("벡터 검색(DB)") as t:
+        hits = search_vectors(topic_id, vectors, k * 3, period_days, statuses)
+        t.note = f"DB 쿼리 {len(vectors)}번(동시에), 후보 {len(hits)}개"
     return [h for h in hits if h.similarity >= threshold][:k]
 
 
@@ -185,12 +202,19 @@ def search_vectors(topic_id: int, vectors: list[list[float]], per_vector: int,
 
     같은 청크가 여러 문장에서 나오면 가장 높은 유사도를 쓴다 (max-pooling).
     search_topic과 유사도 확인 도구(experiments/similarity.py)가 같이 쓴다.
+
+    문장마다 DB 검색(= DB 연결 1번, 약 1.6초)을 동시에 보낸다. 합치는 순서는 예전과 같아서
+    (문장 순서대로) 결과도 같다.
     """
     from qupict import db
 
+    results = map_parallel(
+        lambda vec: db.search_chunks(topic_id, vec, k=per_vector, period_days=period_days, statuses=statuses),
+        vectors,
+    )
     best: dict[tuple[str, str], object] = {}       # (기사 link, 청크 내용) → 가장 높은 유사도의 hit
-    for vec in vectors:
-        for hit in db.search_chunks(topic_id, vec, k=per_vector, period_days=period_days, statuses=statuses):
+    for vec_hits in results:
+        for hit in vec_hits:
             key = (hit.article.link, hit.content)
             if key not in best or hit.similarity > best[key].similarity:
                 best[key] = hit

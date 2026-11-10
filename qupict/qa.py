@@ -10,10 +10,13 @@
 from __future__ import annotations
 
 import re
+import time
+from typing import Callable
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
+from qupict import timing
 from qupict.llm import get_chat_model
 from qupict.schemas import Answer, Article
 
@@ -80,13 +83,15 @@ def _get_chain():
     return _chain
 
 
-def generate_answer(question: str, articles: list[Article]) -> Answer:
+def generate_answer(question: str, articles: list[Article],
+                    on_token: Callable[[str], None] | None = None) -> Answer:
     """
-    질문 + 관련 기사 목록을 받아 답변을 생성한다.
+    질문 + 관련 기사 목록을 받아 답변을 생성한다. (메모리 버전)
 
     관련 기사가 없어도 답변을 포기하지 않는다. 이 경우 컨텍스트에 "관련 기사 없음"을
     명시해 LLM이 일반 지식으로 답변을 완결한 뒤, 마지막에 그 사실을 짧게 덧붙이도록
     유도한다.
+    on_token: 주면 답변을 스트리밍으로 받으며 조각마다 부른다 (generate_answer_from_chunks와 같음)
     """
     if articles:
         context = "\n\n".join(
@@ -95,7 +100,9 @@ def generate_answer(question: str, articles: list[Article]) -> Answer:
     else:
         context = NO_ARTICLE_CONTEXT
 
-    answer_text = _get_chain().invoke({"question": question, "context": context})
+    with timing.timed("답변 생성(LLM)") as t:
+        answer_text = _run_answer_chain(question, context, on_token)
+        t.note = f"입력 근거 {len(context)}자 → 답변 {len(answer_text)}자"
 
     return Answer(question=question, answer=answer_text, sources=articles)
 
@@ -124,10 +131,42 @@ def build_chunk_context(hits: list) -> tuple[str, list[Article], list[str]]:
     return "\n\n".join(blocks), sources, kinds
 
 
-def generate_answer_from_chunks(question: str, hits: list) -> Answer:
-    """[DB 버전] 검색된 청크로 답변을 만든다. 출처에 근거 종류(본문 / 이미지 설명)를 함께 돌려준다."""
+def _run_answer_chain(question: str, context: str, on_token: Callable[[str], None] | None) -> str:
+    """답변 LLM 호출. on_token을 주면 스트리밍: 글자가 만들어지는 대로 on_token(조각)을 부른다.
+
+    스트리밍은 "다 만들어진 뒤 한 번에" 대신 "만들어지는 대로" 받는 것뿐이라 완성된 답변 글은 같다.
+    사용자는 첫 글자를 훨씬 빨리 본다 (전체 시간은 거의 같음).
+    스트리밍 연결이 첫 조각 전에 실패하면 예전처럼 한 번에 받는다.
+    """
+    chain = _get_chain()
+    inputs = {"question": question, "context": context}
+    if on_token is None:
+        return chain.invoke(inputs)
+    parts: list[str] = []
+    start = time.perf_counter()
+    try:
+        for piece in chain.stream(inputs):
+            if not parts:
+                timing.add("첫 글자까지", time.perf_counter() - start)
+            parts.append(piece)
+            on_token(piece)
+    except Exception:
+        if parts:
+            raise
+        text = chain.invoke(inputs)
+        on_token(text)
+        return text
+    return "".join(parts)
+
+
+def generate_answer_from_chunks(question: str, hits: list,
+                                on_token: Callable[[str], None] | None = None) -> Answer:
+    """[DB 버전] 검색된 청크로 답변을 만든다. 출처에 근거 종류(본문 / 이미지 설명)를 함께 돌려준다.
+    on_token: 주면 답변을 스트리밍으로 받으며 조각마다 부른다 (run.py가 화면에 바로 찍는 데 씀)"""
     context, sources, kinds = build_chunk_context(hits) if hits else (NO_ARTICLE_CONTEXT, [], [])
-    answer_text = _get_chain().invoke({"question": question, "context": context})
+    with timing.timed("답변 생성(LLM)") as t:
+        answer_text = _run_answer_chain(question, context, on_token)
+        t.note = f"입력 근거 {len(context)}자 → 답변 {len(answer_text)}자"
     return Answer(question=question, answer=answer_text, sources=sources, source_kinds=kinds,
                   cited=cited_numbers(answer_text, len(sources)))
 
