@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QuPicT 뉴스 Q&amp;A</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #6b7280; --line: #e3e6eb;
+    --accent: #2f6fde; --accent-soft: #e8f0fd; --ok: #1f9d55; --err: #d64545; --log: #f1f3f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c; --card: #1c2027; --text: #e6e8eb; --muted: #9aa3ae; --line: #2d333c;
+      --accent: #6c9cf0; --accent-soft: #23314a; --ok: #4cc38a; --err: #f07070; --log: #161a20;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; display: flex; gap: 8px; align-items: center; }
+  .step { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+          background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+  label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .field { flex: 1 1 160px; }
+  .field.small { flex: 0 1 110px; }
+  input[type=text], input[type=number], textarea {
+    width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); color: var(--text); font: inherit; }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button { padding: 9px 16px; border: 0; border-radius: 8px; background: var(--accent); color: #fff;
+           font: inherit; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+  .opts { margin-top: 10px; font-size: 13px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; }
+  .senses { display: grid; gap: 8px; }
+  .sense { display: block; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer; }
+  .sense:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .sense input { margin-right: 6px; }
+  .sense .name { font-weight: 600; }
+  .sense .def { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .tags { margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; }
+  .tag { font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--log); color: var(--muted); }
+  .note { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+  .log { background: var(--log); border-radius: 8px; padding: 12px; font: 13px/1.6 ui-monospace, Consolas, monospace;
+         white-space: pre-wrap; word-break: break-all; max-height: 260px; overflow: auto; }
+  .status { font-size: 13px; margin-top: 8px; }
+  .status.err { color: var(--err); } .status.ok { color: var(--ok); }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line);
+             border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .chat { display: grid; gap: 14px; margin-bottom: 14px; }
+  .q { justify-self: end; background: var(--accent); color: #fff; padding: 8px 14px; border-radius: 14px 14px 4px 14px; max-width: 85%; }
+  .a { background: var(--log); padding: 12px 14px; border-radius: 14px 14px 14px 4px; white-space: pre-wrap; }
+  .a .cite { color: var(--accent); font-weight: 600; }
+  .srcs { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; white-space: normal; }
+  .srcs a { color: var(--accent); text-decoration: none; } .srcs a:hover { text-decoration: underline; }
+  .srcs li { margin-bottom: 4px; } .srcs ol { margin: 4px 0 0; padding-left: 0; list-style: none; }
+  .muted { color: var(--muted); }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>QuPicT 뉴스 Q&amp;A</h1>
+  <p class="sub">검색어로 최근 뉴스를 모으고, 모은 기사 안에서 근거를 들어 답합니다. <span id="info"></span></p>
+
+  <!-- 1. 검색어 -->
+  <section class="card">
+    <h2><span class="step">1</span>검색어와 기간</h2>
+    <form id="f-query" class="row">
+      <div class="field"><label for="query">검색어</label><input id="query" type="text" placeholder="예: 애플, 강남" required></div>
+      <div class="field small"><label for="days">기간 (최근 며칠)</label><input id="days" type="number" min="1" max="365" value="30" required></div>
+      <button id="b-query" type="submit">의미 찾기</button>
+    </form>
+    <div class="opts">
+      <label><input id="maxn" type="number" min="1" max="500" value="100" style="width:80px"> 최대 수집 기사 수</label>
+      <label><input id="memory" type="checkbox"> DB 없이 메모리에서 (예전 방식)</label>
+    </div>
+    <div id="s-query" class="status"></div>
+  </section>
+
+  <!-- 2. 의미 선택 -->
+  <section id="c-sense" class="card hidden">
+    <h2><span class="step">2</span>어떤 의미로 찾을까요?</h2>
+    <p id="sense-src" class="note"></p>
+    <form id="f-sense">
+      <div id="senses" class="senses"></div>
+      <div id="custom-box" class="hidden" style="margin-top:8px">
+        <textarea id="custom" rows="2" placeholder="찾고 싶은 대상을 설명해 주세요 (예: 2020년대 활동하는 방송인 강남)"></textarea>
+      </div>
+      <div style="margin-top:12px"><button id="b-sense" type="submit">이 의미로 뉴스 모으기</button></div>
+    </form>
+  </section>
+
+  <!-- 3. 진행 상황 -->
+  <section id="c-job" class="card hidden">
+    <h2><span class="step">3</span>뉴스 수집 · 필터링 · 인덱싱</h2>
+    <div id="log" class="log"></div>
+    <div id="s-job" class="status"></div>
+  </section>
+
+  <!-- 4. 질문 -->
+  <section id="c-qa" class="card hidden">
+    <h2><span class="step">4</span>질문하기 <span id="qa-label" class="muted" style="font-weight:400"></span></h2>
+    <div id="chat" class="chat"></div>
+    <form id="f-ask" class="row">
+      <div class="field"><input id="question" type="text" placeholder="예: 최근 어떤 방송에 출연했어?" required></div>
+      <button id="b-ask" type="submit">질문</button>
+    </form>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { query: "", sessionId: null };
+
+async function api(path, body) {
+  const res = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const d = data.detail;
+    throw new Error(typeof d === "string" ? d : (Array.isArray(d) ? d.map(x => x.msg).join(", ") : `오류 ${res.status}`));
+  }
+  return data;
+}
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const busy = (el, text) => { el.className = "status"; el.innerHTML = `<span class="spinner"></span> ${esc(text)}`; };
+const setStatus = (el, text, kind = "") => { el.className = "status " + kind; el.textContent = text; };
+
+api("/api/info").then(i => {
+  $("info").textContent = `· 모델 ${i.chat_model} · ${i.has_db ? "DB 연결" : "DB 없음 (메모리 버전)"}`;
+  if (!i.has_db) { $("memory").checked = true; $("memory").disabled = true; }
+}).catch(() => {});
+
+// 1) 검색어 → 의미 후보
+$("f-query").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const query = $("query").value.trim();
+  if (!query) return;
+  state.query = query; state.sessionId = null;
+  ["c-sense", "c-job", "c-qa"].forEach(id => $(id).classList.add("hidden"));
+  $("b-query").disabled = true;
+  busy($("s-query"), "의미 후보를 찾는 중…");
+  try {
+    const r = await api("/api/senses", { query });
+    setStatus($("s-query"), "");
+    renderSenses(r);
+  } catch (err) {
+    setStatus($("s-query"), err.message, "err");
+  } finally { $("b-query").disabled = false; }
+});
+
+function renderSenses(r) {
+  $("sense-src").textContent = r.senses.length
+    ? `의미 후보 출처: ${r.source}` + (r.senses.length === 1 ? " · 후보가 하나라 미리 골라 두었습니다." : "")
+    : "의미 후보를 만들지 못했습니다. 찾고 싶은 대상을 직접 설명해 주세요.";
+  const items = r.senses.map((s, i) => `
+    <label class="sense"><input type="radio" name="sense" value="${i}" ${i === 0 ? "checked" : ""}>
+      <span class="name">${esc(s.name)}</span>
+      <div class="def">${esc(s.definition)}</div>
+      <div class="tags">${[...s.aliases.map(a => "별칭 " + a), ...s.related_terms].map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
+    </label>`);
+  items.push(`<label class="sense"><input type="radio" name="sense" value="custom" ${r.senses.length ? "" : "checked"}>
+      <span class="name">기타 (직접 입력)</span></label>`);
+  $("senses").innerHTML = items.join("");
+  const sync = () => $("custom-box").classList.toggle("hidden",
+    document.querySelector("input[name=sense]:checked")?.value !== "custom");
+  $("senses").querySelectorAll("input").forEach(el => el.addEventListener("change", sync));
+  sync();
+  $("c-sense").classList.remove("hidden");
+}
+
+// 2) 의미 선택 → 준비 작업 시작
+$("f-sense").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const v = document.querySelector("input[name=sense]:checked")?.value;
+  const body = {
+    query: state.query, period_days: Number($("days").value), max_articles: Number($("maxn").value),
+    memory: $("memory").checked,
+    sense_index: v === "custom" ? null : Number(v), custom_description: v === "custom" ? $("custom").value : "",
+  };
+  if (v === "custom" && !body.custom_description.trim()) { $("custom").focus(); return; }
+  $("b-sense").disabled = true;
+  $("c-job").classList.remove("hidden"); $("c-qa").classList.add("hidden");
+  $("log").textContent = "";
+  busy($("s-job"), "작업을 시작하는 중…");
+  try {
+    const { job_id } = await api("/api/prepare", body);
+    poll(job_id);
+  } catch (err) {
+    setStatus($("s-job"), err.message, "err");
+    $("b-sense").disabled = false;
+  }
+});
+
+async function poll(jobId) {
+  try {
+    const j = await api(`/api/jobs/${jobId}`);
+    $("log").textContent = j.logs.join("\n");
+    $("log").scrollTop = $("log").scrollHeight;
+    if (j.status === "running") {
+      busy($("s-job"), "처리 중… 기사 수에 따라 몇 분 걸릴 수 있습니다.");
+      setTimeout(() => poll(jobId), 1500);
+      return;
+    }
+    $("b-sense").disabled = false;
+    if (j.status === "done") {
+      setStatus($("s-job"), "준비 완료", "ok");
+      state.sessionId = j.session_id;
+      $("qa-label").textContent = j.label;
+      $("chat").innerHTML = "";
+      $("c-qa").classList.remove("hidden");
+      $("question").focus();
+    } else {
+      setStatus($("s-job"), j.error || "작업이 실패했습니다.", "err");
+    }
+  } catch (err) {
+    setStatus($("s-job"), err.message, "err");
+    $("b-sense").disabled = false;
+  }
+}
+
+// 3) 질문
+$("f-ask").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const question = $("question").value.trim();
+  if (!question || !state.sessionId) return;
+  $("question").value = "";
+  $("b-ask").disabled = true;
+  const q = document.createElement("div"); q.className = "q"; q.textContent = question;
+  const a = document.createElement("div"); a.className = "a"; a.innerHTML = `<span class="spinner"></span> 근거를 찾고 답변을 만드는 중…`;
+  $("chat").append(q, a);
+  a.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  try {
+    const r = await api("/api/ask", { session_id: state.sessionId, question });
+    a.innerHTML = esc(r.answer).replace(/\(기사\s*\d+(?:\s*,\s*\d+)*\)/g, m => `<span class="cite">${m}</span>`) + renderSources(r);
+  } catch (err) {
+    a.innerHTML = `<span class="status err">${esc(err.message)}</span>`;
+  } finally {
+    $("b-ask").disabled = false; $("question").focus();
+  }
+});
+
+function renderSources(r) {
+  if (!r.sources.length) return `<div class="srcs muted">출처: 관련성 있는 기사를 찾지 못해 이번 답변에는 뉴스 출처가 없습니다.</div>`;
+  const li = r.sources.map(s => `<li>[${s.n}] <a href="${esc(s.link)}" target="_blank" rel="noopener">${esc(s.title)}</a>
+    <span class="muted">· ${esc(s.press)}${s.pub_date ? " · " + esc(s.pub_date) : ""}${s.kind ? " · " + esc(s.kind) : ""}</span></li>`).join("");
+  const extra = r.unused > 0 ? `<div class="muted">검색은 됐지만 답변에 쓰이지 않은 기사 ${r.unused}건은 뺐습니다.</div>` : "";
+  return `<div class="srcs">출처<ol>${li}</ol>${extra}</div>`;
+}
+</script>
+</body>
+</html>

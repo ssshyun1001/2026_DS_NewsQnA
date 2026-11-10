@@ -1,0 +1,265 @@
+"""
+QuPicT 웹 서비스 — run.py의 질문 서비스를 브라우저 화면으로 쓴다
+
+    python web.py                 http://127.0.0.1:8000 에서 실행
+    python web.py --port 8080     포트 바꾸기
+    python web.py --host 0.0.0.0  같은 네트워크의 다른 컴퓨터에서도 접속 (팀원 시연용)
+
+화면 흐름 (run.py와 같은 단계, 실제 일은 qupict/ 단계 파일이 한다)
+    1) 검색어 + 기간 입력          → POST /api/senses        [0단계] 의미 후보 (DB 캐시 또는 LLM)
+    2) 의미 고르기 (또는 직접 입력) → POST /api/prepare       [1~4단계] 수집·필터·인덱싱 (백그라운드 작업)
+    3) 진행 상황 보기               → GET  /api/jobs/{id}     단계별 로그를 몇 초마다 확인
+    4) 질문하기                     → POST /api/ask           [5단계] 검색 · 답변
+
+세션(준비한 뉴스)은 서버 메모리에만 있다 → 서버를 끄면 사라진다. DB 버전은 DB에 쌓인 것을 다시 쓰므로
+같은 검색어를 다시 준비하면 이미 한 일은 건너뛰어 빠르다.
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import threading
+import traceback
+import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable, Optional
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
+
+from qupict.cli import setup_console
+from qupict.config import settings, validate_settings
+from qupict.schemas import Answer, SelectedSense, SenseCandidates
+
+setup_console()
+
+WEB_DIR = Path(__file__).parent / "web"
+
+app = FastAPI(title="QuPicT 뉴스 Q&A")
+
+
+# ---------------------------------------------------------------------------
+# 서버 메모리 상태: 의미 후보 · 준비 작업 · 질문 세션
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Job:
+    """[1~4단계] 준비 작업 하나 (백그라운드 스레드에서 돈다)."""
+    label: str
+    status: str = "running"            # running / done / error
+    logs: list[str] = field(default_factory=list)
+    session_id: Optional[str] = None
+    error: str = ""
+
+
+@dataclass
+class Session:
+    """준비가 끝난 뉴스. 질문이 오면 answer_fn으로 답한다."""
+    label: str
+    mode: str                          # "DB" / "메모리"
+    answer_fn: Callable[[str], Answer]
+
+
+_candidates: dict[str, SenseCandidates] = {}   # 검색어 → 의미 후보 (선택할 때 다시 쓴다)
+_jobs: dict[str, Job] = {}
+_sessions: dict[str, Session] = {}
+_lock = threading.Lock()
+
+
+# ---------------------------------------------------------------------------
+# 요청 · 응답 형식
+# ---------------------------------------------------------------------------
+
+class SensesRequest(BaseModel):
+    query: str = Field(min_length=1)
+
+
+class PrepareRequest(BaseModel):
+    query: str = Field(min_length=1)
+    period_days: int = Field(ge=1, le=365)
+    sense_index: Optional[int] = None       # 후보 번호 (0부터). 없으면 custom_description을 쓴다
+    custom_description: str = ""            # "기타 (직접 입력)" 설명
+    max_articles: int = Field(default=100, ge=1, le=500)
+    memory: bool = False                    # DB 없이 메모리(FAISS) 버전
+
+
+class AskRequest(BaseModel):
+    session_id: str
+    question: str = Field(min_length=1)
+
+
+# ---------------------------------------------------------------------------
+# 화면
+# ---------------------------------------------------------------------------
+
+@app.get("/")
+def index() -> FileResponse:
+    return FileResponse(WEB_DIR / "index.html")
+
+
+@app.get("/api/info")
+def info() -> dict:
+    return {"has_db": bool(settings.database_url), "chat_model": settings.chat_model}
+
+
+# ---------------------------------------------------------------------------
+# [0단계] 의미 후보
+# ---------------------------------------------------------------------------
+
+@app.post("/api/senses")
+def senses(req: SensesRequest) -> dict:
+    from qupict.sense import load_sense_candidates
+
+    query = req.query.strip()
+    candidates, source = load_sense_candidates(query)
+    with _lock:
+        _candidates[query] = candidates
+    return {
+        "query": query,
+        "source": source,
+        "senses": [{"name": s.name, "definition": s.definition,
+                    "aliases": s.aliases, "related_terms": s.related_terms}
+                   for s in candidates.senses],
+    }
+
+
+def _select(req: PrepareRequest) -> SelectedSense:
+    from qupict.sense import build_custom_sense, load_sense_candidates, select_custom_sense, select_sense
+
+    query = req.query.strip()
+    with _lock:
+        candidates = _candidates.get(query)
+    if candidates is None:                  # 서버를 다시 켠 경우 등: 후보를 다시 가져온다
+        candidates, _ = load_sense_candidates(query)
+    if req.sense_index is not None:
+        if not 0 <= req.sense_index < len(candidates.senses):
+            raise HTTPException(400, "의미 후보 번호가 맞지 않습니다. 검색어를 다시 입력해 주세요.")
+        return select_sense(candidates, req.sense_index)
+    desc = req.custom_description.strip()
+    if not desc:
+        raise HTTPException(400, "의미를 고르거나, 찾고 싶은 대상을 직접 설명해 주세요.")
+    return select_custom_sense(candidates, build_custom_sense(query, desc))
+
+
+# ---------------------------------------------------------------------------
+# [1~4단계] 수집 · 필터 · 인덱싱 (백그라운드)
+# ---------------------------------------------------------------------------
+
+def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: bool) -> None:
+    job = _jobs[job_id]
+    log = job.logs.append
+    try:
+        if memory:
+            from qupict.qa import generate_answer
+            from qupict.retrieval import retrieve_relevant_articles
+            from run import collect_news
+
+            news = asyncio.run(collect_news(selected, req.period_days, req.max_articles, log=log))
+            if news is None:
+                raise RuntimeError("질문에 쓸 기사가 없습니다. 다른 검색어·의미·기간으로 다시 시도해 주세요.")
+
+            def answer_fn(question: str) -> Answer:
+                relevant = retrieve_relevant_articles(news.store, news.articles, question, topic=news.topic)
+                return generate_answer(question, relevant)
+        else:
+            from qupict.qa import generate_answer_from_chunks
+            from qupict.retrieval import search_topic
+            from run import prepare_topic
+
+            topic_id = asyncio.run(prepare_topic(selected, req.period_days, req.max_articles, log=log))
+
+            def answer_fn(question: str) -> Answer:
+                hits = search_topic(topic_id, question, selected, period_days=req.period_days)
+                return generate_answer_from_chunks(question, hits)
+
+        session_id = uuid.uuid4().hex
+        with _lock:
+            _sessions[session_id] = Session(job.label, "메모리" if memory else "DB", answer_fn)
+        job.session_id = session_id
+        job.status = "done"
+        log("준비 완료! 이제 질문할 수 있습니다.")
+    except Exception as e:
+        traceback.print_exc()
+        job.error = str(e) or type(e).__name__
+        job.status = "error"
+        log(f"[오류] {job.error}")
+
+
+@app.post("/api/prepare")
+def prepare(req: PrepareRequest) -> dict:
+    try:
+        validate_settings()
+    except EnvironmentError as e:
+        raise HTTPException(500, str(e))
+    selected = _select(req)
+    memory = req.memory or not settings.database_url
+    label = f"{selected.query} ({selected.sense.name})"
+    job_id = uuid.uuid4().hex
+    job = Job(label=label)
+    job.logs.append(f"[0단계] 선택한 의미 → {selected.sense.name}: {selected.sense.definition}")
+    if memory and not req.memory:
+        job.logs.append("DATABASE_URL이 없어 DB 없이(메모리 버전으로) 실행합니다.")
+    _jobs[job_id] = job
+    threading.Thread(target=_run_job, args=(job_id, selected, req, memory), daemon=True).start()
+    return {"job_id": job_id, "label": label}
+
+
+@app.get("/api/jobs/{job_id}")
+def job_status(job_id: str) -> dict:
+    job = _jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "작업을 찾을 수 없습니다 (서버를 다시 켰다면 처음부터 다시 해 주세요).")
+    return {"status": job.status, "logs": job.logs, "session_id": job.session_id,
+            "error": job.error, "label": job.label}
+
+
+# ---------------------------------------------------------------------------
+# [5단계] 질문 · 답변
+# ---------------------------------------------------------------------------
+
+@app.post("/api/ask")
+def ask(req: AskRequest) -> dict:
+    session = _sessions.get(req.session_id)
+    if session is None:
+        raise HTTPException(404, "세션이 없습니다 (서버를 다시 켰다면 뉴스를 다시 준비해 주세요).")
+    answer = session.answer_fn(req.question.strip())
+
+    # 답변에서 실제로 인용한 기사만 보여 준다 (번호는 답변 속 "(기사 N)"과 같게 유지) — run.print_answer와 같은 규칙
+    shown = answer.cited or list(range(1, len(answer.sources) + 1))
+    sources = []
+    for i in shown:
+        if not 1 <= i <= len(answer.sources):
+            continue
+        src = answer.sources[i - 1]
+        sources.append({
+            "n": i, "title": src.title, "press": src.press or "알 수 없음", "link": src.link,
+            "pub_date": src.pub_date.strftime("%Y-%m-%d") if src.pub_date else "",
+            "kind": answer.source_kinds[i - 1] if i <= len(answer.source_kinds) else "",
+        })
+    return {
+        "question": answer.question,
+        "answer": answer.answer,
+        "sources": sources,
+        "unused": len(answer.sources) - len(sources),
+    }
+
+
+# ---------------------------------------------------------------------------
+# 실행
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    import uvicorn
+
+    p = argparse.ArgumentParser(prog="python web.py", description="QuPicT 웹 서비스")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8000)
+    args = p.parse_args()
+    print(f"브라우저에서 http://{'localhost' if args.host in ('127.0.0.1', '0.0.0.0') else args.host}:{args.port} 을 여세요.")
+    uvicorn.run(app, host=args.host, port=args.port)
+
+
+if __name__ == "__main__":
+    main()
