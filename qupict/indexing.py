@@ -1,10 +1,12 @@
 """
-[4단계] 인덱싱 — 이미지 설명 → 청크 → 임베딩 → article_chunks 저장
+[4단계] 인덱싱 — 이미지 → 글 → 청크 → 임베딩 → article_chunks 저장
 
 필터링에서 '관련'·'보류' 판정을 받은 기사만 질문 답변에 쓸 수 있게 준비한다.
 
-  1) 이미지 설명   LLM이 기사 이미지를 2~3문장으로 설명 → article_images.llm_description
-                   이미지 주소를 그대로 LLM에 넘기고, 실패하면 파일을 내려받아 보낸다 (파일은 저장하지 않음)
+  1) 이미지 → 글   둘 중 하나 (결과는 모두 article_images.llm_description에 저장)
+                   - OCR(EasyOCR): 이미지 속 글자를 읽는다. LLM 비용 0. 서비스 기본 (qupict/ocr.py)
+                   - VLM: LLM이 기사 이미지를 2~3문장으로 설명한다. 이미지 주소를 그대로 넘기고,
+                     실패하면 파일을 내려받아 보낸다 (파일은 저장하지 않음)
   2) 청크 나누기   본문을 약 500자씩, 문장 단위로 자른다 (앞 청크의 마지막 문장을 겹쳐서 문맥 유지)
                    이미지 설명은 이미지 하나 = 청크 하나 (출처 유형 'image')
   3) 임베딩 저장   청크마다 임베딩을 만들어 article_chunks에 저장 → 5단계 pgvector 검색에 쓴다
@@ -198,25 +200,29 @@ class IndexResult:
     body_chunks: int = 0
     image_chunks: int = 0
     images_described: int = 0
-    images_failed: int = 0       # 내려받기·설명 실패 (다음 실행 때 다시 시도됨)
+    images_failed: int = 0       # 내려받기·설명 실패 (VLM은 다음 실행 때 다시 시도, OCR은 다시 안 읽음)
+    images_no_text: int = 0      # OCR로 읽었지만 글자가 없던 이미지 (인물·현장 사진 등)
 
     def summary(self) -> str:
+        no_text = f", 글자 없음 {self.images_no_text}장" if self.images_no_text else ""
         return (f"기사 {self.articles}건 → 본문 청크 {self.body_chunks}개 + 이미지 청크 {self.image_chunks}개"
-                f" (이미지 설명 {self.images_described}장, 실패 {self.images_failed}장)")
+                f" (이미지 설명 {self.images_described}장{no_text}, 실패 {self.images_failed}장)")
 
 
 def described_images(article_links: list[str]) -> dict[str, list[tuple[int, str]]]:
-    """기사별로 이미 LLM 설명이 있는 이미지. {기사 link: [(image_id, 이미지 청크 내용)]} (기사 안 순서)
+    """기사별로 이미 글(VLM 설명 또는 OCR 글자)이 있는 이미지. {기사 link: [(image_id, 이미지 청크 내용)]}
+    (기사 안 순서). OCR로 읽었지만 글자가 없던 이미지("")는 청크를 만들지 않는다.
 
     db.py에 이 조회가 없어서 여기에 두었다. (DB 담당이 db.py로 옮겨도 된다 — 읽기 전용 SELECT 하나)
     """
     from qupict import db
+    from qupict.ocr import OCR_MODEL_NAME, ocr_text_chunk
 
     if not article_links:
         return {}
     with db.connect() as conn:
         rows = conn.execute(
-            """SELECT a.link, i.id, i.caption, i.llm_description FROM article_images i
+            """SELECT a.link, i.id, i.caption, i.llm_description, i.described_model FROM article_images i
                JOIN articles a ON a.id = i.article_id
                WHERE a.link = ANY(%s) AND i.llm_description IS NOT NULL
                ORDER BY a.id, i.position""",
@@ -224,8 +230,31 @@ def described_images(article_links: list[str]) -> dict[str, list[tuple[int, str]
         ).fetchall()
     out: dict[str, list[tuple[int, str]]] = {}
     for r in rows:
-        out.setdefault(r["link"], []).append((r["id"], image_chunk_text(r["caption"], r["llm_description"])))
+        if not r["llm_description"]:
+            continue
+        if r.get("described_model") == OCR_MODEL_NAME:
+            text = ocr_text_chunk(r["caption"], r["llm_description"])
+        else:
+            text = image_chunk_text(r["caption"], r["llm_description"])
+        out.setdefault(r["link"], []).append((r["id"], text))
     return out
+
+
+def _processed_image_counts(article_links: list[str]) -> dict[str, int]:
+    """기사별로 이미 처리한(글이 비어 있어도 저장된) 이미지 수. OCR의 기사당 상한을 셀 때 쓴다."""
+    from qupict import db
+
+    if not article_links:
+        return {}
+    with db.connect() as conn:
+        rows = conn.execute(
+            """SELECT a.link, count(*) AS n FROM article_images i
+               JOIN articles a ON a.id = i.article_id
+               WHERE a.link = ANY(%s) AND i.llm_description IS NOT NULL
+               GROUP BY a.link""",
+            (list(article_links),),
+        ).fetchall()
+    return {r["link"]: r["n"] for r in rows}
 
 
 async def _describe_topic_images(topic_id: int, statuses: tuple[str, ...]) -> tuple[set[str], int, int]:
@@ -270,17 +299,67 @@ async def _describe_topic_images(topic_id: int, statuses: tuple[str, ...]) -> tu
     return changed, len(ok), len(picked) - len(ok)
 
 
+async def _ocr_topic_images(topic_id: int, statuses: tuple[str, ...]) -> tuple[set[str], int, int, int]:
+    """아직 글이 없는 이미지의 글자를 OCR로 읽고 저장한다.
+    돌려주는 값: (글자가 새로 생긴 기사 link들, 글자 있음 수, 글자 없음 수, 내려받기 실패 수)
+
+    - 기사당 MAX_IMAGES_PER_ARTICLE장까지 (이전 실행에서 처리한 장수도 센다)
+    - 글자가 없거나 내려받지 못한 이미지는 ""로 저장한다 → 다음 실행 때 같은 이미지를 다시 읽지 않는다
+    - 이미지 파일은 메모리에서만 쓰고 저장하지 않는다
+    """
+    from qupict import db, ocr
+
+    todo = await asyncio.to_thread(db.get_images_to_describe, topic_id, statuses=statuses)
+    if not todo:
+        return set(), 0, 0, 0
+    already = await asyncio.to_thread(_processed_image_counts, list({i.article_link for i in todo}))
+    per_article: dict[str, list] = {}
+    for img in todo:                                    # get_images_to_describe는 기사 안 순서대로 준다
+        picked = per_article.setdefault(img.article_link, [])
+        if already.get(img.article_link, 0) + len(picked) < MAX_IMAGES_PER_ARTICLE:
+            picked.append(img)
+    per_article = {link: imgs for link, imgs in per_article.items() if imgs}
+    if not per_article:
+        return set(), 0, 0, 0
+
+    # 이미지 파일 내려받기 (기사 link를 Referer로 보내려고 기사별로 묶는다)
+    files = {link: [ArticleImage(url=img.url, caption=img.caption) for img in imgs]
+             for link, imgs in per_article.items()}
+    await download_images([Article(title="", link=link, images=images) for link, images in files.items()])
+
+    saved: list[tuple[int, str]] = []
+    changed: set[str] = set()
+    with_text = no_text = failed = 0
+    for link, imgs in per_article.items():
+        for img, file in zip(imgs, files[link]):
+            if file.data is None:
+                failed += 1
+                saved.append((img.image_id, ""))
+                continue
+            text = await asyncio.to_thread(ocr.read_image_text, file.data)
+            saved.append((img.image_id, text))
+            if text:
+                with_text += 1
+                changed.add(link)
+            else:
+                no_text += 1
+    await asyncio.to_thread(db.save_image_descriptions, saved, ocr.OCR_MODEL_NAME)
+    return changed, with_text, no_text, failed
+
+
 async def index_topic(
     topic_id: int,
     statuses: tuple[str, ...] = INDEX_STATUSES,
     describe_images: bool = True,
     rebuild: bool = False,
+    ocr_images: bool = False,
 ) -> IndexResult:
     """[DB 버전] 판정을 통과한 기사의 청크·임베딩을 만들어 저장한다.
 
     처리하는 기사: ① 아직 청크가 없는 기사 ② 이번에 이미지 설명이 새로 생긴 기사 (이미지 청크를 넣으려고 다시 만든다)
     청크는 기사 단위로 통째로 교체 저장되므로 여러 번 실행해도 안전하다.
     describe_images=False면 이미지 설명을 새로 만들지 않는다 (LLM 비용 0, 이미 있는 설명은 청크에 넣음).
+    ocr_images=True면 아직 글이 없는 이미지의 글자를 OCR로 읽는다 (describe_images와 함께 켜지 않는다).
     rebuild=True면 판정을 통과한 모든 기사의 청크를 다시 만든다 (청크 규칙을 바꿨을 때. 이미지 설명은 재사용).
     """
     from qupict import db
@@ -300,6 +379,14 @@ async def index_topic(
         with timing.timed("이미지 설명(VLM)") as t:
             changed, result.images_described, result.images_failed = await _describe_topic_images(topic_id, statuses)
             t.note = f"설명 {result.images_described}장, 실패 {result.images_failed}장 (동시 {IMAGE_CONCURRENCY})"
+    if ocr_images:
+        with timing.timed("이미지 글자 읽기(OCR)") as t:
+            changed_ocr, with_text, no_text, failed = await _ocr_topic_images(topic_id, statuses)
+            changed |= changed_ocr
+            result.images_described += with_text
+            result.images_no_text += no_text
+            result.images_failed += failed
+            t.note = f"글자 있음 {with_text}장, 글자 없음 {no_text}장, 내려받기 실패 {failed}장"
 
     with timing.timed("청크 만들 기사 불러오기(DB)") as t:
         targets, load_sec = await targets_task
@@ -308,7 +395,7 @@ async def index_topic(
                 if a.link in changed:
                     targets.setdefault(a.link, a)
         image_chunks = described_images(list(targets))
-        t.note = f"기사 {len(targets)}건 (대상 조회 {load_sec:.2f}초는 이미지 설명과 동시에)"
+        t.note = f"기사 {len(targets)}건 (대상 조회 {load_sec:.2f}초는 이미지 처리와 동시에)"
 
     with timing.timed("청크 임베딩") as t:
         built = await build_article_chunks(list(targets.values()), image_chunks)

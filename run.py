@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+import threading
 from dataclasses import dataclass
 from typing import Callable
 
@@ -124,11 +125,10 @@ async def prepare_topic(selected: SelectedSense, period_days: int, max_articles:
     # 질문 가능 기사 세기는 판정만 보므로(인덱싱 결과와 무관) 인덱싱하는 동안 동시에 해 둔다
     usable_task = asyncio.create_task(asyncio.to_thread(
         db.get_topic_articles, collected.topic_id, period_days=period_days, statuses=("관련", "보류")))
-    # 이미지 설명(VLM)은 설정(DESCRIBE_IMAGES)으로 켤 때만 새로 만든다 (기본 끔: 준비 시간의 대부분을 차지해서)
-    with timing.timed("[4단계] 인덱싱"):
-        indexed = await index_topic(collected.topic_id, describe_images=settings.describe_images)
-    log(f"[4단계] 인덱싱 (새 기사만) → {indexed.summary()}"
-        + ("" if settings.describe_images else " · 이미지 설명은 꺼 둠"))
+    # 준비 단계는 본문만. 이미지 → 글(OCR·VLM)은 "준비 완료" 뒤 add_image_text가 백그라운드에서 한다
+    with timing.timed("[4단계] 인덱싱 (본문)"):
+        indexed = await index_topic(collected.topic_id, describe_images=False)
+    log(f"[4단계] 인덱싱 (새 기사만) → {indexed.summary()}")
     with timing.timed("질문 가능 기사 세기(DB, 인덱싱과 동시)"):
         usable = await usable_task
     log(f"→ 최근 {period_days}일 기사 중 질문에 쓸 수 있는 기사(관련·보류): {len(usable)}건")
@@ -136,11 +136,60 @@ async def prepare_topic(selected: SelectedSense, period_days: int, max_articles:
     return collected.topic_id
 
 
+IMAGE_TEXT_NAMES = {"ocr": "이미지 속 글자 읽기(OCR)", "vlm": "이미지 설명(VLM)"}
+
+
+def image_text_mode() -> str | None:
+    """준비 완료 뒤 할 이미지 → 글 방법 ("ocr" / "vlm"). 하지 않으면 None.
+    설정은 IMAGE_TEXT (qupict/config.py). OCR인데 easyocr가 설치되어 있지 않으면 하지 않는다."""
+    mode = settings.image_text
+    if mode not in IMAGE_TEXT_NAMES:
+        return None
+    if mode == "ocr":
+        import importlib.util
+        if importlib.util.find_spec("easyocr") is None:
+            return None
+    return mode
+
+
+async def add_image_text(topic_id: int, log: Callable[[str], None] = print) -> None:
+    """[4단계 뒤] 기사 이미지를 글로 바꿔(OCR 또는 VLM) 이미지 청크를 더한다.
+    "준비 완료" 뒤에 돌려서, 그동안 질문을 받는다. 끝나면 그 뒤 질문부터 이미지 내용도 검색된다."""
+    from qupict.indexing import index_topic
+
+    mode = image_text_mode()
+    if mode is None:
+        return
+    name = IMAGE_TEXT_NAMES[mode]
+    timing.reset()
+    log(f"[이미지] {name}를 뒤에서 진행합니다. 그동안 질문해도 됩니다.")
+    with timing.timed(name):
+        result = await index_topic(topic_id, describe_images=(mode == "vlm"), ocr_images=(mode == "ocr"))
+    log(f"[이미지] {name} 끝 → {result.summary()}")
+    timing.report(name)
+
+
+def start_image_text_in_background(topic_id: int, log: Callable[[str], None] = print) -> threading.Thread:
+    """add_image_text를 다른 스레드에서 돌린다 (터미널 질문 반복과 동시에). 실패해도 질문에는 영향 없음."""
+    def work() -> None:
+        try:
+            asyncio.run(add_image_text(topic_id, log=log))
+        except Exception as e:
+            log(f"[이미지] 실패해서 건너뜁니다 ({type(e).__name__}: {e})")
+
+    thread = threading.Thread(target=work, daemon=True)
+    thread.start()
+    return thread
+
+
 def run_ask_db(selected: SelectedSense, period_days: int, max_articles: int = 100) -> None:
     from qupict.qa import generate_answer_from_chunks
     from qupict.retrieval import search_topic
 
     topic_id = asyncio.run(prepare_topic(selected, period_days, max_articles))
+    if image_text_mode():
+        # 질문 입력 줄과 섞이지 않게 한 줄 띄우고 찍는다
+        start_image_text_in_background(topic_id, log=lambda s: print(f"\n{s}"))
 
     def answer(question: str) -> Answer:
         with timing.timed("[5단계] 근거 검색") as t:

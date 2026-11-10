@@ -240,12 +240,20 @@ async function poll(jobId) {
     }
     $("b-sense").disabled = false;
     if (j.status === "done") {
-      setStatus($("s-job"), "준비 완료", "ok");
-      state.sessionId = j.session_id;
-      $("qa-label").textContent = j.label;
-      $("qa-note").textContent = "";
-      state.ready.resolve(j.session_id);       // 미리 적어 둔 질문이 이제 차례로 나간다
-      $("question").focus();
+      if (state.sessionId !== j.session_id) {  // 준비가 막 끝났을 때 한 번만
+        state.sessionId = j.session_id;
+        $("qa-label").textContent = j.label;
+        $("qa-note").textContent = "";
+        state.ready.resolve(j.session_id);     // 미리 적어 둔 질문이 이제 차례로 나간다
+        $("question").focus();
+      }
+      // 이미지 속 글자 읽기는 준비 완료 뒤 서버에서 이어서 한다 → 끝날 때까지 가끔 확인 (질문은 지금도 됨)
+      if (j.images === "running") {
+        busy($("s-job"), "준비 완료 · 이미지 속 글자를 읽는 중… 질문은 지금 해도 되고, 끝나면 이미지 내용도 답변에 쓰입니다.");
+        setTimeout(() => poll(jobId), 3000);
+      } else {
+        setStatus($("s-job"), j.images === "done" ? "준비 완료 · 이미지 속 글자까지 반영됨" : "준비 완료", "ok");
+      }
     } else {
       const msg = j.error || "작업이 실패했습니다.";
       setStatus($("s-job"), msg, "err");

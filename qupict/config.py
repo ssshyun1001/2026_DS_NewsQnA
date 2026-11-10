@@ -59,12 +59,13 @@ class Settings:
     #   실제 값 참고: 방송인 강남 질문에서 관련 청크가 0.48~0.70 → 0.5면 상위 일부만 남는다.
     #   근거가 하나도 안 남으면 답변은 "관련 뉴스를 찾지 못했습니다"로 끝난다.
     relevance_similarity_threshold: float = _get_float("RELEVANCE_SIMILARITY_THRESHOLD", 0.50)
-    # 서비스(run.py · web.py)의 [4단계] 인덱싱에서 이미지 설명(VLM)을 새로 만들지. 기본: 끔 (0)
-    #   측정(2026-11-10, "삼성" 기사 100건): 이미지 39장 설명에 60초 = 준비 시간 89초 중 67%.
-    #   VLM을 아직 쓰지 않으므로 끈다. 꺼도 이미 만들어 둔 이미지 설명은 청크에 그대로 들어간다.
-    #   다시 켜려면 .env에 DESCRIBE_IMAGES=1 (admin.py index-all은 이 설정과 상관없이 --no-images로 정한다)
-    describe_images: bool = _get_int("DESCRIBE_IMAGES", 0) == 1
-
+    # 서비스(run.py · web.py)에서 기사 이미지를 글로 바꾸는 방법. 기본: "ocr"
+    #   "ocr" = EasyOCR로 이미지 속 글자 읽기 (LLM 비용 0, "준비 완료" 뒤 백그라운드에서 → 준비 시간에 영향 없음)
+    #   "vlm" = LLM이 이미지 설명 (측정 2026-11-10, "삼성" 기사 100건: 39장에 60초 = 준비 시간 89초 중 67%)
+    #   "off" = 새로 만들지 않음. 어느 쪽이든 이미 만들어 둔 이미지 글은 청크에 그대로 들어간다.
+    #   예전 설정 DESCRIBE_IMAGES=1은 "vlm"으로 읽는다. (admin.py index-all은 이 설정과 상관없이 --no-images로 정한다)
+    image_text: str = (os.getenv("IMAGE_TEXT")
+                       or ("vlm" if os.getenv("DESCRIBE_IMAGES") == "1" else "ocr")).strip().lower()
 
 
 settings = Settings()

@@ -9,7 +9,7 @@ VLM과 다른 점
   - 대신 인포그래픽·표·그래프·자막의 숫자와 문구를 그대로 읽는다. LLM 비용이 없다.
 
 속도: GPU(CUDA)가 있으면 이미지 1장 0.2~0.5초, CPU면 1~3초. 그래서 서비스는 "준비 완료" 뒤
-백그라운드에서 돌린다 (indexing.index_topic(image_text="ocr")).
+백그라운드에서 돌린다 (indexing.index_topic(ocr_images=True), run.add_image_text).
 
 모델(한국어 + 영어, 약 100MB)은 처음 쓸 때 ~/.EasyOCR 폴더에 한 번 내려받는다.
 """

@@ -58,6 +58,8 @@ class Job:
     session_id: Optional[str] = None
     error: str = ""
     images: str = ""                   # 준비 완료 뒤 이미지 → 글(OCR·VLM): "" 안 함 / running / done
+
+
 @dataclass
 class Session:
     """준비가 끝난 뉴스. 질문이 오면 answer_fn(질문, on_token)으로 답한다.
