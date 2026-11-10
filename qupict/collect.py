@@ -11,15 +11,14 @@
 
 ## 검색어 만들기 (build_search_terms)
 
-  1순위  검색어 + 연관어      "눈 안과", "눈 시력", "눈 각막"     ← 의미가 좁혀진 검색
-  2순위  별칭 단독             "서울여자대학교", "배스킨라빈스"     ← 같은 대상의 다른 이름
-  3순위  검색어 단독           "눈"                                ← 놓치는 기사 줄이기
+  검색어 + 연관어      "눈 안과", "눈 시력", "눈 각막", ...  ← 고른 의미로 좁힌 검색 (연관어 전부, 최대 8개)
+  별칭 단독             "서울여자대학교", "배스킨라빈스"       ← 같은 대상의 다른 이름
 
-  "눈"처럼 뜻이 여러 개인 검색어를 그대로 최신순 검색하면, 그날 기사가 많은 쪽(날씨)이
-  결과를 다 채워 버려서 사용자가 고른 의미(신체 눈)의 기사가 거의 안 들어온다.
-  그래서 의미가 좁혀진 "검색어 + 연관어"를 먼저 검색한다. (기존 "검색어 + 검증어"를 대체)
-  검색어 단독 검색도 남겨 두는 이유: 연관어가 안 들어간 관련 기사를 놓치지 않기 위해서다.
-  거기 섞여 들어오는 다른 의미의 기사는 2·3단계 필터가 걸러 낸다.
+  검색어 단독("눈", "강남")은 검색하지 않는다. 뜻이 여러 개인 검색어를 그대로 최신순 검색하면
+  그날 기사가 많은 쪽(날씨 눈, 지역 강남)이 결과를 채워 버려서, 사용자가 고른 의미의 기사가
+  상한(300건) 안에 잘 들어오지 않는다. (예전에는 검색어 단독도 섞어서 강남 → 방송인 강남 300건 중
+  100건이 "강남" 단독 검색 결과였다)
+  고른 의미에 연관어·별칭이 하나도 없을 때만 검색어 단독으로 검색한다 (결과가 0건이 되지 않게).
 
 ## 결과 섞기 (_interleave)
 
@@ -51,7 +50,7 @@ _TAG_RE = re.compile(r"<.*?>")
 _NAVER_MAX_DISPLAY = 100        # 네이버 뉴스 검색 API가 한 번에 주는 최대 건수
 DEFAULT_MAX_ARTICLES = 100      # 대상 하나당 수집할 기사 수 상한 (ask 기본값. 모이는 날 collect-all은 300)
 SEARCH_PAGES = 3                # 검색어 하나당 최대 몇 쪽(1쪽 = 100건)까지 받을지. 기간 밖으로 나가면 일찍 멈춘다
-MAX_RELATED_IN_QUERY = 3        # "검색어 + 연관어" 조합에 쓸 연관어 개수 (API 호출 수 = 이 값 + 별칭 수 + 1)
+MAX_RELATED_IN_QUERY = 8        # "검색어 + 연관어" 조합에 쓸 연관어 개수 (= 연관어 최대 개수, API 호출 수 = 이 값 + 별칭 수)
 
 
 # ---------------------------------------------------------------------------
@@ -71,10 +70,10 @@ def _parse_pubdate(raw: str) -> datetime | None:
 
 
 def build_search_terms(selected: SelectedSense) -> list[str]:
-    """고른 의미로 네이버 검색어 목록을 만든다 (우선순위 순)."""
+    """고른 의미로 네이버 검색어 목록을 만든다: 검색어 + 연관어, 별칭. (검색어 단독은 좁힐 단어가 없을 때만)"""
     query = selected.query
     combos = [f"{query} {t}" for t in selected.sense.related_terms[:MAX_RELATED_IN_QUERY]]
-    return unique_terms([*combos, *selected.sense.aliases, query])
+    return unique_terms([*combos, *selected.sense.aliases]) or [query]
 
 
 def _interleave(results_by_term: list[list[NewsMeta]], limit: int) -> list[NewsMeta]:

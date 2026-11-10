@@ -43,7 +43,7 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from qupict.config import settings
-from qupict.llm import get_chat_model, get_embeddings
+from qupict.llm import get_embeddings, get_structured_model
 from qupict.schemas import Article, SelectedSense
 
 RULE_REJECT_SCORE = -2          # 규칙 점수가 이 값 이하면 '무관' (정답 라벨이 생기면 실험으로 조정)
@@ -251,7 +251,7 @@ async def llm_verify(articles: list[Article], selected: SelectedSense) -> tuple[
     """LLM으로 관련 / 무관 / 보류를 판정한다. (판정 목록, 판정 못 한 기사 link 목록)"""
     if not articles:
         return [], []
-    llm = get_chat_model(temperature=0).with_structured_output(_LLMVerdictBatch)
+    llm = get_structured_model(_LLMVerdictBatch)
     system = _verify_prompt(selected)
     semaphore = asyncio.Semaphore(LLM_CONCURRENCY)
 

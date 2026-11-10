@@ -3,6 +3,12 @@
 > **안내:** 이 README의 기능 설명과 성능 평가는 **이전 버전(검증 키워드 방식)** 기준입니다.
 > QuPicT로 바꾸는 중이며, 현재 구조·실행 방법·진행 상황은 [docs/PROGRESS.md](docs/PROGRESS.md)를 보세요.
 > (검증 키워드 입력은 없어졌고, 검색어의 **의미를 고르는 단계**가 그 역할을 대신합니다.)
+>
+> **최근 변경 (2026-11-09)** — 자세한 내용은 [docs/PROGRESS.md 1-1](docs/PROGRESS.md)
+> - 정답 라벨은 **JSON 평가셋**(`evalset/labeled_set.json`)으로 붙입니다: `python evalset/build_labeled_set.py` (검색어를 계속 받아 라벨링, `q`로 종료, 한 파일에 누적)
+> - **실험 A(필터링)는 `evalset/exp_a_filtering.py`로 옮겨 정답 JSON으로 평가**합니다 (`python evaluate.py exp-a`, DB 안 씀)
+> - 뉴스 검색은 **"검색어 + 연관어"와 별칭만** 씁니다 (검색어 단독 검색 제거 → 고른 의미의 기사가 더 많이 들어옴)
+> - `targets.yaml` 삭제: 의미·별칭·연관어는 **LLM 의미 후보만** 씁니다. 서비스 DB 대상은 `python admin.py collect 검색어`로 추가
 
 관심 주제에 대한 최근 뉴스를 수집하고, **수집된 기사 범위 안에서 근거를 들어 답변하는 RAG 기반 뉴스 Q&A 에이전트**입니다.
 
@@ -426,24 +432,24 @@ Embedding model: text-embedding-3-small
 ```text
 2026_DS_NewsQnA/
 ├── run.py              서비스 실행 파일 (기존 main.py): 검색어로 질문하기
-├── admin.py            서비스 DB 관리 (미리 수집·판정·인덱싱, 현황)
+├── admin.py            서비스 DB 관리 (대상 추가·미리 수집·판정·인덱싱, 현황)
 ├── evaluate.py         평가 (정답 라벨, 실험 A·B·C)
-├── schema.sql          DB 테이블 (작성 예정)
-├── targets.yaml        수집 대상 목록
+├── schema.sql          DB 테이블 6개
 ├── requirements.txt
 ├── .env.example
 ├── qupict/
 │   ├── config.py       환경변수 및 임계값 설정
 │   ├── schemas.py      기사, 답변 데이터 모델
-│   ├── llm.py          공유 임베딩 클라이언트
-│   ├── db.py           DB 연결·저장 (작성 예정)
-│   ├── sense.py        [0단계] 검색 키워드 생성 → 의미 후보로 개편 예정
-│   ├── collect.py      [1단계] 뉴스 검색 API + 본문 크롤링
-│   ├── filtering.py    [2·3단계] 중복 제거 + 관련성 필터
-│   ├── indexing.py     [4단계] 청크·임베딩 (작성 예정)
-│   ├── retrieval.py    [5단계] FAISS 구축, HyDE, Multi-Query
+│   ├── llm.py          LLM·임베딩 클라이언트 (형식 응답은 get_structured_model)
+│   ├── db.py           DB 연결 + 단계별 저장·조회
+│   ├── sense.py        [0단계] 검색어 → LLM 의미 후보 → 선택
+│   ├── collect.py      [1단계] "검색어 + 연관어"·별칭 검색 + 본문·이미지 크롤링
+│   ├── filtering.py    [2·3단계] 중복 제거 → 규칙 필터 → LLM 검증
+│   ├── indexing.py     [4단계] 이미지 설명 → 청크 → 임베딩 저장
+│   ├── retrieval.py    [5단계] pgvector 검색 (+HyDE·Multi-Query), FAISS는 비교용
 │   └── qa.py           [5단계] 근거 기반 답변 생성
-├── experiments/        [7단계] 실험 A·B·C, 질문 세트, 유사도 확인
+├── evalset/            정답 JSON 평가셋: 라벨링(build_labeled_set.py), 실험 A(exp_a_filtering.py)
+├── experiments/        [7단계] 실험 B·C, 질문 세트, 유사도 확인
 └── old/                예전 평가·라벨링 스크립트 (지금 구조에 맞게 고침)
 ```
 
@@ -507,7 +513,14 @@ python run.py 애플 30
 
 실행하면 검색어의 의미 후보(예: 기업 Apple / 과일 사과)가 나오고, 번호로 하나를 고르면 수집이 시작됩니다.
 
-일괄 처리·라벨링 명령(`collect-all`, `filter-all`, `label`, `index-all`, `status`)은 [docs/PROGRESS.md](docs/PROGRESS.md)의 3-5를 보세요.
+정답 라벨링과 실험 A (DB 없이 JSON 파일로):
+
+```bash
+python evalset/build_labeled_set.py   # 검색어 입력 → 의미 고르기 → 라벨(1 관련 / 2 무관) → 다음 검색어 … q로 종료
+python evaluate.py exp-a              # evalset/labeled_set.json으로 필터링 방법 비교 → evalset/results/
+```
+
+서비스 DB 관리 명령(`collect 검색어`, `collect-all`, `filter-all`, `index-all`, `status`)은 [docs/PROGRESS.md](docs/PROGRESS.md)의 3-5를 보세요.
 
 프로그램 시작 시 필수 API 키가 누락됐는지 검사합니다. 누락된 값이 있으면 실행을 중단하고 필요한 환경변수를 안내합니다.
 
@@ -681,6 +694,18 @@ UTF-8 입출력 설정과 불완전한 자모 입력 감지 로직을 적용했�
 ```bash
 python run.py 서울여대 7
 ```
+
+### LLM 400 오류 (`tool_choice ... not supported`)
+
+게이트웨이의 Claude 모델은 도구 호출 강제를 지원하지 않습니다. 형식 있는 응답은 `qupict/llm.py`의 `get_structured_model()`(`json_schema` 방식)으로 만들어야 합니다. (예전에는 이 에러가 조용히 넘어가 의미 후보가 비고 LLM 판정이 빠졌습니다.)
+
+### 임베딩 토큰 한도 오류 (`max 300000 tokens per request`)
+
+기사를 한 번에 너무 많이 임베딩하면 발생합니다. 지금은 한 요청에 100건씩 나눠 보냅니다 (`qupict/llm.py`의 `EMBED_BATCH_SIZE`).
+
+### Windows `WinError 10054` 로그
+
+크롤링 중 언론사 서버가 연결을 끊을 때 `Exception in callback _ProactorBasePipeTransport...`가 찍히던 문제입니다. 실행 파일 시작 시 `setup_console()`이 Windows asyncio 루프를 Selector 방식으로 바꿔서 더 이상 나오지 않습니다.
 
 ### 실행 시점에 따른 평가 결과 변화
 

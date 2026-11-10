@@ -72,12 +72,14 @@ class BinaryScores:
                 "irrelevant_inflow": round(self.irrelevant_inflow, 3)}
 
 
-def save_results(name: str, rows: list[dict], meta: dict | None = None) -> tuple[Path, Path]:
-    """결과를 JSON(설정 포함)과 CSV(표)로 저장한다."""
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+def save_results(name: str, rows: list[dict], meta: dict | None = None,
+                 results_dir: Path | None = None) -> tuple[Path, Path]:
+    """결과를 JSON(설정 포함)과 CSV(표)로 저장한다. results_dir: 저장 폴더 (기본 experiments/results)"""
+    out = RESULTS_DIR if results_dir is None else results_dir
+    out.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
-    json_path = RESULTS_DIR / f"{name}_{stamp}.json"
-    csv_path = RESULTS_DIR / f"{name}_{stamp}.csv"
+    json_path = out / f"{name}_{stamp}.json"
+    csv_path = out / f"{name}_{stamp}.csv"
     payload = {"experiment": name, "run_at": datetime.now().isoformat(timespec="seconds"),
                "meta": meta or {}, "rows": rows}
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=_jsonable), encoding="utf-8")

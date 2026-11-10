@@ -13,11 +13,17 @@ LLM·임베딩 클라이언트를 만드는 곳 (프로젝트 전체에서 여�
 """
 from __future__ import annotations
 
+import warnings
+
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from qupict.config import settings
 
 _embeddings: OpenAIEmbeddings | None = None
+
+# 임베딩 요청 한 번에 보내는 텍스트 수. 기본값(1000)이면 기사 300건(본문 2000자씩)이 한 요청에 들어가
+# 게이트웨이 한도(요청당 30만 토큰)를 넘는다. 100건이면 기사 기준 약 13만 토큰.
+EMBED_BATCH_SIZE = 100
 
 
 def _base_url() -> str | None:
@@ -34,6 +40,19 @@ def get_chat_model(temperature: float = 0) -> ChatOpenAI:
     )
 
 
+def get_structured_model(schema, temperature: float = 0):
+    """정해진 형식(pydantic 모델)으로 답하는 채팅 모델.
+
+    method="json_schema"(response_format)를 쓴다. 기본값(function_calling)은 tool_choice로 도구 호출을
+    강제하는데, 게이트웨이의 Claude 모델은 이를 거부한다 (400 "tool_choice ... not supported").
+    """
+    return get_chat_model(temperature).with_structured_output(schema, method="json_schema")
+
+
+# json_schema 방식으로 부를 때마다 langchain이 찍는 경고 (스트리밍을 쓰지 않으므로 상관없음)
+warnings.filterwarnings("ignore", message="Streaming with Pydantic response_format not yet supported")
+
+
 def get_embeddings() -> OpenAIEmbeddings:
     """임베딩 클라이언트 (공유 인스턴스). 모델 이름은 .env의 OPENAI_EMBEDDING_MODEL."""
     global _embeddings
@@ -42,5 +61,6 @@ def get_embeddings() -> OpenAIEmbeddings:
             model=settings.embedding_model,
             api_key=settings.openai_api_key,
             base_url=_base_url(),
+            chunk_size=EMBED_BATCH_SIZE,
         )
     return _embeddings

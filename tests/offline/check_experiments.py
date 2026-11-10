@@ -1,5 +1,5 @@
 """
-실험 코드: 지표 계산, 실험 A 방법별 예측, 실험 B 순위 점수, 실험 C 요약, 질문 세트 만들기 (가짜 DB·LLM)
+실험 코드: 지표 계산, 실험 A(정답 JSON) 방법별 예측, 실험 B 순위 점수, 실험 C 요약, 질문 세트 만들기 (가짜 DB·LLM)
 
 LLM·네이버·DB를 실제로 부르지 않는다 (크레딧 0). 실행: python tests/run_offline.py
 """
@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import experiments.common as C
-import experiments.exp_a_filtering as A
+import evalset.exp_a_filtering as A
 import experiments.exp_b_retrieval as B
 import experiments.exp_c_answers as X
 import experiments.qa_set as Q
@@ -33,47 +33,68 @@ _, csv_path = C.save_results("t", [{"a": 1}, {"a": 2, "b": 3}])    # 행마다 �
 assert list(csv.DictReader(open(csv_path, encoding="utf-8-sig")))[1] == {"a": "2", "b": "3"}
 print("1 ok: 지표·결과 저장")
 
-# 2) 실험 A: 방법별 예측
+# 2) 실험 A (evalset, 정답 JSON 기준): 방법별 예측
+import json
 sel = SelectedSense(query="강남", sense=Sense(name="방송인 강남", definition="d", related_terms=["이상화", "예능"]),
                     excluded_terms=["재건축", "강남역"])
-target = {"query": "강남", "sense": "방송인 강남", "validation_term": "방송인"}
 art = lambda link, title, content="": Article(title=title, link=link, content=content)
 items = [
-    A.LabeledArticle(art("1", "강남 이상화 예능", "방송인 강남"), "관련", "관련", "llm"),
-    A.LabeledArticle(art("2", "강남역 재건축", "강남 아파트"), "무관", "무관", "rule"),
-    A.LabeledArticle(art("3", "성신여대 축제"), "무관", "무관", "rule"),
-    A.LabeledArticle(art("4", "강남 근황", "예능 출연"), "관련", "보류", "llm"),
+    A.LabeledArticle(art("1", "강남 이상화 예능", "방송인 강남"), True),
+    A.LabeledArticle(art("2", "강남역 재건축", "강남 아파트"), False),
+    A.LabeledArticle(art("3", "성신여대 축제"), False),
+    A.LabeledArticle(art("4", "강남 근황", "예능 출연"), True),
 ]
-llm_only = {"1": "관련", "2": "무관", "3": "무관", "4": "관련"}
-pred = lambda m, x: A.predict(m, x, target, sel, llm_only)
+llm = {"1": "관련", "2": "관련", "3": "무관", "4": "보류"}
+pred = lambda m, x: A.predict(m, x, sel, llm)
 assert [pred("baseline", x) for x in items] == [True, True, True, True]
 assert [pred("1a_alias", x) for x in items] == [True, True, False, True]          # 3번엔 '강남' 없음
-assert [pred("1b_validation", x) for x in items] == [True, False, False, False]   # 검증어 '방송인'
+assert [pred("1b_validation", x) for x in items] == [True, False, False, False]   # 검증어 '방송인' (VALIDATION_TERMS)
 assert [pred("1c_rule", x) for x in items] == [True, False, False, True]          # 점수 ≥ 1
-assert [pred("proposed", x) for x in items] == [True, False, False, True]         # 보류 = 관련으로 셈
-assert A.predict("1b_validation", items[0], {"query": "강남", "sense": "x"}, sel, llm_only) is None  # 검증어 없음
+assert [pred("2b_llm_only", x) for x in items] == [True, True, False, True]       # LLM만: 2번을 관련으로 잘못 봄
+assert [pred("proposed", x) for x in items] == [True, False, False, True]         # 규칙이 2·3번을 먼저 거름, 보류 = 관련
+other = sel.model_copy(update={"sense": sel.sense.model_copy(update={"name": "x"})})
+assert A.predict("1b_validation", items[0], other, llm) is None                  # 검증어 없는 대상
+assert A.predict("2b_llm_only", items[0], sel, {}) is None                       # LLM이 답 못 한 기사
 print("2 ok: 실험 A 방법별 예측")
 
-# 3) 실험 A 전체 흐름: 라벨 보류 제외, 2b는 규칙으로 걸러진 기사만 LLM 추가 판정(캐시)
-A.LLM_ONLY_CACHE = tmp / "cache.json"
-A.pick_targets = lambda q=None: [target]
-A.resolve_target = lambda t: (7, sel)
-A.load_labeled = lambda tid: items + [A.LabeledArticle(art("5", "강남"), "보류", None, None)]
+# 3) 실험 A 전체 흐름: 정답 JSON 읽기 (기준은 항목에 저장된 값), LLM 판정 캐시, 결과 행
+sense_json = {"name": "방송인 강남", "definition": "d", "aliases": [], "related_terms": ["이상화", "예능"],
+              "excluded_terms": ["재건축", "강남역"], "other_senses": [{"name": "지역 강남", "definition": "구", "related_terms": ["강남역"]}]}
+entry = lambda url, title, content, label: {"title": title, "url": url, "description": "", "content": content,
+                                            "query": "강남", "sense": sense_json, "label": label}
+labeled = tmp / "labeled_set.json"
+labeled.write_text(json.dumps([entry("1", "강남 이상화 예능", "방송인 강남", True),
+                               entry("2", "강남역 재건축", "강남 아파트", False),
+                               entry("3", "성신여대 축제", "", False),
+                               entry("4", "강남 근황", "예능 출연", True),
+                               entry("4", "같은 기사 두 번", "", False),                     # 중복 url → 처음 것만
+                               {"title": "예전 형식", "url": "x", "label": "관련"}], ensure_ascii=False), encoding="utf-8")
+groups, bad = A.load_groups(labeled)
+assert bad == 1 and len(groups) == 1 and [x.relevant for x in groups[0].items] == [True, False, False, True]
+assert groups[0].selected.other_senses[0].name == "지역 강남" and groups[0].selected.excluded_terms == ["재건축", "강남역"]
+assert A.load_groups(labeled, "애플") == ([], 1)
+A.LLM_CACHE = tmp / "llm_cache.json"
 asked = []
 async def fake_verify(articles, selected):
     asked.extend(a.link for a in articles)
     from qupict.filtering import Verdict
-    return [Verdict(a.link, "무관", "llm") for a in articles], []
+    return [Verdict(a.link, "무관" if a.link == "3" else "관련", "llm") for a in articles if a.link != "2"], ["2"]
 A.llm_verify = fake_verify
-rows = asyncio.run(A.run())
-assert sorted(asked) == ["2", "3"]                                  # LLM이 안 본 기사만
-asked.clear(); asyncio.run(A.run()); assert asked == []             # 두 번째는 캐시 → 호출 0
+rows = asyncio.run(A.run(path=labeled))
+assert sorted(asked) == ["1", "2", "3", "4"]                         # 처음엔 모든 기사 판정
+asked.clear(); asyncio.run(A.run(path=labeled)); assert asked == ["2"]   # 다시: 답 못 한 기사만
 overall = {r["method"]: r for r in rows if r.get("target") == "전체(micro)"}
-assert overall["proposed"]["f1"] == 1.0 and overall["baseline"]["precision"] == 0.5
-assert overall["1b_validation"]["recall"] == 0.5
-assert next(r for r in rows if r.get("method") == "baseline" and r["target"] != "전체(micro)")["label_hold_excluded"] == 1
+assert overall["proposed"]["f1"] == 1.0 and overall["proposed"]["n"] == 4   # 2번은 규칙이 거름 → LLM 답 없어도 예측
+assert overall["2b_llm_only"]["n"] == 3                              # 2번은 LLM 답이 없어 건너뜀
+assert overall["baseline"]["precision"] == 0.5 and overall["1b_validation"]["recall"] == 0.5
+assert overall["2b_llm_only"]["llm_calls"] == 1 and overall["proposed"]["llm_calls"] == 1
 assert any(r.get("section") == "1c 기준값별" and r.get("target") == "강남 → 방송인 강남" for r in rows)
-print("3 ok: 실험 A 흐름 (라벨 보류 제외, LLM 추가 판정 캐시)")
+A.RESULTS_DIR = tmp / "results"
+import contextlib, io
+with contextlib.redirect_stdout(io.StringIO()):
+    A.main(path=labeled)
+assert list((tmp / "results").glob("exp_a_filtering_*.csv"))           # 결과는 evalset/results (여기선 임시 폴더)
+print("3 ok: 실험 A 흐름 (정답 JSON, 저장된 기준, LLM 캐시)")
 
 # 4) 실험 B: 순위 점수, pgvector 청크 → 기사 순위
 assert B.score(["a", "b", "c"], ["b"]) == (True, 0.5, 2)

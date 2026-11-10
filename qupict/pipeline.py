@@ -4,11 +4,14 @@ DB 파이프라인 묶음 — 0~5단계를 topic(검색어 × 고른 의미) 단
 admin.py(서비스 DB 관리)와 evaluate.py(평가)의 명령들이 이 파일의 함수를 부른다.
 (서비스 run.py는 이 파일을 거치지 않고 단계 함수를 직접 부른다)
 
-  resolve_target(target)     targets.yaml 항목 → (topic id, 고른 의미)   [0단계, LLM 비용은 처음 한 번]
-  collect_target / filter / index                                         [1·2·3·4단계, 각 단계 함수 호출]
+  choose_topic(query)        검색어 → LLM 의미 후보에서 고르기 → topic 저장   [0단계, 새 대상 추가]
+  stored_topics(query)       DB에 저장된 topic 목록 (일괄 명령의 대상)
+  resolve_topic(record)      저장된 topic의 기준을 LLM 의미 후보로 다시 맞춘다 [0단계, LLM 비용은 처음 한 번]
+  collect_target / filter / index                                           [1·2·3·4단계, 각 단계 함수 호출]
   topic_status()             topic별 진행 현황 (수집·중복·판정·라벨·청크 수)
   articles_to_label(...)     사람이 정답 라벨을 붙일 기사 목록
 
+의미·별칭·연관어는 LLM이 만든 후보(DB의 query_senses에 캐시)만 쓴다. 사람이 적은 값으로 덮어쓰지 않는다.
 각 단계는 "아직 안 한 것만" 처리하므로, 같은 명령을 여러 번 실행해도 안전하고 비용이 다시 들지 않는다.
 """
 from __future__ import annotations
@@ -18,11 +21,10 @@ from datetime import datetime
 
 from qupict import db
 from qupict.collect import CollectResult, collect_to_db
-from qupict.config import load_targets
 from qupict.filtering import FilterOutcome, dedup_topic, filter_topic
 from qupict.indexing import IndexResult, index_topic
 from qupict.schemas import SelectedSense
-from qupict.sense import load_sense_candidates, select_for_target, select_sense_by_name
+from qupict.sense import choose_sense_interactively, load_sense_candidates, select_sense_by_name
 
 DEFAULT_PERIOD_DAYS = 30
 LABEL_PER_TARGET = 150          # 대상당 정답 라벨 수: 중복 제거 후 최신 대표 기사 150건
@@ -31,37 +33,41 @@ COLLECT_MAX_PER_TARGET = 300    # 대상당 수집 상한: 본문 실패·중복
 
 
 # ---------------------------------------------------------------------------
-# 대상(targets.yaml) → topic
+# 대상 = DB에 저장된 topic
 # ---------------------------------------------------------------------------
 
-def pick_targets(query: str | None = None) -> list[dict]:
-    """targets.yaml의 대상 목록. query를 주면 그 검색어만 (예: "눈" → 눈-날씨, 눈-신체)."""
-    targets = [t for t in load_targets() if not str(t["sense"]).startswith("TODO")]
-    if query:
-        targets = [t for t in targets if t["query"] == query]
-        if not targets:
-            raise ValueError(f"targets.yaml에 '{query}' 검색어가 없습니다.")
-    return targets
+def choose_topic(query: str) -> tuple[int, SelectedSense]:
+    """새 대상 추가: LLM 의미 후보(DB 캐시)에서 터미널로 고르고 topic으로 저장한다. (topic id, 고른 의미)"""
+    candidates, source = load_sense_candidates(query)
+    print(f"[의미 후보] {source}")
+    selected = choose_sense_interactively(candidates)
+    return db.save_topic(selected), selected
 
 
-def target_label(target: dict) -> str:
-    return f"{target['query']} → {target['sense']}"
+def stored_topics(query: str | None = None) -> list[db.TopicRecord]:
+    """DB에 저장된 topic 목록. query를 주면 그 검색어만 (예: "눈" → 눈-날씨, 눈-신체)."""
+    with db.connect() as conn:
+        rows = conn.execute("SELECT query, sense_name FROM topics ORDER BY query, sense_name").fetchall()
+    records = [db.get_topic(r["query"], r["sense_name"]) for r in rows if query is None or r["query"] == query]
+    if query and not records:
+        raise ValueError(f"DB에 '{query}' 검색어의 topic이 없습니다. 먼저 python admin.py collect {query} 로 추가하세요.")
+    return records
 
 
-def resolve_target(target: dict) -> tuple[int, SelectedSense]:
-    """targets.yaml 항목으로 의미를 고르고 topic으로 저장한다. (topic id, 고른 의미)
+def topic_label(record: db.TopicRecord) -> str:
+    return f"{record.selected.query} → {record.selected.sense.name}"
 
-    - 의미 후보는 DB 캐시에서 가져온다 (처음 한 번만 LLM)
-    - 직접 입력 의미(예: 베라 → 배스킨라빈스)는 이전에 만든 topic이 있으면 그 의미를 그대로 쓴다 (LLM 다시 안 부름)
-    - targets.yaml에 사람이 적은 정의·별칭·연관어는 매번 반영된다
+
+def resolve_topic(record: db.TopicRecord) -> tuple[int, SelectedSense]:
+    """저장된 topic의 기준(정의·별칭·연관어·배제어)을 LLM 의미 후보 값으로 다시 맞춰 저장한다. (topic id, 고른 의미)
+
+    예전에 사람이 적은 값(지금은 지운 targets.yaml)이 DB topic에 남아 있어도 여기서 LLM 값으로 바뀐다.
+    후보에서 같은 이름을 못 찾으면(직접 입력한 의미 등) 저장된 기준을 그대로 쓴다.
     """
-    candidates, _ = load_sense_candidates(target["query"])
-    known_custom = None
-    if select_sense_by_name(candidates, target["sense"]) is None:
-        record = db.get_topic(target["query"], str(target["sense"]).strip())
-        if record is not None:
-            known_custom = record.selected.sense
-    selected = select_for_target(candidates, target, known_custom=known_custom)
+    candidates, _ = load_sense_candidates(record.selected.query)
+    selected = select_sense_by_name(candidates, record.selected.sense.name)
+    if selected is None or selected.sense.name != record.selected.sense.name:
+        return record.id, record.selected
     return db.save_topic(selected), selected
 
 
@@ -92,23 +98,21 @@ class CollectTargetResult:
         return text
 
 
-async def collect_target(target: dict, period_days: int = DEFAULT_PERIOD_DAYS,
+async def collect_target(selected: SelectedSense, period_days: int = DEFAULT_PERIOD_DAYS,
                          max_articles: int = COLLECT_MAX_PER_TARGET) -> CollectTargetResult:
     """수집 → 중복 제거 (임베딩만, LLM 판정 없음). 라벨 붙일 대표 기사가 몇 건인지 같이 돌려준다."""
-    _, selected = resolve_target(target)
     collected = await collect_to_db(selected, period_days, max_articles)
     duplicates = await dedup_topic(collected.topic_id)
     return CollectTargetResult(collected, len(duplicates), count_representatives(collected.topic_id), max_articles)
 
 
-async def filter_target(target: dict, redo: bool = False) -> FilterOutcome:
-    topic_id, selected = resolve_target(target)
+async def filter_target(record: db.TopicRecord, redo: bool = False) -> FilterOutcome:
+    topic_id, selected = resolve_topic(record)
     return await filter_topic(topic_id, selected, redo=redo)
 
 
-async def index_target(target: dict, describe_images: bool = True) -> IndexResult:
-    topic_id, _ = resolve_target(target)
-    return await index_topic(topic_id, describe_images=describe_images)
+async def index_target(record: db.TopicRecord, describe_images: bool = True) -> IndexResult:
+    return await index_topic(record.id, describe_images=describe_images)
 
 
 # ---------------------------------------------------------------------------

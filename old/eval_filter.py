@@ -23,11 +23,11 @@ eval_filter.py — Relevance Filter 효과 측정 스크립트
   - 정답이 '보류'인 기사는 맞고 틀림을 정할 수 없어서 지표에서 뺀다.
 
 사용법 (프로젝트 맨 위 폴더에서):
-  1) python old/build_labeled_set.py 로 old/labeled_set.json 생성 (사람이 라벨링)
+  1) python evalset/build_labeled_set.py 로 evalset/labeled_set.json 생성 (사람이 라벨링)
   2) python old/eval_filter.py 실행
   비용: V2에서 규칙을 통과한 기사 8건당 LLM 1번 (약 0.3 크레딧)
 
-(DB에 붙인 라벨로 평가하려면 python evaluate.py exp-a — 방법 6가지 비교, 결과 파일 저장)
+(같은 JSON으로 방법 6가지를 비교하고 결과 파일까지 저장하려면 python evaluate.py exp-a = evalset/exp_a_filtering.py)
 """
 
 from __future__ import annotations
@@ -40,9 +40,9 @@ from pathlib import Path
 from _common import describe, pick_sense
 
 from qupict.filtering import llm_verify, rule_verdict
-from qupict.schemas import Article, SelectedSense
+from qupict.schemas import Article, SelectedSense, Sense
 
-LABELED_SET_PATH = Path(__file__).resolve().parent / "labeled_set.json"
+LABELED_SET_PATH = Path(__file__).resolve().parents[1] / "evalset" / "labeled_set.json"
 PASS_STATUSES = ("관련", "보류")   # 서비스가 답변에 쓰는 판정 = "관련 있다고 예측"
 
 
@@ -187,8 +187,11 @@ def load_labeled_set(path: Path | None = None) -> list[dict]:
 
 
 def entry_relevance(entry: dict) -> bool | None:
-    """정답: 관련 True / 무관 False / 보류·알 수 없음 None. 새 형식(label)과 예전 형식(is_actually_relevant) 모두 읽는다."""
+    """정답: 관련 True / 무관 False / 보류·알 수 없음 None.
+    evalset 형식(label: true/false)과 예전 형식(label: 관련/무관/보류, is_actually_relevant) 모두 읽는다."""
     label = entry.get("label")
+    if isinstance(label, bool):
+        return label
     if label in ("관련", "무관"):
         return label == "관련"
     if label == "보류":
@@ -197,19 +200,53 @@ def entry_relevance(entry: dict) -> bool | None:
     return None if value is None else bool(value)
 
 
+def parse_evalset_entry(entry: dict) -> tuple[str, str, Article, SelectedSense]:
+    """evalset/build_labeled_set.py 형식 → (검색어, 의미 이름, 기사, 고른 의미)"""
+    query = str(entry["query"]).strip()
+    s = entry["sense"]
+    article = Article(title=entry["title"], link=entry["url"],
+                      description=entry.get("description") or "", content=entry.get("content") or "")
+    selected = SelectedSense(
+        query=query,
+        sense=Sense(name=s["name"], definition=s.get("definition", ""),
+                    aliases=s.get("aliases", []), related_terms=s.get("related_terms", [])),
+        excluded_terms=s.get("excluded_terms", []),
+        other_senses=[Sense(name=o["name"], definition=o.get("definition", ""),
+                            related_terms=o.get("related_terms", []))
+                      for o in s.get("other_senses", [])],
+    )
+    return query, selected.sense.name, article, selected
+
+
 async def main() -> None:
     raw_entries = load_labeled_set()
     if not raw_entries:
         print(
             f"{LABELED_SET_PATH}이 없거나 비어 있습니다.\n"
-            "먼저 python old/build_labeled_set.py 로 라벨링 데이터를 만들어주세요."
+            "먼저 python evalset/build_labeled_set.py 로 라벨링 데이터를 만들어주세요."
         )
         return
 
     groups: dict[tuple[str, str], list[LabeledArticle]] = {}
+    stored_senses: dict[tuple[str, str], SelectedSense] = {}   # 라벨링 때 저장한 기준 (evalset/build_labeled_set.py)
     skipped = held = 0
 
     for i, entry in enumerate(raw_entries):
+        if "url" in entry and isinstance(entry.get("sense"), dict):    # evalset 형식: 기준이 항목 안에 있다
+            relevant = entry_relevance(entry)
+            try:
+                query, sense_name, article, selected = parse_evalset_entry(entry)
+            except Exception as error:
+                print(f"[경고] {i}번째 항목 변환 실패 → 건너뜁니다: {error}")
+                skipped += 1
+                continue
+            if relevant is None:
+                held += 1
+                continue
+            groups.setdefault((query, sense_name), []).append(LabeledArticle(article, relevant))
+            stored_senses.setdefault((query, sense_name), selected)
+            continue
+
         query = str(entry.get("query") or entry.get("topic") or "").strip()
         sense_name = str(entry.get("sense") or "").strip()
         if "article" not in entry or not query or not sense_name:
@@ -246,7 +283,9 @@ async def main() -> None:
         return PredictionResult(acc.tp + r.tp, acc.fp + r.fp, acc.fn + r.fn, acc.tn + r.tn)
 
     for (query, sense_name), labeled_articles in groups.items():
-        selected = pick_sense(query, sense_name)
+        selected = stored_senses.get((query, sense_name))
+        if selected is None:                          # 예전 파일: 저장된 기준이 없으면 다시 정한다
+            selected = pick_sense(query, sense_name)
         result_v0, result_v1, result_v2 = await run_ablation(labeled_articles, selected)
         total_v0 = _add(total_v0, result_v0)
         total_v1 = _add(total_v1, result_v1)

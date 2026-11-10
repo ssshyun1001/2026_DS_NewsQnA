@@ -51,11 +51,12 @@ print("1-1 ok: 옮긴 명령 안내")
 
 # 2) 대상별 실행 (admin.py): 하나가 실패해도 나머지는 계속
 import importlib; importlib.reload(admin)
-P.pick_targets = lambda q=None: [{"query": "a", "sense": "x"}, {"query": "b", "sense": "y"}]
+_rec = lambda q, name, i: db.TopicRecord(i, SelectedSense(query=q, sense=Sense(name=name, definition="d")), None)
+P.stored_topics = lambda q=None: [_rec("a", "x", 1), _rec("b", "y", 2)]
 class R:
     def summary(self): return "ok"
-async def step(t):
-    if t["query"] == "a": raise RuntimeError("boom")
+async def step(r):
+    if r.selected.query == "a": raise RuntimeError("boom")
     return R()
 out = []
 builtins_print = builtins.print
@@ -65,23 +66,22 @@ builtins.print = builtins_print
 assert any("a → x → 실패: RuntimeError" in o for o in out) and any("b → y → ok" in o for o in out) and any("실패 1개" in o for o in out)
 print("2 ok: 대상 하나 실패해도 계속")
 
-# 3) resolve_target: 직접 입력 의미는 DB에 있으면 LLM 안 부름, 이름은 targets.yaml 그대로
-cands = SenseCandidates(query="베라", senses=[Sense(name="음료 베라", definition="d", related_terms=["음료"])])
+# 3) resolve_topic: 저장된 topic의 기준을 LLM 의미 후보 값으로 다시 맞춤 (사람이 적었던 값은 사라짐)
+cands = SenseCandidates(query="강남", senses=[
+    Sense(name="지역 강남", definition="d", related_terms=["강남역"]),
+    Sense(name="방송인 강남", definition="LLM 정의", aliases=["전형수"], related_terms=["예능", "유튜브"])])
 P.load_sense_candidates = lambda q: (cands, "DB")
-llm_calls = []
-sense.build_custom_sense = lambda q, d: (llm_calls.append(d), Sense(name="LLM이 붙인 이름", definition=d, related_terms=["아이스크림"]))[1]
 saved = []
 db.save_topic = lambda sel: (saved.append(sel), 42)[1]
-db.get_topic = lambda q, name: None
-tid, sel = P.resolve_target({"query": "베라", "sense": "배스킨라빈스", "description": "아이스크림", "aliases": ["배라"]})
-assert tid == 42 and sel.sense.name == "배스킨라빈스" and sel.sense.is_custom and sel.sense.aliases == ["배라"] and llm_calls == ["아이스크림"]
-class Rec: selected = SelectedSense(query="베라", sense=Sense(name="배스킨라빈스", definition="저장된 정의", related_terms=["아이스크림"], is_custom=True))
-db.get_topic = lambda q, name: Rec() if name == "배스킨라빈스" else None
-llm_calls.clear()
-tid, sel = P.resolve_target({"query": "베라", "sense": "배스킨라빈스", "aliases": ["배라"]})
-assert llm_calls == [] and sel.sense.definition == "저장된 정의" and sel.sense.aliases == ["배라"]
-assert sel.excluded_terms == ["음료"]
-print("3 ok: 직접 입력 의미 재사용 (LLM 0번, 이름 고정, 사람 값 반영)")
+human = db.TopicRecord(3, SelectedSense(query="강남", sense=Sense(name="방송인 강남", definition="사람 정의",
+                                                               aliases=[], related_terms=["이상화"])), None)
+tid, sel = P.resolve_topic(human)
+assert tid == 42 and sel.sense.definition == "LLM 정의" and sel.sense.related_terms == ["예능", "유튜브"]
+assert sel.sense.aliases == ["전형수"] and sel.excluded_terms == ["강남역"] and saved == [sel]
+custom = db.TopicRecord(5, SelectedSense(query="강남", sense=Sense(name="강남 맛집", definition="직접 입력", is_custom=True)), None)
+saved.clear()
+assert P.resolve_topic(custom) == (5, custom.selected) and saved == []       # 후보에 없는 의미는 저장된 기준 그대로
+print("3 ok: 저장된 topic → LLM 의미 후보 값으로 맞춤")
 
 # 4) 라벨링 (evaluate.py): 1/2/3/s/b/q, 5건마다 저장 + 끝낼 때 저장
 importlib.reload(evaluate)
@@ -136,17 +136,17 @@ print("5 ok: 대상당 라벨 목표 (최신 대표 기사부터 남은 개수�
 import asyncio
 from qupict.collect import CollectResult
 P3 = importlib.reload(P2)
-P3.resolve_target = lambda t: (3, None)
+_sel = SelectedSense(query="강남", sense=Sense(name="방송인 강남", definition="d"))
 async def fake_collect(sel, days, mx): return CollectResult(3, searched=mx, reused=0, crawled=mx, crawl_failed=0, images=0)
 async def fake_dedup2(tid): return {"x": "y", "z": "y"}
 P3.collect_to_db, P3.dedup_topic, P3.count_representatives = fake_collect, fake_dedup2, lambda tid: 120
-r = asyncio.run(P3.collect_target({"query": "강남", "sense": "방송인 강남"}))
+r = asyncio.run(P3.collect_target(_sel))
 assert r.collected.searched == 300 and r.duplicates == 2 and r.representatives == 120
 assert "대표 기사 120건" in r.summary() and "30건 적음" in r.summary() and "--max를 늘려" in r.summary()
 async def fake_collect_few(sel, days, mx): return CollectResult(3, searched=200, reused=0, crawled=190, crawl_failed=10, images=0)
 P3.collect_to_db = fake_collect_few
-assert "--days를 늘려" in asyncio.run(P3.collect_target({"query": "강남", "sense": "방송인 강남"})).summary()
+assert "--days를 늘려" in asyncio.run(P3.collect_target(_sel)).summary()
 P3.count_representatives = lambda tid: 160
-assert "적음" not in asyncio.run(P3.collect_target({"query": "강남", "sense": "방송인 강남"})).summary()
+assert "적음" not in asyncio.run(P3.collect_target(_sel)).summary()
 print("6 ok: collect-all 수집 → 중복 제거 → 대표 기사 수")
 print("ALL PASS")
