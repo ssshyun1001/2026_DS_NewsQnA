@@ -3,7 +3,12 @@
 
 0단계에서 고른 의미(SelectedSense)를 기준으로, 수집한 기사가 그 대상을 실제로 다루는지 판정한다.
 
-  [2단계] 중복 제거      같은 사안을 다룬 비슷한 기사는 대표 기사 1건만 남긴다 (임베딩 유사도)
+  [2단계] 중복 제거      같은 사안을 다룬 비슷한 기사는 대표 기사 1건만 남긴다
+                         기준 DEDUP_BY (쉼표로 여러 개):
+                           title    제목 임베딩 유사도                  (DEDUP_TITLE_THRESHOLD)
+                           content  본문 앞 N문장 임베딩 유사도          (DEDUP_CONTENT_THRESHOLD, N = DEDUP_LEAD_SENTENCES)
+                           noun     제목의 드문 고유명사 겹침 (TF-IDF)   (DEDUP_NOUN_THRESHOLD)
+                         여러 기준을 묶는 방법 DEDUP_RULE: "and"(모두 넘어야 중복) | "or"(하나만 넘어도)
   [2단계] 1차 규칙 필터  분명히 무관한 기사만 규칙으로 걸러 LLM 호출을 줄인다      → stage = "rule"
   [3단계] 2차 LLM 검증   나머지를 LLM이 관련 / 무관 / 보류로 판정하고 근거 한 줄을 남긴다 → stage = "llm"
 
@@ -54,7 +59,9 @@ LLM_BATCH_SIZE = 8              # LLM 한 번에 판정할 기사 수
 # 8개씩 보내도 1분에 수십 번 수준. 배치 나누는 방식은 그대로라 각 요청의 입력(= 판정 결과)은 예전과 같다.
 LLM_CONCURRENCY = 8
 LLM_BODY_CHARS = 800            # LLM에 보여 줄 본문 앞부분 길이
-EMBED_CHARS = 2000              # 중복 제거용 임베딩에 쓰는 본문 길이 (임베딩 입력 한도 안쪽, 비교에는 충분)
+EMBED_CHARS = 2000              # 기사 임베딩에 쓰는 본문 길이 (임베딩 입력 한도 안쪽, 비교에는 충분)
+DEDUP_CRITERIA = ("title", "content", "noun")
+DEDUP_RULES = ("and", "or")
 
 STATUSES = ("관련", "무관", "보류")
 
@@ -101,6 +108,124 @@ async def embed_articles(articles: list[Article]) -> list[Article]:
     return articles
 
 
+_SENTENCE_END = re.compile(r"(?<=[.!?。])\s+|(?<=[.!?。][\"'”’)\]])\s+|\n+")
+# 문장 끝: . ! ? 뒤(닫는 따옴표·괄호 하나까지 포함)의 공백, 또는 줄바꿈. "3.5%"처럼 공백 없는 점은 안 나눈다
+
+
+def lead_text(article: Article, n: int | None = None) -> str:
+    """본문 앞 n문장 (중복 제거 content 기준). 문장 끝(. ! ?) 뒤 공백이나 줄바꿈으로 나눈다.
+    본문이 비어 있으면 제목을 쓴다 (빈 문자열은 임베딩할 수 없으므로)."""
+    n = settings.dedup_lead_sentences if n is None else n
+    sentences = [x.strip() for x in _SENTENCE_END.split(article.content or "") if x and x.strip()]
+    return " ".join(sentences[:n]) or article.title
+
+
+async def embed_leads(articles: list[Article]) -> list[Article]:
+    """본문 앞 n문장으로 임베딩을 채운다 (중복 제거용). DB에 저장하지 않으므로 실행할 때마다 계산한다."""
+    to_embed = [a for a in articles if a.lead_embedding is None]
+    if to_embed:
+        vectors = await aembed_in_batches(get_embeddings(), [lead_text(a) for a in to_embed])
+        for article, vec in zip(to_embed, vectors):
+            article.lead_embedding = vec
+    return articles
+
+
+async def embed_titles(articles: list[Article]) -> list[Article]:
+    """제목만으로 임베딩을 채운다 (중복 제거용). DB에 저장하지 않으므로 실행할 때마다 계산한다 (제목이라 저렴)."""
+    to_embed = [a for a in articles if a.title_embedding is None]
+    if to_embed:
+        vectors = await aembed_in_batches(get_embeddings(), [a.title for a in to_embed])
+        for article, vec in zip(to_embed, vectors):
+            article.title_embedding = vec
+    return articles
+
+
+def _dedup_criteria(by: str | None = None) -> list[str]:
+    """DEDUP_BY → 비교할 기준 목록. "title,content,noun"처럼 쉼표로 여러 개, "both" = title,content, "all" = 셋 다."""
+    raw = (by or settings.dedup_by).strip().lower()
+    alias = {"both": "title,content", "all": ",".join(DEDUP_CRITERIA)}
+    criteria = [c.strip() for c in alias.get(raw, raw).split(",") if c.strip()]
+    if not criteria or any(c not in DEDUP_CRITERIA for c in criteria):
+        raise ValueError(f"DEDUP_BY는 {DEDUP_CRITERIA} 중 하나 이상(쉼표로 구분) 또는 both/all이어야 합니다: {raw!r}")
+    return list(dict.fromkeys(criteria))
+
+
+def _dedup_rule(rule: str | None = None) -> str:
+    rule = (rule or settings.dedup_rule).strip().lower()
+    if rule not in DEDUP_RULES:
+        raise ValueError(f"DEDUP_RULE은 {DEDUP_RULES} 중 하나여야 합니다: {rule!r}")
+    return rule
+
+
+_EMBEDDING_OF = {
+    "title": lambda a: a.title_embedding,    # 제목만
+    "content": lambda a: a.lead_embedding,   # 본문 앞 n문장
+}
+
+
+async def embed_for_dedup(articles: list[Article], by: str | None = None) -> list[Article]:
+    """find_duplicates에 필요한 임베딩을 채운다 (title: 제목 / content: 본문 앞 n문장, noun은 임베딩 불필요)."""
+    criteria = _dedup_criteria(by)
+    jobs = []
+    if "title" in criteria:
+        jobs.append(embed_titles(articles))
+    if "content" in criteria:
+        jobs.append(embed_leads(articles))
+    await asyncio.gather(*jobs)   # 제목 · 본문 앞 문장 임베딩 요청을 동시에
+    return articles
+
+
+# --- 고유명사 겹침 (noun 기준) ---------------------------------------------------
+#  기사 제목에서 고유명사(NNP)·영문 단어(SL)를 뽑아 TF-IDF로 가중치를 매기고 코사인 유사도를 잰다.
+#  IDF는 이번에 비교하는 기사 묶음 안에서 계산한다:
+#    거의 모든 기사에 나오는 단어(검색어 "강남" 등)  → 가중치 낮음
+#    몇몇 기사에만 나오는 드문 고유명사(인물·장소·행사명) → 가중치 높음
+#  → 드문 고유명사를 제목에 같이 쓰는 기사끼리 유사도가 높아진다 (같은 사건을 다룬 기사).
+#  제목에 고유명사가 하나도 없으면 이 기준에서는 어떤 기사와도 비슷하지 않다 (유사도 0).
+
+_NOUN_TAGS = ("NNP", "SL")
+_kiwi = None
+
+
+def extract_nouns(text: str) -> list[str]:
+    """고유명사(NNP)와 영문 단어(SL, 소문자로)를 등장 순서대로 (중복 포함). 한 글자는 뺀다."""
+    global _kiwi
+    if _kiwi is None:
+        try:
+            from kiwipiepy import Kiwi
+        except ImportError as e:
+            raise ImportError("고유명사 기준(noun) 중복 제거에는 kiwipiepy가 필요합니다: pip install kiwipiepy") from e
+        _kiwi = Kiwi()
+    return [t.form.lower() if t.tag == "SL" else t.form
+            for t in _kiwi.tokenize(text or "") if t.tag in _NOUN_TAGS and len(t.form) >= 2]
+
+
+def noun_text(article: Article) -> str:
+    """고유명사를 뽑을 텍스트: 제목만 (본문에 스쳐 지나가듯 나온 이름은 섞지 않는다)."""
+    return article.title
+
+
+def noun_tfidf(articles: list[Article]) -> dict[str, np.ndarray]:
+    """기사 묶음의 고유명사 TF-IDF 벡터 {link: 벡터}.
+    tf = 1 + log(등장 횟수), idf = log((1 + 기사 수) / (1 + 그 단어가 나온 기사 수)) + 1"""
+    tokens = {a.link: extract_nouns(noun_text(a)) for a in articles}
+    vocab = {w: i for i, w in enumerate(dict.fromkeys(w for ws in tokens.values() for w in ws))}
+    df = np.zeros(len(vocab))
+    for ws in tokens.values():
+        for w in set(ws):
+            df[vocab[w]] += 1
+    idf = np.log((1 + len(tokens)) / (1 + df)) + 1
+    vectors = {}
+    for link, ws in tokens.items():
+        v = np.zeros(len(vocab))
+        for w in ws:
+            v[vocab[w]] += 1
+        nz = v > 0
+        v[nz] = (1 + np.log(v[nz])) * idf[nz]
+        vectors[link] = v
+    return vectors
+
+
 def _unit(vectors: np.ndarray) -> np.ndarray:
     norm = np.linalg.norm(vectors, axis=1, keepdims=True)
     norm[norm == 0] = 1e-10
@@ -110,10 +235,24 @@ def _unit(vectors: np.ndarray) -> np.ndarray:
 def find_duplicates(
     articles: list[Article],
     existing: list[Article] = (),
-    threshold: float | None = None,
     keep: set[str] | frozenset[str] = frozenset(),
+    by: str | None = None,
+    title_threshold: float | None = None,
+    content_threshold: float | None = None,
+    noun_threshold: float | None = None,
+    rule: str | None = None,
 ) -> dict[str, str]:
-    """임베딩 유사도가 threshold 이상인 기사를 중복으로 묶는다. {중복 기사 link: 대표 기사 link}
+    """유사도가 임계값 이상인 기사를 중복으로 묶는다. {중복 기사 link: 대표 기사 link}
+
+    - by: 비교 기준 (쉼표로 여러 개). 비우면 settings.dedup_by.
+        title    제목 임베딩
+        content  본문 앞 n문장 임베딩
+        noun     제목 고유명사 TF-IDF (드문 고유명사를 같이 쓰는 기사일수록 비슷함, 임베딩 불필요)
+        both = title,content / all = title,content,noun
+      임베딩은 미리 채워 둬야 한다 (embed_for_dedup). 필요한 임베딩이 없는 기사는 비교에서 빠진다.
+    - *_threshold: 기준별 임계값. 비우면 settings 값.
+    - rule: 기준이 여러 개일 때 "and"(모두 임계값 이상이어야 중복) | "or"(하나라도 이상이면 중복).
+      비슷한 대표 기사가 여럿이면 (기준별 유사도 평균이) 가장 높은 대표 기사에 묶는다.
 
     - 대표 기사는 본문이 가장 긴 기사 (정보가 가장 많다고 본다)
     - existing: 이미 판정을 마친 대표 기사들 (DB 버전에서 새 기사만 처리할 때).
@@ -122,19 +261,40 @@ def find_duplicates(
     - keep: articles 중 절대 중복으로 바꾸면 안 되는 기사 link (사람이 이미 정답 라벨을 붙인 기사).
       중복이 되면 실험 A에서 빠져서 라벨이 버려지므로, 이 기사들은 항상 대표로 남긴다.
     """
-    threshold = settings.dedup_similarity_threshold if threshold is None else threshold
-    reps: list[Article] = [a for a in existing if a.embedding is not None]
+    criteria, rule = _dedup_criteria(by), _dedup_rule(rule)
+    thresholds = np.array([[{
+        "title": settings.dedup_title_threshold if title_threshold is None else title_threshold,
+        "content": settings.dedup_content_threshold if content_threshold is None else content_threshold,
+        "noun": settings.dedup_noun_threshold if noun_threshold is None else noun_threshold,
+    }[c]] for c in criteria])
+    has_vectors = lambda a: all(_EMBEDDING_OF[c](a) is not None for c in criteria if c in _EMBEDDING_OF)
+    existing = [a for a in existing if has_vectors(a)]
+    articles = [a for a in articles if has_vectors(a)]
+
+    # 기준별 단위 벡터 {link: 벡터}를 미리 만든다 (코사인 유사도 = 단위 벡터 내적)
+    pool = existing + articles
+    unit: dict[str, dict[str, np.ndarray]] = {}
+    for c in criteria:
+        raw = noun_tfidf(pool) if c == "noun" else {a.link: np.asarray(_EMBEDDING_OF[c](a), dtype=float) for a in pool}
+        links = list(raw)
+        mat = _unit(np.array([raw[l] for l in links])) if links else np.zeros((0, 0))
+        unit[c] = dict(zip(links, mat))
+
+    reps: list[Article] = list(existing)
     duplicates: dict[str, str] = {}
     # 라벨 붙은 기사를 먼저 대표로 세우고, 나머지는 긴 기사부터 대표 후보로 본다
     # → 비슷한 기사 무리에서 (라벨 붙은 기사가 없으면) 가장 긴 기사가 대표가 된다
-    ordered = sorted((a for a in articles if a.embedding is not None),
-                     key=lambda a: (a.link not in keep, -len(a.content)))
+    ordered = sorted(articles, key=lambda a: (a.link not in keep, -len(a.content)))
     for article in ordered:
         if reps and article.link not in keep:
-            sims = _unit(np.array([r.embedding for r in reps])) @ _unit(np.array([article.embedding]))[0]
-            best = int(np.argmax(sims))
-            if sims[best] >= threshold:
-                duplicates[article.link] = reps[best].link
+            sims = np.array([   # [기준 수, 대표 수]
+                np.array([unit[c][r.link] for r in reps]) @ unit[c][article.link] for c in criteria
+            ])
+            passed = sims >= thresholds
+            matched = passed.all(axis=0) if rule == "and" else passed.any(axis=0)
+            if matched.any():
+                score = np.where(matched, sims.mean(axis=0), -np.inf)
+                duplicates[article.link] = reps[int(np.argmax(score))].link
                 continue
         reps.append(article)
     return duplicates
@@ -297,6 +457,9 @@ async def filter_articles(
     with timing.timed("새 기사 임베딩") as t:
         t.note = f"{sum(a.embedding is None for a in articles)}건 계산"
         await embed_articles(articles)
+    with timing.timed("중복 제거용 임베딩(제목 · 본문 앞 문장)") as t:
+        t.note = f"기준 {','.join(_dedup_criteria())}"
+        await embed_for_dedup(list(articles) + list(existing))
     with timing.timed("중복 비교") as t:
         duplicates = find_duplicates(articles, existing, keep=keep)
         t.note = f"기사 {len(articles)}건 vs 대표 {len(existing)}건 → 중복 {len(duplicates)}건"
@@ -349,6 +512,7 @@ async def dedup_topic(topic_id: int) -> dict[str, str]:
     existing = db.get_topic_articles(topic_id, statuses=STATUSES, include_duplicates=False)
     missing = [a for a in new + existing if a.embedding is None]
     await embed_articles(new + existing)
+    await embed_for_dedup(new + existing)
     duplicates = find_duplicates(new, existing, keep=_labeled_links(topic_id))
     db.save_article_embeddings(missing)
     db.save_duplicates(topic_id, duplicates)

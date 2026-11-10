@@ -537,7 +537,12 @@ python evaluate.py exp-a              # evalset/labeled_set.json으로 필터링
 | `OPENAI_EMBEDDING_MODEL`         | `text-embedding-3-small` | 기사와 질문 임베딩 모델                 |
 | `NAVER_CLIENT_ID`                |                       필수 | NCP API Gateway Client ID     |
 | `NAVER_CLIENT_SECRET`            |                       필수 | NCP API Gateway Client Secret |
-| `DEDUP_SIMILARITY_THRESHOLD`     |                   `0.90` | 중복 기사로 판단하는 코사인 유사도 기준        |
+| `DEDUP_BY`                       |                  `all` | 중복 판단 기준(쉼표로 여러 개): `title`(제목) / `content`(본문 앞 N문장) / `noun`(제목의 드문 고유명사 겹침). `both`=title,content, `all`=셋 다 |
+| `DEDUP_TITLE_THRESHOLD`          |                  `0.7` | 제목 임베딩 코사인 유사도 임계값               |
+| `DEDUP_CONTENT_THRESHOLD`        |                  `0.5` | 본문 앞 N문장 임베딩 코사인 유사도 임계값 (예전 이름 `DEDUP_SIMILARITY_THRESHOLD`도 읽음) |
+| `DEDUP_NOUN_THRESHOLD`           |                  `0.2` | 제목 고유명사 TF-IDF 코사인 유사도 임계값 (kiwipiepy로 제목에서 고유명사·영문 단어 추출) |
+| `DEDUP_LEAD_SENTENCES`           |                    `5` | `content` 기준에서 비교할 본문 앞 문장 수        |
+| `DEDUP_RULE`                     |                   `or` | 기준이 여러 개일 때: `and`(모두 넘어야 중복) / `or`(하나만 넘어도 중복) |
 | `TOP_K_ARTICLES`                 |                     `10` | 답변 근거로 반환할 최대 기사 수            |
 | `MAX_CRAWL_ARTICLES`             |                    `100` | 한 세션에서 크롤링할 최대 기사 수           |
 | `CRAWL_TIMEOUT_SECONDS`          |                      `8` | 기사 한 건의 크롤링 제한 시간             |

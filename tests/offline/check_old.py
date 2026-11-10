@@ -41,10 +41,14 @@ arts = [Article(title="강남 이상화 예능", link="new", content="방송인 
 async def fake_collect(selected, days, mx): return ["m"] * 4, [a.model_copy() for a in arts]
 class SameForDup:
     async def aembed_documents(self, texts):
-        return [[1.0, 0.0] if "같은 기사" in t or "이상화 예능\n" in t else [0.0, 1.0] if "재건축" in t else [0.6, 0.8]
+        return [[1.0, 0.0] if "같은 기사" in t or t.startswith(("강남 이상화 예능", "방송인 강남")) else [0.0, 1.0] if "재건축" in t else [0.0, -1.0]
                 for t in texts]
 import qupict.filtering as F
 F.get_embeddings = lambda: SameForDup()
+# 라벨링 흐름만 확인한다: 중복 기준은 가짜 임베딩이 맞춰진 제목·본문으로 고정 (고유명사 기준·.env 값과 무관하게)
+import dataclasses
+F.settings = dataclasses.replace(F.settings, dedup_by="title,content", dedup_rule="or",
+                                 dedup_title_threshold=0.7, dedup_content_threshold=0.7)
 from qupict.schemas import SenseCandidates
 cands = SenseCandidates(query="강남", model="m", senses=[
     Sense(name="지역 강남", definition="서울 강남구 일대", related_terms=["재건축", "강남역"]),

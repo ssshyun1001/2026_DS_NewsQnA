@@ -18,3 +18,4 @@ pydantic==2.9.2
 tenacity==9.0.0
 fastapi==0.115.5   # web.py (웹 화면)
 uvicorn==0.32.1    # web.py 서버 실행
+kiwipiepy==0.24.1  # 중복 제거 noun 기준: 제목 고유명사 추출 (형태소 분석)

@@ -36,7 +36,7 @@ if str(ROOT) not in sys.path:            # evalset/ 안의 파일을 바로 실�
 
 from qupict.cli import read_line, setup_console                                  # noqa: E402
 from qupict.collect import collect_articles                                      # noqa: E402
-from qupict.filtering import embed_articles, find_duplicates                     # noqa: E402
+from qupict.filtering import embed_for_dedup, find_duplicates                    # noqa: E402
 from qupict.pipeline import COLLECT_MAX_PER_TARGET, LABEL_PER_TARGET             # noqa: E402
 from qupict.schemas import Article, SelectedSense                                # noqa: E402
 from qupict.sense import choose_sense_interactively, load_sense_candidates      # noqa: E402
@@ -154,7 +154,7 @@ async def label_query(query: str, entries: list[dict]) -> int:
         return 0
 
     # [2단계 중복 제거] 비슷한 기사는 대표 기사 하나만 라벨링한다 (임베딩만, LLM 판정 없음)
-    await embed_articles(articles)
+    await embed_for_dedup(articles)
     duplicates = find_duplicates(articles)
     reps = [a for a in articles if a.link not in duplicates]
     reps.sort(key=lambda a: a.pub_date.timestamp() if a.pub_date else 0, reverse=True)   # 최신순
