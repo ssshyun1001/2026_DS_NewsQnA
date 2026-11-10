@@ -57,8 +57,7 @@ class Job:
     logs: list[str] = field(default_factory=list)
     session_id: Optional[str] = None
     error: str = ""
-
-
+    images: str = ""                   # 준비 완료 뒤 이미지 → 글(OCR·VLM): "" 안 함 / running / done
 @dataclass
 class Session:
     """준비가 끝난 뉴스. 질문이 오면 answer_fn(질문, on_token)으로 답한다.
@@ -184,6 +183,9 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
         with _lock:
             _sessions[session_id] = Session(job.label, "메모리" if memory else "DB", answer_fn)
         job.session_id = session_id
+        if not memory:
+            from run import image_text_mode
+            job.images = "running" if image_text_mode() else ""    # done보다 먼저: 화면이 계속 확인하게
         job.status = "done"
         log("준비 완료! 이제 질문할 수 있습니다.")
     except Exception as e:
@@ -191,6 +193,18 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
         job.error = str(e) or type(e).__name__
         job.status = "error"
         log(f"[오류] {job.error}")
+        return
+
+    # 준비 완료 뒤: 이미지 → 글(OCR·VLM)을 이 스레드에서 이어서 한다. 질문은 그동안에도 받는다.
+    # 끝나면 그 뒤 질문부터 이미지 속 내용도 검색된다. 실패해도 질문 답변에는 영향이 없다.
+    if job.images == "running":
+        from run import add_image_text
+        try:
+            asyncio.run(add_image_text(topic_id, log=log))
+        except Exception as e:
+            traceback.print_exc()
+            log(f"[이미지] 실패해서 건너뜁니다 ({type(e).__name__}: {e})")
+        job.images = "done"
 
 
 @app.post("/api/prepare")
@@ -218,7 +232,7 @@ def job_status(job_id: str) -> dict:
     if job is None:
         raise HTTPException(404, "작업을 찾을 수 없습니다 (서버를 다시 켰다면 처음부터 다시 해 주세요).")
     return {"status": job.status, "logs": job.logs, "session_id": job.session_id,
-            "error": job.error, "label": job.label}
+            "error": job.error, "label": job.label, "images": job.images}
 
 
 # ---------------------------------------------------------------------------

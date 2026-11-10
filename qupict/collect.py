@@ -456,7 +456,16 @@ async def _download_one(
                     return False
                 if resp.content_length and resp.content_length > MAX_IMAGE_BYTES:
                     return False
-                data = await resp.content.read(MAX_IMAGE_BYTES + 1)
+                # 끝까지 조각조각 읽는다. 예전 resp.content.read(n)은 "n바이트까지 전부"가 아니라
+                # "지금 도착해 있는 만큼(n 이하)"만 돌려줘서, 큰 이미지가 중간에 잘린 채 저장됐다
+                # (측정: 1200×995 JPEG가 16KB로 잘림 → OCR·이미지 해석 실패).
+                parts, size = [], 0
+                async for part in resp.content.iter_chunked(64 * 1024):
+                    size += len(part)
+                    if size > MAX_IMAGE_BYTES:
+                        return False
+                    parts.append(part)
+                data = b"".join(parts)
         except (aiohttp.ClientError, asyncio.TimeoutError):
             return False
     if not data or not (MIN_IMAGE_BYTES <= len(data) <= MAX_IMAGE_BYTES):
