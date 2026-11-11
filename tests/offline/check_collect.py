@@ -107,4 +107,55 @@ from bs4 import BeautifulSoup
 b = BeautifulSoup('<div><img src="http://cdn.queen.co.kr/image/newsroom/default-user.png"><img src="https://x.com/photo.jpg"></div>', "lxml")
 assert [i.url for i in collect._extract_images(b)] == ["https://x.com/photo.jpg"]
 print("7·8 ok: 긴 사이트 이름, CMS 본문 영역")
+
+# 9) 추가한 본문 영역: 프라임경제(#news_body_area), bnt뉴스(div.newsview div.content, <p> 없음)
+prime = "<html><body><p>짧은 안내</p><div id='news_body_area'>" + "삼성물산 실적이 늘었다. " * 20 + "</div></body></html>"
+assert collect.parse_article_html(prime)[0].startswith("삼성물산 실적이 늘었다")
+bnt = ("<html><body><article>메뉴</article><div class='din newsview'><h1>제목</h1><div class='content'>"
+       + "신혜선이 팬미팅을 연다. " * 20 + "</div></div></body></html>")
+assert collect.parse_article_html(bnt)[0].startswith("신혜선이 팬미팅을 연다")
+print("9 ok: 프라임경제 · bnt뉴스 본문 영역")
+
+# 10) 보안 연결(SSL) 실패 → 느슨한 설정으로 한 번 더. 다른 오류 · 200이 아닌 응답은 다시 받지 않는다
+import aiohttp
+
+
+class FakeSSLError(aiohttp.ClientSSLError):
+    def __init__(self): pass
+    def __str__(self): return "ssl"
+
+
+class FakeResponse:
+    def __init__(self, status): self.status, self.charset = status, "utf-8"
+    async def read(self): return "<p>본문</p>".encode("utf-8")
+    async def __aenter__(self): return self
+    async def __aexit__(self, *a): return False
+
+
+class FakeSession:
+    """outcomes를 차례로 돌려준다 (예외면 던진다). 받은 ssl 옵션을 calls에 적는다."""
+    def __init__(self, outcomes): self.outcomes, self.calls = list(outcomes), []
+    def get(self, url, headers=None, timeout=None, **options):
+        self.calls.append((options.get("ssl"), timeout.total))
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return FakeResponse(outcome)
+
+
+get = lambda session: _aio.run(collect._get_html(session, "https://press.com/1"))
+s = FakeSession([FakeSSLError(), 200])
+assert get(s) == "<p>본문</p>"
+assert s.calls[0][0] is None and s.calls[1][0] is collect._lenient_ssl_context()      # 두 번째만 느슨한 설정
+assert s.calls[1][0].verify_mode.name == "CERT_NONE"
+assert s.calls[0][1] == min(collect.settings.crawl_timeout_seconds, collect.CRAWL_PAGE_TIMEOUT_SECONDS)
+s = FakeSession([FakeSSLError(), FakeSSLError()])
+assert get(s) is None and len(s.calls) == 2                                          # 두 번 다 실패하면 끝
+s = FakeSession([aiohttp.ClientConnectionError(), 200])
+assert get(s) is None and len(s.calls) == 1                                          # 다른 연결 오류는 다시 안 받음
+s = FakeSession([403, 200])
+assert get(s) is None and len(s.calls) == 1                                          # 403도 다시 안 받음
+s = FakeSession([200])
+assert get(s) == "<p>본문</p>" and s.calls[0][0] is None                              # 정상 사이트는 검사한 채로 한 번
+print("10 ok: 보안 연결 실패 때만 느슨한 설정으로 재시도")
 print("ALL PASS")

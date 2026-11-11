@@ -35,6 +35,8 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import ssl
+import warnings
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass
@@ -202,7 +204,9 @@ _SELECTOR_CANDIDATES = [
     "#articleBody",
     "#article_body",
     "div.article_view",
-    "article",                         # 마지막 수단 (사이드바 기사 목록까지 잡힐 수 있음)
+    "#news_body_area",                 # 프라임경제 (측정 2026-11-11: 본문 영역을 못 찾아 61자만 잡혔다)
+    "div.newsview div.content",        # bnt뉴스 (<p> 없이 div 안에 바로 본문이 있어서 예전에는 0자였다)
+    "article",                      # 마지막 수단 (사이드바 기사 목록까지 잡힐 수 있음)
 ]
 
 _MIN_CONTENT_LENGTH = 100
@@ -310,15 +314,57 @@ def _decode_html(raw: bytes, header_charset: str | None) -> str:
     return dammit.unicode_markup or raw.decode("utf-8", errors="replace")
 
 
+# 기사 페이지 하나를 기다리는 최대 시간(초). 설정값(CRAWL_TIMEOUT_SECONDS, 기본 10초)이 더 짧으면 그 값을 쓴다.
+#   측정(2026-11-11, 기사 257건): 본문을 가져온 요청 중 가장 느린 것이 1.93초였다 (5초를 넘긴 성공 0건).
+#   crawl_articles는 모든 기사가 끝나야 끝나므로, 응답 없는 사이트 하나가 전체를 타임아웃만큼 붙잡는다
+#   (같은 기사 목록을 반복해 받을 때 가끔 한 건이 멈춰 전체가 1.3초 → 10.9초가 됐다). 5초면 그 손해가 절반.
+#   이미지 내려받기(download_images)는 파일이 커서 예전 설정값을 그대로 쓴다.
+CRAWL_PAGE_TIMEOUT_SECONDS = 5
+
+_lenient_ssl: ssl.SSLContext | None = None
+
+
+def _lenient_ssl_context() -> ssl.SSLContext:
+    """인증서 검사를 하지 않고 오래된 암호화 방식도 받아 주는 연결 설정. 보안 연결이 실패한 사이트에만 쓴다.
+
+    측정(2026-11-11, 기사 257건): 실패 13건 중 7건이 보안 연결(SSL) 실패였다. 다시 받아도 똑같이 실패한다.
+      - 인증서 검증 실패 5건 (viva100 · kbmaeil · metroseoul): 사이트가 중간 인증서를 빼고 보내서
+        파이썬이 검증하지 못한다 (브라우저는 빠진 인증서를 알아서 받아 오므로 문제없이 열린다).
+      - 연결 협상 실패 2건 (kbench): 사이트가 오래된 암호화 방식만 지원한다.
+    이 설정으로 받으면 7건 모두 본문을 가져온다.
+
+    검사를 끄면 중간에서 누가 내용을 바꿔도 알 수 없다. 공개된 기사 본문만 읽고 비밀번호 같은 것을
+    보내지 않으므로 감수한다. 처음부터 끄지 않고, 정상 연결이 실패했을 때만 쓴다.
+    """
+    global _lenient_ssl
+    if _lenient_ssl is None:
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        context.set_ciphers("DEFAULT:@SECLEVEL=0")                 # 오래된 암호화 방식 허용
+        context.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0x4)
+        with warnings.catch_warnings():                             # TLS 1.0은 "오래됨" 경고가 뜬다
+            warnings.simplefilter("ignore", DeprecationWarning)
+            context.minimum_version = ssl.TLSVersion.TLSv1
+        _lenient_ssl = context
+    return _lenient_ssl
+
+
 async def _get_html(session: aiohttp.ClientSession, url: str) -> str | None:
-    try:
-        timeout = aiohttp.ClientTimeout(total=settings.crawl_timeout_seconds)
-        async with session.get(url, headers=_HEADERS, timeout=timeout) as resp:
-            if resp.status != 200:
-                return None
-            return _decode_html(await resp.read(), resp.charset)
-    except (aiohttp.ClientError, asyncio.TimeoutError):
-        return None
+    """기사 페이지를 받는다. 보안 연결(SSL) 문제로 실패하면 느슨한 설정으로 한 번 더 받는다."""
+    timeout = aiohttp.ClientTimeout(total=min(settings.crawl_timeout_seconds, CRAWL_PAGE_TIMEOUT_SECONDS))
+    for lenient in (False, True):
+        options = {"ssl": _lenient_ssl_context()} if lenient else {}
+        try:
+            async with session.get(url, headers=_HEADERS, timeout=timeout, **options) as resp:
+                if resp.status != 200:
+                    return None
+                return _decode_html(await resp.read(), resp.charset)
+        except aiohttp.ClientSSLError:          # 인증서 검증 실패 · 연결 협상 실패 → 느슨한 설정으로 다시
+            continue
+        except (aiohttp.ClientError, asyncio.TimeoutError):
+            return None
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -410,7 +456,10 @@ async def _fetch_and_parse(
 # 동시에 내려받는 기사 수. 측정(2026-11-10, 처음 받는 기사 100건): 10% 정도가 3초 넘게 걸린다
 #   (처음 접속하는 언론사 사이트의 주소 찾기·연결 재시도로 보임. 같은 기사를 두 번째 받으면 0.3초 안쪽).
 #   동시 8개면 느린 다운로드가 자리를 막아 나머지가 줄을 선다 → 24개로. 해석은 별도 프로세스라 부딪히지 않는다.
-CRAWL_CONCURRENCY = 24
+# 측정(2026-11-11): 24개일 때 기사 한 건이 자리를 기다리는 시간(중앙 0.45초)이 다운로드(중앙 0.28초)보다 길었다.
+#   같은 기사 목록으로 비교: 100건은 차이가 오차 범위(1.2~1.7초), 257건은 24개 3.3~3.8초 → 64개 2.7~3.5초.
+#   한 사이트에 여는 연결 수(CRAWL_PER_HOST)는 그대로라 사이트 하나에 몰리지는 않는다.
+CRAWL_CONCURRENCY = 64
 CRAWL_PER_HOST = 8          # 한 사이트에 동시에 여는 연결 수 (네이버 뉴스에는 예전과 같은 8개까지만)
 
 
