@@ -32,7 +32,7 @@ _kst = timezone(timedelta(hours=9))
 _day = lambda d: (datetime.now(_kst) - timedelta(days=d)).strftime("%a, %d %b %Y %H:%M:%S %z")
 def _pages(*sizes_and_age):
     calls = []
-    async def fake_page(session, keyword, start):
+    async def fake_page(session, keyword, start, sort="date"):
         calls.append(start)
         n, age = sizes_and_age[len(calls) - 1]
         return [{"pubDate": _day(age)}] * n
@@ -44,7 +44,35 @@ collect._fetch_page, calls = _pages((100, 1), (40, 3))
 assert len(_aio.run(collect._fetch_one_keyword(None, "k", cut))) == 140 and calls == [1, 101]        # 결과가 끝남
 collect._fetch_page, calls = _pages((100, 1), (100, 40), (100, 50))
 assert len(_aio.run(collect._fetch_one_keyword(None, "k", cut))) == 200 and calls == [1, 101]        # 기간 밖으로 나감
+collect._fetch_page, calls = _pages((100, 1), (100, 40), (100, 50))
+assert len(_aio.run(collect._fetch_one_keyword(None, "k", cut, sort="sim"))) == 300 and calls == [1, 101, 201]   # 관련도순은 기간 밖이어도 안 멈춤
 print("2-1 ok: 쪽 넘기기")
+
+# 2-2) 검색: 1순위 관련도순, 모자라면 최신순으로 채움 (기간 밖 제외, 같은 기사는 한 번만)
+def _item(link, age):
+    return {"title": link, "originallink": f"https://p.com/{link}", "link": f"https://p.com/{link}", "pubDate": _day(age)}
+_results = {      # (검색어, 정렬) → 결과
+    ("강남 이상화", "sim"): [_item("s1", 3), _item("old", 90), _item("s2", 20)],          # old는 기간 밖
+    ("강남 이상화", "date"): [_item("d1", 0), _item("s1", 3), _item("d2", 1), _item("d3", 2)],
+}
+_asked = []
+async def _fake_keyword(session, keyword, cutoff=None, pages=None, sort="date"):
+    _asked.append((keyword, sort, pages))
+    return _results[(keyword, sort)]
+_real_keyword, collect._fetch_one_keyword = collect._fetch_one_keyword, _fake_keyword
+links = lambda n: [x.link.rsplit("/", 1)[1] for x in _aio.run(collect.search_news(g, 30, n))]
+assert links(10) == ["s1", "s2", "d1", "d2", "d3"]           # 관련도순 먼저, 그 뒤 최신순 (s1은 한 번만)
+assert links(3) == ["s1", "s2", "d1"]                         # 상한까지만
+assert links(2) == ["s1", "s2"]                               # 관련도순만으로 차면 최신순은 안 씀
+assert ("강남 이상화", "sim", collect.RELEVANCE_PAGES) in _asked and ("강남 이상화", "date", None) in _asked
+async def _sim_fails(session, keyword, cutoff=None, pages=None, sort="date"):
+    if sort == "sim":
+        raise RuntimeError("관련도순 실패")
+    return _results[(keyword, sort)]
+collect._fetch_one_keyword = _sim_fails
+assert links(10) == ["d1", "s1", "d2", "d3"]                  # 관련도순 검색이 실패하면 최신순만으로
+collect._fetch_one_keyword = _real_keyword
+print("2-2 ok: 관련도순 우선, 최신순으로 채움")
 
 # 3) API 결과 → NewsMeta: 기간 밖 제외, 네이버 링크 구분, HTML 태그 제거
 now = datetime.now(timezone(timedelta(hours=9)))

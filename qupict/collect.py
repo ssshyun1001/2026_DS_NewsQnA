@@ -22,9 +22,11 @@
 
 ## 결과 섞기 (_interleave)
 
-  검색어마다 최신순으로 최대 300건(100건씩 3쪽, 기간 밖으로 나가면 일찍 멈춤)을 받은 뒤,
-  검색어별로 돌아가며 하나씩 뽑아 상한(ask 100건, collect-all 300건)을 채운다.
-  첫 검색어 결과만으로 상한이 차 버리는 것을 막아, 여러 검색어의 기사가 고르게 들어오게 한다.
+  1순위 관련성, 2순위 최신성 (search_news)
+  검색어마다 관련도순 상위 100건과 최신순 최대 300건(100건씩 3쪽, 기간 밖으로 나가면 일찍 멈춤)을 받는다.
+  먼저 관련도순 결과(기간 안)를 검색어별로 돌아가며 하나씩 뽑아 상한(ask 100건, collect-all 300건)을 채우고,
+  모자라면 최신순 결과를 같은 방식으로 뽑아 나머지를 채운다.
+  돌아가며 뽑는 이유: 첫 검색어 결과만으로 상한이 차 버리는 것을 막아, 여러 검색어의 기사가 고르게 들어오게.
 
 ## 기간
 
@@ -57,6 +59,8 @@ _TAG_RE = re.compile(r"<.*?>")
 _NAVER_MAX_DISPLAY = 100        # 네이버 뉴스 검색 API가 한 번에 주는 최대 건수
 DEFAULT_MAX_ARTICLES = 100      # 대상 하나당 수집할 기사 수 상한 (ask 기본값. 모이는 날 collect-all은 300)
 SEARCH_PAGES = 3                # 검색어 하나당 최대 몇 쪽(1쪽 = 100건)까지 받을지. 기간 밖으로 나가면 일찍 멈춘다
+RELEVANCE_PAGES = 1             # 관련도순으로 받을 쪽수 (검색어당 상위 100건). 뒤쪽으로 갈수록 관련성이 떨어지고,
+                                #   관련도순은 일찍 멈출 수 없어 쪽수만큼 호출이 늘어난다
 MAX_RELATED_IN_QUERY = 8        # "검색어 + 연관어" 조합에 쓸 연관어 개수 (= 연관어 최대 개수, API 호출 수 = 이 값 + 별칭 수)
 
 
@@ -101,12 +105,13 @@ def _interleave(results_by_term: list[list[NewsMeta]], limit: int) -> list[NewsM
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
-async def _fetch_page(session: aiohttp.ClientSession, keyword: str, start: int) -> list[dict]:
+async def _fetch_page(session: aiohttp.ClientSession, keyword: str, start: int, sort: str = "date") -> list[dict]:
+    """네이버 뉴스 검색 한 쪽. sort: "date"(최신순) 또는 "sim"(관련도순)."""
     headers = {
         "X-NCP-APIGW-API-KEY-ID": settings.naver_client_id,
         "X-NCP-APIGW-API-KEY": settings.naver_client_secret,
     }
-    params = {"query": keyword, "display": _NAVER_MAX_DISPLAY, "start": start, "sort": "date"}
+    params = {"query": keyword, "display": _NAVER_MAX_DISPLAY, "start": start, "sort": sort}
     async with session.get(_NAVER_NEWS_URL, headers=headers, params=params) as resp:
         resp.raise_for_status()
         data = await resp.json(content_type=None)
@@ -114,21 +119,24 @@ async def _fetch_page(session: aiohttp.ClientSession, keyword: str, start: int) 
 
 
 async def _fetch_one_keyword(session: aiohttp.ClientSession, keyword: str,
-                             cutoff: datetime | None = None, pages: int = None) -> list[dict]:
-    """검색어 하나를 최신순으로 최대 pages쪽(1쪽 = 100건)까지 받는다.
+                             cutoff: datetime | None = None, pages: int = None,
+                             sort: str = "date") -> list[dict]:
+    """검색어 하나를 최대 pages쪽(1쪽 = 100건)까지 받는다. sort: "date"(최신순) 또는 "sim"(관련도순).
 
     네이버는 한 번에 100건만 주므로, 인기 검색어는 첫 쪽이 하루치밖에 안 될 수 있다.
-    다음 쪽을 이어 받되, 결과가 100건보다 적거나 쪽의 마지막 기사가 기간(cutoff) 밖이면 멈춘다.
+    다음 쪽을 이어 받되, 결과가 100건보다 적으면 멈춘다.
+    최신순일 때는 쪽의 마지막 기사가 기간(cutoff) 밖이면 멈춘다 (그 뒤는 전부 더 오래된 기사).
+    관련도순은 날짜가 섞여 있어서 이 규칙을 쓸 수 없다 → 정한 쪽수만큼 받는다.
     """
     pages = SEARCH_PAGES if pages is None else pages
     items: list[dict] = []
     for page in range(pages):
-        batch = await _fetch_page(session, keyword, 1 + page * _NAVER_MAX_DISPLAY)
+        batch = await _fetch_page(session, keyword, 1 + page * _NAVER_MAX_DISPLAY, sort)
         items.extend(batch)
         if len(batch) < _NAVER_MAX_DISPLAY:
             break
         last = _parse_pubdate(batch[-1].get("pubDate", ""))
-        if cutoff and last and last < cutoff:
+        if sort == "date" and cutoff and last and last < cutoff:
             break
     return items
 
@@ -159,22 +167,40 @@ async def search_news(
     period_days: int,
     max_articles: int = DEFAULT_MAX_ARTICLES,
 ) -> list[NewsMeta]:
-    """고른 의미로 검색어들을 만들어 동시에 검색하고, 기간 안의 기사를 최대 max_articles건 돌려준다."""
+    """고른 의미로 검색어들을 만들어 동시에 검색하고, 기간 안의 기사를 최대 max_articles건 돌려준다.
+
+    고르는 순서: 1순위 관련성, 2순위 최신성
+      1) 검색어마다 관련도순 결과(기간 안)를 돌아가며 뽑아 상한을 채운다.
+      2) 그래도 상한에 모자라면 최신순 결과(기간 안)로 나머지를 채운다.
+    관련도순 결과에는 오래된 기사가 섞여 있어서 기간으로 거르면 상한에 못 미칠 수 있다 → 2)가 필요하다.
+    네이버는 관련도 "점수"를 주지 않고 순서만 주므로, 점수가 같을 때 최신순으로 세우는 식의 정렬은 할 수 없다.
+    """
     terms = build_search_terms(selected)
     cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
 
     async with aiohttp.ClientSession() as session:
+        # 검색어마다 관련도순 · 최신순 두 가지를 모두, 전부 동시에 받는다 (API 호출은 무료)
         responses = await asyncio.gather(
-            *(_fetch_one_keyword(session, t, cutoff) for t in terms), return_exceptions=True
+            *(_fetch_one_keyword(session, t, cutoff, pages=RELEVANCE_PAGES, sort="sim") for t in terms),
+            *(_fetch_one_keyword(session, t, cutoff) for t in terms),
+            return_exceptions=True,
         )
 
-    results_by_term = []
-    for term, items in zip(terms, responses):
-        if isinstance(items, Exception):  # 검색어 하나가 실패해도 나머지는 쓴다
-            print(f"  [검색 실패] '{term}': {type(items).__name__}")
-            continue
-        results_by_term.append(_to_metas(items, term, cutoff))
-    return _interleave(results_by_term, max_articles)
+    by_relevance, by_date = [], []
+    for kind, results, part in (("관련도순", by_relevance, responses[:len(terms)]),
+                                ("최신순", by_date, responses[len(terms):])):
+        for term, items in zip(terms, part):
+            if isinstance(items, Exception):  # 검색 하나가 실패해도 나머지는 쓴다
+                print(f"  [검색 실패] '{term}' ({kind}): {type(items).__name__}")
+                continue
+            results.append(_to_metas(items, term, cutoff))
+
+    picked = _interleave(by_relevance, max_articles)
+    if len(picked) < max_articles:              # 모자란 만큼 최신순 결과로 채운다 (이미 뽑은 기사는 건너뜀)
+        seen = {m.link for m in picked}
+        rest = [[m for m in results if m.link not in seen] for results in by_date]
+        picked += _interleave(rest, max_articles - len(picked))
+    return picked
 
 
 # ---------------------------------------------------------------------------
