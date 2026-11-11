@@ -24,8 +24,8 @@
 
   1순위 관련성, 2순위 최신성 (search_news)
   검색어마다 관련도순 상위 100건과 최신순 최대 300건(100건씩 3쪽, 기간 밖으로 나가면 일찍 멈춤)을 받는다.
-  먼저 관련도순 결과(기간 안)를 검색어별로 돌아가며 하나씩 뽑아 상한(ask 100건, collect-all 300건)을 채우고,
-  모자라면 최신순 결과를 같은 방식으로 뽑아 나머지를 채운다.
+  관련도순 결과(기간 안)를 "관련 후보"로 삼고, 그 안에서 최신 기사부터 검색어별로 돌아가며 하나씩 뽑아
+  상한(ask 100건, collect-all 300건)을 채운다. 모자라면 최신순 결과를 같은 방식으로 뽑아 나머지를 채운다.
   돌아가며 뽑는 이유: 첫 검색어 결과만으로 상한이 차 버리는 것을 막아, 여러 검색어의 기사가 고르게 들어오게.
 
 ## 기간
@@ -170,10 +170,11 @@ async def search_news(
     """고른 의미로 검색어들을 만들어 동시에 검색하고, 기간 안의 기사를 최대 max_articles건 돌려준다.
 
     고르는 순서: 1순위 관련성, 2순위 최신성
-      1) 검색어마다 관련도순 결과(기간 안)를 돌아가며 뽑아 상한을 채운다.
-      2) 그래도 상한에 모자라면 최신순 결과(기간 안)로 나머지를 채운다.
-    관련도순 결과에는 오래된 기사가 섞여 있어서 기간으로 거르면 상한에 못 미칠 수 있다 → 2)가 필요하다.
-    네이버는 관련도 "점수"를 주지 않고 순서만 주므로, 점수가 같을 때 최신순으로 세우는 식의 정렬은 할 수 없다.
+      1) 검색어마다 관련도순 상위 결과(기간 안)를 "관련 후보"로 삼는다. → 관련 없는 기사가 걸러진다
+      2) 관련 후보 안에서 최신 기사부터, 검색어별로 돌아가며 뽑아 상한을 채운다.
+      3) 그래도 상한에 모자라면 최신순 결과(기간 안)로 나머지를 채운다.
+    관련도순 결과에는 오래된 기사가 섞여 있어서 기간으로 거르면 상한에 못 미칠 수 있다 → 3)이 필요하다.
+    네이버는 관련도 "점수"를 주지 않고 순서만 주므로, 관련도순 상위에 들었는지(후보인지)만 관련성으로 쓴다.
     """
     terms = build_search_terms(selected)
     cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
@@ -194,6 +195,10 @@ async def search_news(
                 print(f"  [검색 실패] '{term}' ({kind}): {type(items).__name__}")
                 continue
             results.append(_to_metas(items, term, cutoff))
+
+    # 관련 후보 안에서는 최신 기사부터 (게시일을 모르는 기사는 맨 뒤). 같은 날짜면 관련도순 순서가 유지된다
+    oldest = datetime.min.replace(tzinfo=timezone.utc)
+    by_relevance = [sorted(results, key=lambda m: m.pub_date or oldest, reverse=True) for results in by_relevance]
 
     picked = _interleave(by_relevance, max_articles)
     if len(picked) < max_articles:              # 모자란 만큼 최신순 결과로 채운다 (이미 뽑은 기사는 건너뜀)

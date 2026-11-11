@@ -61,9 +61,13 @@ async def _fake_keyword(session, keyword, cutoff=None, pages=None, sort="date"):
     return _results[(keyword, sort)]
 _real_keyword, collect._fetch_one_keyword = collect._fetch_one_keyword, _fake_keyword
 links = lambda n: [x.link.rsplit("/", 1)[1] for x in _aio.run(collect.search_news(g, 30, n))]
-assert links(10) == ["s1", "s2", "d1", "d2", "d3"]           # 관련도순 먼저, 그 뒤 최신순 (s1은 한 번만)
+assert links(10) == ["s1", "s2", "d1", "d2", "d3"]           # 관련 후보 먼저, 그 뒤 최신순 (s1은 한 번만)
 assert links(3) == ["s1", "s2", "d1"]                         # 상한까지만
-assert links(2) == ["s1", "s2"]                               # 관련도순만으로 차면 최신순은 안 씀
+assert links(2) == ["s1", "s2"]                               # 관련 후보만으로 차면 최신순은 안 씀
+_results[("강남 이상화", "sim")] = [_item("s_old", 20), _item("s_new", 1), _item("s_mid", 5)]
+assert links(2) == ["s_new", "s_mid"]                         # 관련 후보 안에서는 최신 기사부터
+assert links(10)[:3] == ["s_new", "s_mid", "s_old"]
+_results[("강남 이상화", "sim")] = [_item("s1", 3), _item("old", 90), _item("s2", 20)]
 assert ("강남 이상화", "sim", collect.RELEVANCE_PAGES) in _asked and ("강남 이상화", "date", None) in _asked
 async def _sim_fails(session, keyword, cutoff=None, pages=None, sort="date"):
     if sort == "sim":
