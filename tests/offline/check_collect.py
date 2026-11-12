@@ -32,7 +32,7 @@ _kst = timezone(timedelta(hours=9))
 _day = lambda d: (datetime.now(_kst) - timedelta(days=d)).strftime("%a, %d %b %Y %H:%M:%S %z")
 def _pages(*sizes_and_age):
     calls = []
-    async def fake_page(session, keyword, start):
+    async def fake_page(session, keyword, start, sort="date"):
         calls.append(start)
         n, age = sizes_and_age[len(calls) - 1]
         return [{"pubDate": _day(age)}] * n
@@ -44,7 +44,39 @@ collect._fetch_page, calls = _pages((100, 1), (40, 3))
 assert len(_aio.run(collect._fetch_one_keyword(None, "k", cut))) == 140 and calls == [1, 101]        # 결과가 끝남
 collect._fetch_page, calls = _pages((100, 1), (100, 40), (100, 50))
 assert len(_aio.run(collect._fetch_one_keyword(None, "k", cut))) == 200 and calls == [1, 101]        # 기간 밖으로 나감
+collect._fetch_page, calls = _pages((100, 1), (100, 40), (100, 50))
+assert len(_aio.run(collect._fetch_one_keyword(None, "k", cut, sort="sim"))) == 300 and calls == [1, 101, 201]   # 관련도순은 기간 밖이어도 안 멈춤
 print("2-1 ok: 쪽 넘기기")
+
+# 2-2) 검색: 1순위 관련도순, 모자라면 최신순으로 채움 (기간 밖 제외, 같은 기사는 한 번만)
+def _item(link, age):
+    return {"title": link, "originallink": f"https://p.com/{link}", "link": f"https://p.com/{link}", "pubDate": _day(age)}
+_results = {      # (검색어, 정렬) → 결과
+    ("강남 이상화", "sim"): [_item("s1", 3), _item("old", 90), _item("s2", 20)],          # old는 기간 밖
+    ("강남 이상화", "date"): [_item("d1", 0), _item("s1", 3), _item("d2", 1), _item("d3", 2)],
+}
+_asked = []
+async def _fake_keyword(session, keyword, cutoff=None, pages=None, sort="date"):
+    _asked.append((keyword, sort, pages))
+    return _results[(keyword, sort)]
+_real_keyword, collect._fetch_one_keyword = collect._fetch_one_keyword, _fake_keyword
+links = lambda n: [x.link.rsplit("/", 1)[1] for x in _aio.run(collect.search_news(g, 30, n))]
+assert links(10) == ["s1", "s2", "d1", "d2", "d3"]           # 관련 후보 먼저, 그 뒤 최신순 (s1은 한 번만)
+assert links(3) == ["s1", "s2", "d1"]                         # 상한까지만
+assert links(2) == ["s1", "s2"]                               # 관련 후보만으로 차면 최신순은 안 씀
+_results[("강남 이상화", "sim")] = [_item("s_old", 20), _item("s_new", 1), _item("s_mid", 5)]
+assert links(2) == ["s_new", "s_mid"]                         # 관련 후보 안에서는 최신 기사부터
+assert links(10)[:3] == ["s_new", "s_mid", "s_old"]
+_results[("강남 이상화", "sim")] = [_item("s1", 3), _item("old", 90), _item("s2", 20)]
+assert ("강남 이상화", "sim", collect.RELEVANCE_PAGES) in _asked and ("강남 이상화", "date", None) in _asked
+async def _sim_fails(session, keyword, cutoff=None, pages=None, sort="date"):
+    if sort == "sim":
+        raise RuntimeError("관련도순 실패")
+    return _results[(keyword, sort)]
+collect._fetch_one_keyword = _sim_fails
+assert links(10) == ["d1", "s1", "d2", "d3"]                  # 관련도순 검색이 실패하면 최신순만으로
+collect._fetch_one_keyword = _real_keyword
+print("2-2 ok: 관련도순 우선, 최신순으로 채움")
 
 # 3) API 결과 → NewsMeta: 기간 밖 제외, 네이버 링크 구분, HTML 태그 제거
 now = datetime.now(timezone(timedelta(hours=9)))
@@ -107,4 +139,55 @@ from bs4 import BeautifulSoup
 b = BeautifulSoup('<div><img src="http://cdn.queen.co.kr/image/newsroom/default-user.png"><img src="https://x.com/photo.jpg"></div>', "lxml")
 assert [i.url for i in collect._extract_images(b)] == ["https://x.com/photo.jpg"]
 print("7·8 ok: 긴 사이트 이름, CMS 본문 영역")
+
+# 9) 추가한 본문 영역: 프라임경제(#news_body_area), bnt뉴스(div.newsview div.content, <p> 없음)
+prime = "<html><body><p>짧은 안내</p><div id='news_body_area'>" + "삼성물산 실적이 늘었다. " * 20 + "</div></body></html>"
+assert collect.parse_article_html(prime)[0].startswith("삼성물산 실적이 늘었다")
+bnt = ("<html><body><article>메뉴</article><div class='din newsview'><h1>제목</h1><div class='content'>"
+       + "신혜선이 팬미팅을 연다. " * 20 + "</div></div></body></html>")
+assert collect.parse_article_html(bnt)[0].startswith("신혜선이 팬미팅을 연다")
+print("9 ok: 프라임경제 · bnt뉴스 본문 영역")
+
+# 10) 보안 연결(SSL) 실패 → 느슨한 설정으로 한 번 더. 다른 오류 · 200이 아닌 응답은 다시 받지 않는다
+import aiohttp
+
+
+class FakeSSLError(aiohttp.ClientSSLError):
+    def __init__(self): pass
+    def __str__(self): return "ssl"
+
+
+class FakeResponse:
+    def __init__(self, status): self.status, self.charset = status, "utf-8"
+    async def read(self): return "<p>본문</p>".encode("utf-8")
+    async def __aenter__(self): return self
+    async def __aexit__(self, *a): return False
+
+
+class FakeSession:
+    """outcomes를 차례로 돌려준다 (예외면 던진다). 받은 ssl 옵션을 calls에 적는다."""
+    def __init__(self, outcomes): self.outcomes, self.calls = list(outcomes), []
+    def get(self, url, headers=None, timeout=None, **options):
+        self.calls.append((options.get("ssl"), timeout.total))
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return FakeResponse(outcome)
+
+
+get = lambda session: _aio.run(collect._get_html(session, "https://press.com/1"))
+s = FakeSession([FakeSSLError(), 200])
+assert get(s) == "<p>본문</p>"
+assert s.calls[0][0] is None and s.calls[1][0] is collect._lenient_ssl_context()      # 두 번째만 느슨한 설정
+assert s.calls[1][0].verify_mode.name == "CERT_NONE"
+assert s.calls[0][1] == min(collect.settings.crawl_timeout_seconds, collect.CRAWL_PAGE_TIMEOUT_SECONDS)
+s = FakeSession([FakeSSLError(), FakeSSLError()])
+assert get(s) is None and len(s.calls) == 2                                          # 두 번 다 실패하면 끝
+s = FakeSession([aiohttp.ClientConnectionError(), 200])
+assert get(s) is None and len(s.calls) == 1                                          # 다른 연결 오류는 다시 안 받음
+s = FakeSession([403, 200])
+assert get(s) is None and len(s.calls) == 1                                          # 403도 다시 안 받음
+s = FakeSession([200])
+assert get(s) == "<p>본문</p>" and s.calls[0][0] is None                              # 정상 사이트는 검사한 채로 한 번
+print("10 ok: 보안 연결 실패 때만 느슨한 설정으로 재시도")
 print("ALL PASS")

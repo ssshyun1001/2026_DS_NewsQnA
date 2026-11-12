@@ -145,10 +145,11 @@ def topic_status() -> list[TopicStatus]:
                       count(at.duplicate_of) AS duplicates,
                       count(*) FILTER (WHERE at.article_id IS NOT NULL AND at.duplicate_of IS NULL
                                        AND at.status IS NULL) AS unjudged,
-                      count(*) FILTER (WHERE at.stage = 'rule' AND at.status = '무관') AS rule_irrelevant,
-                      count(*) FILTER (WHERE at.stage = 'llm' AND at.status = '관련') AS llm_relevant,
-                      count(*) FILTER (WHERE at.stage = 'llm' AND at.status = '무관') AS llm_irrelevant,
-                      count(*) FILTER (WHERE at.stage = 'llm' AND at.status = '보류') AS llm_hold,
+                      -- 판정 칸은 대표 기사만 센다 (중복 기사는 대표 판정을 복사해 가지므로 "중복" 칸에서만 센다)
+                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.stage = 'rule' AND at.status = '무관') AS rule_irrelevant,
+                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.stage = 'llm' AND at.status = '관련') AS llm_relevant,
+                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.stage = 'llm' AND at.status = '무관') AS llm_irrelevant,
+                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.stage = 'llm' AND at.status = '보류') AS llm_hold,
                       count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.label IS NOT NULL) AS labeled,
                       count(*) FILTER (WHERE at.article_id IS NOT NULL AND at.duplicate_of IS NULL) AS to_label,
                       count(*) FILTER (WHERE EXISTS (SELECT 1 FROM article_chunks c

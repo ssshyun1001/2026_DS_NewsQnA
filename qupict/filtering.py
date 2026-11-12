@@ -10,7 +10,7 @@
                            noun     제목의 드문 고유명사 겹침 (TF-IDF)   (DEDUP_NOUN_THRESHOLD)
                          여러 기준을 묶는 방법 DEDUP_RULE: "and"(모두 넘어야 중복) | "or"(하나만 넘어도)
   [2단계] 1차 규칙 필터  분명히 무관한 기사만 규칙으로 걸러 LLM 호출을 줄인다      → stage = "rule"
-  [3단계] 2차 LLM 검증   나머지를 LLM이 관련 / 무관 / 보류로 판정하고 근거 한 줄을 남긴다 → stage = "llm"
+  [3단계] 2차 LLM 검증   나머지를 LLM이 관련 / 무관으로 판정하고 근거 한 줄을 남긴다 → stage = "llm"
 
   filter_articles(articles, selected)   메모리 버전 (run.py가 사용)
   filter_topic(topic_id, selected)      DB 버전 (DB의 기사를 판정하고 결과를 article_topics에 저장)
@@ -34,7 +34,7 @@
   LLM에게 고른 의미(정의·별칭·연관어)와 고르지 않은 의미들을 함께 보여 주고 대조하게 한다.
     관련  찾는 대상이 기사의 주요 소재다
     무관  다른 의미의 기사이거나, 찾는 대상이 스쳐 지나가듯 언급만 된다
-    보류  주어진 내용만으로는 판단하기 어렵다 (Recall을 지키기 위해 바로 버리지 않는다)
+    보류 없음: 애매해도 관련 / 무관 중 더 가까운 쪽으로 반드시 판정한다 (예전에는 보류가 있었지만 한 번도 나오지 않았다)
   LLM이 답하지 못한 기사는 판정하지 않고 남겨 둔다 (DB 버전은 다음 실행 때 다시 시도).
 """
 from __future__ import annotations
@@ -362,7 +362,9 @@ class _LLMVerdict(BaseModel):
     # 근거를 먼저 쓰고 그에 맞춰 판정하게 한다.
     index: int = Field(description="기사 번호")
     reason: str = Field(description="판단 근거 한 줄 (40자 이내, 근거가 된 단어나 내용)")
-    status: Literal["관련", "무관", "보류"] = Field(description="위 근거에 따른 판정")
+    # 보류는 받지 않는다: 관련 / 무관 중 하나로 반드시 판정하게 한다 (실제로도 보류는 한 번도 나오지 않았다).
+    # DB·검색 쪽의 '보류'(STATUSES 등)는 예전 판정 · 사람 라벨과 맞추려고 그대로 둔다.
+    status: Literal["관련", "무관"] = Field(description="위 근거에 따른 판정")
 
 
 class _LLMVerdictBatch(BaseModel):
@@ -384,9 +386,10 @@ _VERIFY_SYSTEM_PROMPT = """\
 판정 기준:
 - 관련: 찾는 대상이 기사의 주요 소재이거나, 기사에서 의미 있게 다뤄진다.
 - 무관: 다른 의미의 기사이거나, 찾는 대상이 한두 줄 스쳐 지나가듯 언급만 된다.
-- 보류: 주어진 내용만으로는 판단하기 어렵다. (예: 대상이 실제로 관여하는지 불분명)
 
 규칙:
+- 모든 기사를 반드시 '관련' 또는 '무관' 중 하나로 판정하라. 판정을 비워 두거나 건너뛰지 마라.
+- 판단이 애매해도 망설이지 말고, 아주 조금이라도 더 가까운 쪽을 골라라. 반반이라고 느껴져도 둘 중 하나를 택하라.
 - 검색어 글자가 들어 있다는 이유만으로 '관련'이라고 하지 마라. 어떤 의미로 쓰였는지 봐라.
 - reason은 한국어 한 줄(40자 이내)로, 판단 근거가 된 단어나 내용을 적어라.
 - 입력된 모든 기사 번호에 대해 하나씩 답하라.
@@ -411,8 +414,22 @@ def _articles_block(articles: list[Article]) -> str:
     )
 
 
+# LLM이 답하지 않은 기사(요청 실패 · 응답에서 빠진 번호)는 답할 때까지 계속 다시 묻는다 (횟수 제한 없음).
+# 다시 물을 때는 기사 1건씩 따로 보낸다 (묶음이 작을수록 빠뜨리지 않는다).
+# 판정은 항상 LLM이 관련 / 무관 중에서 직접 고른다. 코드가 대신 채워 넣지 않고, 판정 없이 남기지도 않는다.
+# 주의: 게이트웨이가 계속 멈춰 있으면 판정 단계도 그동안 끝나지 않고 기다린다.
+LLM_RETRY_WAIT_SECONDS = 1.0           # n번째 다시 묻기 전에 n × 이 값만큼 쉰다 (게이트웨이가 잠깐 막혔을 때 대비)
+LLM_RETRY_WAIT_MAX_SECONDS = 30.0      # 쉬는 시간의 상한 (이 이상 늘리지 않고 이 간격으로 계속 묻는다)
+
+
 async def llm_verify(articles: list[Article], selected: SelectedSense) -> tuple[list[Verdict], list[str]]:
-    """LLM으로 관련 / 무관 / 보류를 판정한다. (판정 목록, 판정 못 한 기사 link 목록)"""
+    """LLM으로 관련 / 무관을 판정한다 (보류 없음). (판정 목록, 판정 못 한 기사 link 목록 — 항상 비어 있음)
+
+    모든 기사를 LLM이 직접 판정할 때까지 묻는다:
+      1) LLM_BATCH_SIZE건씩 묶어 판정
+      2) 답이 없던 기사는 1건씩 따로 다시 묻는다. 답이 나올 때까지 계속 (회차마다 조금씩 더 쉬고, 최대 30초 간격)
+    두 번째 돌려주는 값(판정 못 한 기사)은 예전 호출 코드와 맞추려고 남겨 둔 것으로, 항상 빈 목록이다.
+    """
     if not articles:
         return [], []
     llm = get_structured_model(_LLMVerdictBatch)
@@ -426,7 +443,7 @@ async def llm_verify(articles: list[Article], selected: SelectedSense) -> tuple[
                     [("system", system), ("human", f"아래 기사들을 판정하라.\n\n{_articles_block(batch)}")]
                 )
             except Exception as e:
-                print(f"  [경고] LLM 판정 실패 ({type(e).__name__}) — 기사 {len(batch)}건은 판정하지 않음")
+                print(f"  [경고] LLM 판정 실패 ({type(e).__name__}) — 기사 {len(batch)}건은 다시 묻는다")
                 return []
         verdicts, seen = [], set()
         for v in result.verdicts:
@@ -436,10 +453,20 @@ async def llm_verify(articles: list[Article], selected: SelectedSense) -> tuple[
                                         v.reason.strip()[:200], settings.chat_model))
         return verdicts
 
-    batches = [articles[i:i + LLM_BATCH_SIZE] for i in range(0, len(articles), LLM_BATCH_SIZE)]
-    verdicts = [v for vs in await asyncio.gather(*(judge(b) for b in batches)) for v in vs]
-    judged = {v.link for v in verdicts}
-    return verdicts, [a.link for a in articles if a.link not in judged]
+    async def judge_all(batches: list[list[Article]]) -> list[Verdict]:
+        return [v for vs in await asyncio.gather(*(judge(b) for b in batches)) for v in vs]
+
+    verdicts = await judge_all([articles[i:i + LLM_BATCH_SIZE] for i in range(0, len(articles), LLM_BATCH_SIZE)])
+    n = 0
+    while True:
+        judged = {v.link for v in verdicts}
+        missing = [a for a in articles if a.link not in judged]
+        if not missing:
+            return verdicts, []
+        n += 1
+        print(f"  [다시 묻기 {n}회차] LLM이 답하지 않은 기사 {len(missing)}건을 1건씩 다시 판정합니다")
+        await asyncio.sleep(min(LLM_RETRY_WAIT_SECONDS * n, LLM_RETRY_WAIT_MAX_SECONDS))
+        verdicts += await judge_all([[a] for a in missing])           # 답이 없던 기사만 1건씩 다시
 
 
 # ---------------------------------------------------------------------------
@@ -516,6 +543,7 @@ async def dedup_topic(topic_id: int) -> dict[str, str]:
     duplicates = find_duplicates(new, existing, keep=_labeled_links(topic_id))
     db.save_article_embeddings(missing)
     db.save_duplicates(topic_id, duplicates)
+    db.copy_duplicate_judgments(topic_id)     # 이미 판정된 대표 기사의 중복이면 그 판정을 바로 받는다
     return duplicates
 
 
@@ -545,6 +573,8 @@ async def filter_topic(
         )
         t.note = f"새 기사 {len(new)}건"
         if not new:
+            # 판정할 새 기사가 없어도, 판정이 빈 중복 기사(예전 데이터 · 라벨링 전 중복 표시)가 있으면 채워 둔다
+            await asyncio.to_thread(db.copy_duplicate_judgments, topic_id)
             return FilterOutcome()
         t.note += f", 판정된 대표 {len(existing)}건"
 
@@ -564,4 +594,9 @@ async def filter_topic(
             lambda: db.save_judgments(topic_id, [db.Judgment(v.link, v.status, v.stage, v.reason, v.model)
                                                  for v in outcome.verdicts]),
         )
+    with timing.timed("중복 기사에 대표 판정 복사(DB)") as t:
+        # 중복 기사는 따로 판정하지 않고 대표 기사의 판정(관련/무관)을 그대로 받는다 → 판정이 비는 행이 없게.
+        # 위 저장이 모두 끝난 뒤에 해야 한다 (대표 기사의 판정이 먼저 있어야 복사할 수 있음).
+        copied = await asyncio.to_thread(db.copy_duplicate_judgments, topic_id)
+        t.note = f"{copied}건"
     return outcome

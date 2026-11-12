@@ -195,6 +195,30 @@ def search_topic(
     return [h for h in hits if h.similarity >= threshold][:k]
 
 
+def oldest_searchable_date(topic_id: int, period_days: int | None = None,
+                           statuses: tuple[str, ...] = SEARCH_STATUSES):
+    """질문할 때 검색되는 기사(search_topic과 같은 조건: topic · 판정 · 발행일 기간 · 청크 있음) 중
+    가장 오래된 발행일. 없으면 None. 답변에서 "○○부터 오늘까지의 기사 중에서 못 찾았다"고 밝힐 때 쓴다.
+
+    db.py에 이 조회가 없어서 여기에 두었다 (읽기 전용 SELECT 하나. DB 담당이 db.py로 옮겨도 된다).
+    기간 계산은 db.search_chunks와 같은 db._window를 쓴다."""
+    from qupict import db
+
+    since, until = db._window(period_days, None)
+    with db.connect() as conn:
+        row = conn.execute(
+            """SELECT min(a.pub_date) AS oldest
+               FROM articles a
+               JOIN article_topics at ON at.article_id = a.id
+               WHERE at.topic_id = %(topic_id)s AND at.status = ANY(%(statuses)s) AND at.duplicate_of IS NULL
+                 AND EXISTS (SELECT 1 FROM article_chunks c WHERE c.article_id = a.id AND c.embedding IS NOT NULL)
+                 AND (%(since)s::timestamptz IS NULL
+                      OR a.pub_date BETWEEN %(since)s::timestamptz AND %(until)s::timestamptz)""",
+            {"topic_id": topic_id, "statuses": list(statuses), "since": since, "until": until},
+        ).fetchone()
+    return row["oldest"] if row else None
+
+
 def search_vectors(topic_id: int, vectors: list[list[float]], per_vector: int,
                    period_days: int | None = None,
                    statuses: tuple[str, ...] = SEARCH_STATUSES) -> list:
