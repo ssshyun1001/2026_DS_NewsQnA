@@ -212,8 +212,10 @@ $("f-sense").addEventListener("submit", async (e) => {
   newReady();
   $("chat").innerHTML = "";
   $("qa-label").textContent = "";
-  $("qa-note").textContent = "뉴스를 준비하는 동안 질문을 미리 적어 두세요. 준비가 끝나면 적은 순서대로 답합니다.";
+  $("qa-note").textContent = "준비가 끝나면 수집된 기사 요약부터 보여 드립니다. 그동안 질문을 적어 두면 요약 다음에 차례로 답합니다.";
   $("c-qa").classList.remove("hidden");
+  // 첫 질문은 고정: 수집된 기사 전체 요약 (qupict/qa.py의 FIRST_QUESTION_TEMPLATE과 같은 문장)
+  enqueueQuestion(`${state.query}에 대해 수집된 기사들의 전체적인 요약을 제공해줘.`);
   try {
     const { job_id, label } = await api("/api/prepare", body);
     state.jobId = job_id;
@@ -240,12 +242,20 @@ async function poll(jobId) {
     }
     $("b-sense").disabled = false;
     if (j.status === "done") {
-      setStatus($("s-job"), "준비 완료", "ok");
-      state.sessionId = j.session_id;
-      $("qa-label").textContent = j.label;
-      $("qa-note").textContent = "";
-      state.ready.resolve(j.session_id);       // 미리 적어 둔 질문이 이제 차례로 나간다
-      $("question").focus();
+      if (state.sessionId !== j.session_id) {  // 준비가 막 끝났을 때 한 번만
+        state.sessionId = j.session_id;
+        $("qa-label").textContent = j.label;
+        $("qa-note").textContent = "";
+        state.ready.resolve(j.session_id);     // 미리 적어 둔 질문이 이제 차례로 나간다
+        $("question").focus();
+      }
+      // 이미지 속 글자 읽기는 준비 완료 뒤 서버에서 이어서 한다 → 끝날 때까지 가끔 확인 (질문은 지금도 됨)
+      if (j.images === "running") {
+        busy($("s-job"), "준비 완료 · 이미지 속 글자를 읽는 중… 질문은 지금 해도 되고, 끝나면 이미지 내용도 답변에 쓰입니다.");
+        setTimeout(() => poll(jobId), 3000);
+      } else {
+        setStatus($("s-job"), j.images === "done" ? "준비 완료 · 이미지 속 글자까지 반영됨" : "준비 완료", "ok");
+      }
     } else {
       const msg = j.error || "작업이 실패했습니다.";
       setStatus($("s-job"), msg, "err");
@@ -265,6 +275,12 @@ $("f-ask").addEventListener("submit", (e) => {
   const question = $("question").value.trim();
   if (!question || !state.ready) return;
   $("question").value = "";
+  enqueueQuestion(question);
+  $("question").focus();
+});
+
+// 질문을 대화창에 올리고 차례 줄(chain)에 넣는다. 준비 중이면 준비가 끝날 때까지 기다렸다가 답한다.
+function enqueueQuestion(question) {
   const q = document.createElement("div"); q.className = "q"; q.textContent = question;
   const a = document.createElement("div"); a.className = "a waiting";
   a.innerHTML = state.sessionId ? `<span class="spinner"></span> 차례를 기다리는 중…`
@@ -278,8 +294,7 @@ $("f-ask").addEventListener("submit", (e) => {
     catch (err) { a.className = "a"; a.innerHTML = `<span class="status err">답할 수 없습니다: ${esc(err.message)}</span>`; return; }
     await askStream(sessionId, question, a);
   });
-  $("question").focus();
-});
+}
 
 const citeHtml = (text) => esc(text).replace(/\(기사\s*\d+(?:\s*,\s*\d+)*\)/g, m => `<span class="cite">${m}</span>`);
 

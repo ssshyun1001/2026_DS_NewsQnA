@@ -58,6 +58,8 @@ class Job:
     session_id: Optional[str] = None
     error: str = ""
     images: str = ""                   # 준비 완료 뒤 이미지 → 글(OCR·VLM): "" 안 함 / running / done
+
+
 @dataclass
 class Session:
     """준비가 끝난 뉴스. 질문이 오면 answer_fn(질문, on_token)으로 답한다.
@@ -157,27 +159,32 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
     log = job.logs.append
     try:
         if memory:
-            from qupict.qa import generate_answer
+            from qupict.qa import answer_period, answer_subject, generate_answer, oldest_date
             from qupict.retrieval import retrieve_relevant_articles
             from run import collect_news
 
             news = asyncio.run(collect_news(selected, req.period_days, req.max_articles, log=log))
             if news is None:
                 raise RuntimeError("질문에 쓸 기사가 없습니다. 다른 검색어·의미·기간으로 다시 시도해 주세요.")
+            oldest = oldest_date(news.articles)
 
             def answer_fn(question: str, on_token=None) -> Answer:
                 relevant = retrieve_relevant_articles(news.store, news.articles, question, topic=news.topic)
-                return generate_answer(question, relevant, on_token=on_token)
+                return generate_answer(question, relevant, on_token=on_token, subject=answer_subject(selected),
+                                       period=answer_period(oldest))
         else:
-            from qupict.qa import generate_answer_from_chunks
+            from qupict.qa import answer_period, answer_subject, generate_answer_from_chunks
             from qupict.retrieval import search_topic
-            from run import prepare_topic
+            from run import oldest_searchable_or_none, prepare_topic, wait_after_prepare
 
             topic_id = asyncio.run(prepare_topic(selected, req.period_days, req.max_articles, log=log))
+            wait_after_prepare(log=log)        # "준비 완료" 전에 잠깐 기다린다 (run.PREPARE_SETTLE_SECONDS)
+            oldest = oldest_searchable_or_none(topic_id, req.period_days)
 
             def answer_fn(question: str, on_token=None) -> Answer:
                 hits = search_topic(topic_id, question, selected, period_days=req.period_days)
-                return generate_answer_from_chunks(question, hits, on_token=on_token)
+                return generate_answer_from_chunks(question, hits, on_token=on_token,
+                                                   subject=answer_subject(selected), period=answer_period(oldest))
 
         session_id = uuid.uuid4().hex
         with _lock:

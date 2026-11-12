@@ -5,7 +5,8 @@
 --   - 기사(articles)는 link 기준으로 한 번만 저장한다. 여러 topic에 걸린 기사는 article_topics로 연결한다.
 --   - topic에는 기간을 저장하지 않는다. 기간은 질문 시점 기준으로 articles.pub_date(발행일)로 거른다.
 --     같은 topic을 다시 쓰면 이미 있는 기사는 그대로 쓰고, DB에 없는 기사만 새로 수집한다.
---   - 중복 여부는 article_topics.duplicate_of 하나로만 표시한다 (값이 있으면 중복, status는 비움).
+--   - 중복 여부는 article_topics.duplicate_of 하나로만 표시한다 (값이 있으면 중복).
+--     중복 기사의 status는 대표 기사의 판정을 따른다. 청크 · 검색에는 대표 기사만 쓴다 (duplicate_of IS NULL).
 --   - 임베딩 차원 1536 = text-embedding-3-small. 모델을 바꾸면 vector(N)과 인덱스를 함께 바꿔야 한다.
 
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -88,7 +89,9 @@ CREATE TABLE IF NOT EXISTS article_topics (
     labeled_at     TIMESTAMPTZ,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (article_id, topic_id),
-    CHECK (duplicate_of IS NULL OR status IS NULL),     -- 중복이면 판정하지 않는다
+    -- 중복 기사도 판정을 가진다 (대표 기사 판정을 복사: db.copy_duplicate_judgments).
+    -- 예전 규칙 CHECK (duplicate_of IS NULL OR status IS NULL)은 2026-11-13에 지웠다.
+    -- 이미 만든 DB: ALTER TABLE article_topics DROP CONSTRAINT article_topics_check;
     CHECK (duplicate_of IS DISTINCT FROM article_id)
 );
 CREATE INDEX IF NOT EXISTS article_topics_topic_idx ON article_topics (topic_id, status);

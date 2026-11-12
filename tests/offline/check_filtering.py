@@ -127,17 +127,38 @@ class FakeLLM:
 fake = FakeLLM()
 F.get_structured_model = lambda schema, temperature=0: fake
 F.LLM_BATCH_SIZE = 3
+F.LLM_RETRY_WAIT_SECONDS = 0                                    # 테스트에서는 쉬지 않고 바로 다시 묻는다
 items = [A(f"l{i}", f"강남 기사 {i}") for i in range(7)]       # 3 + 3 + 1
 verdicts, unjudged = asyncio.run(F.llm_verify(items, gangnam))
-assert len(fake.calls) == 3
-assert {v.link for v in verdicts} == {"l0", "l2", "l3", "l5", "l6"} and unjudged == ["l1", "l4"]   # 각 배치의 1번 누락
+# 첫 판정 3번(배치) + 빠진 l1·l4를 1건씩 다시 묻기. 1건짜리 요청에서는 0번 답이 오므로 둘 다 판정된다
+assert len(fake.calls) == 3 + 2, len(fake.calls)
+assert {v.link for v in verdicts} == {f"l{i}" for i in range(7)} and unjudged == []
 assert all(v.stage == "llm" and v.model for v in verdicts)
 system = fake.calls[0][0][1]
 assert "방송인 강남" in system and "지역 강남" in system and "강남역" in system   # 다른 의미와 대조
 fake2 = FakeLLM(fail_on=1); F.get_structured_model = lambda schema, temperature=0: fake2
 verdicts, unjudged = asyncio.run(F.llm_verify(items, gangnam))
-assert set(unjudged) >= {"l3", "l4", "l5"}                     # 실패한 배치는 판정하지 않음
-print("4 ok: LLM 검증 (배치, 누락, 범위 밖, 실패)")
+assert {v.link for v in verdicts} == {f"l{i}" for i in range(7)} and unjudged == []   # 실패한 배치도 다시 물어 판정
+assert all(v.status in ("관련", "무관") and v.model == F.settings.chat_model for v in verdicts)   # 모두 LLM이 직접 고른 판정
+
+
+class StubbornLLM(FakeLLM):
+    """1건짜리 요청에 처음 4번은 빈 답을 주다가 그 뒤에 답한다 → 답할 때까지 계속 다시 묻는지 확인."""
+    single = 0
+    async def ainvoke(self, msgs):
+        result = await super().ainvoke(msgs)
+        if msgs[1][1].count("] 제목: ") == 1:
+            StubbornLLM.single += 1
+            if StubbornLLM.single <= 4 * 3:            # 답 없는 기사 3건 × 4회차 동안 빈 답
+                return F._LLMVerdictBatch(verdicts=[])
+        return result
+stubborn = StubbornLLM(); F.get_structured_model = lambda schema, temperature=0: stubborn
+verdicts, unjudged = asyncio.run(F.llm_verify(items, gangnam))
+# l1·l4: 배치 답에서 빠짐, l6: 마지막 배치가 1건이라 처음부터 빈 답 → 5회차에서 답을 받아 모두 판정
+assert unjudged == [] and {v.link for v in verdicts} == {f"l{i}" for i in range(7)}, (unjudged, len(verdicts))
+assert all(v.status in ("관련", "무관") and v.model == F.settings.chat_model for v in verdicts)
+assert len(stubborn.calls) >= 3 + 3 * 4, len(stubborn.calls)                         # 빈 답이 계속돼도 포기하지 않고 여러 회차 다시 물음
+print("4 ok: LLM 검증 (배치, 누락·실패는 답할 때까지 다시 묻기, 판정 없이 남기지 않음)")
 
 # 5) 전체 흐름(메모리): 중복 → 규칙 → LLM
 F.get_structured_model = lambda schema, temperature=0: FakeLLM()
@@ -152,7 +173,7 @@ out = asyncio.run(F.filter_articles(arts, gangnam))
 assert out.duplicates == {"dup": "rep"}
 stages = {v.link: (v.stage, v.status) for v in out.verdicts}
 assert stages["area"] == ("rule", "무관") and stages["none"] == ("rule", "무관")
-assert stages["rep"][0] == "llm" and out.unjudged == ["ok"]   # 가짜 LLM은 1번 답을 일부러 빼먹음 → 판정 못 함
+assert stages["rep"][0] == "llm" and stages["ok"][0] == "llm" and out.unjudged == []   # 빠진 답은 다시 물어 판정
 print("5 ok:", out.summary())
 
 # 6) DB 버전: 새 기사만, 임베딩 없는 기사는 계산해서 저장, 결과 저장
@@ -172,13 +193,17 @@ db.get_topic_articles = lambda tid, period_days=None, statuses=None, include_dup
 db.save_article_embeddings = lambda arts: saved.__setitem__("emb", sorted(a.link for a in arts))
 db.save_duplicates = lambda tid, d: saved.__setitem__("dups", d)
 db.save_judgments = lambda tid, js: saved.__setitem__("judg", [(j.link, j.status, j.stage) for j in js])
+copied = []
+db.copy_duplicate_judgments = lambda tid: copied.append(tid) or 0    # 실제 DB에 쓰지 않게
 F._labeled_links = lambda tid: set()
 out = asyncio.run(F.filter_topic(5, gangnam, redo=True))
 assert saved["reset"] == 5 and saved["emb"] == ["e1", "n1"]   # n2는 이미 임베딩이 있어서 다시 계산·저장 안 함
 assert saved["dups"] == {}
 assert ("n2", "무관", "rule") in saved["judg"] and any(l == "n1" and s == "llm" for l, _, s in saved["judg"])
+assert copied == [5]                                          # 판정 저장 뒤 중복 기사에 대표 판정 복사
 db.get_topic_articles = lambda *a, **k: []
 assert asyncio.run(F.filter_topic(5, gangnam)).verdicts == []      # 새 기사 없음
+assert copied == [5, 5]                                       # 새 기사가 없어도 빈 중복 판정은 채운다
 print("6 ok: DB 버전 (재판정·임베딩 저장·결과 저장·새 기사 없음)")
 
 # 7) dedup_topic: 판정 없이 중복 표시만 (LLM 0번), 라벨 붙은 기사는 지킴, 다시 돌려도 같음
@@ -197,6 +222,7 @@ assert dups == {"d_long": "d_lab", "d_short": "d_lab"}, dups          # 라벨 �
 assert saved["dups"] == dups and saved["emb"] == ["d_lab"]
 assert emb_calls == [1, 1]          # DB용 임베딩 1건(d_lab) + 중복 제거용 본문 앞 문장 임베딩 1건(d_lab)
 assert "judg" not in saved                                            # 판정은 저장하지 않음
+assert copied[-1] == 9                                                # 이미 판정된 대표의 중복이면 판정을 바로 받게
 db.get_topic_articles = lambda *a, **k: []
 assert asyncio.run(F.dedup_topic(9)) == {}
 print("7 ok: dedup_topic (판정 없이 중복만, 라벨 기사 지킴)")

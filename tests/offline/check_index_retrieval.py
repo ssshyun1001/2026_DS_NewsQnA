@@ -110,13 +110,41 @@ ctx, sources, kinds = Q.build_chunk_context(hits)
 assert [s.link for s in sources] == ["A", "B"] and kinds == ["본문", "이미지 설명"]
 assert "[기사 1]" in ctx and "- 본문1\n- 본문2" in ctx and "발행일: 2026-11-06" in ctx and "[기사 2]" in ctx
 class FakeChain:
-    def invoke(self, x): FakeChain.ctx = x["context"]; return "답변"
+    def invoke(self, x): FakeChain.ctx, FakeChain.subject, FakeChain.period = x["context"], x["subject"], x["period"]; return "답변"
 Q._get_chain = lambda: FakeChain()
 ans = Q.generate_answer_from_chunks("질문", hits)
 assert ans.answer == "답변" and ans.source_kinds == ["본문", "이미지 설명"] and len(ans.sources) == 2
+assert FakeChain.subject == Q.NO_SUBJECT                                    # 대상을 안 주면 "(지정 없음)"
 ans0 = Q.generate_answer_from_chunks("질문", [])
 assert ans0.sources == [] and FakeChain.ctx == Q.NO_ARTICLE_CONTEXT
 print("5 ok: 청크 답변 (번호·근거 종류·근거 없음)")
+
+# 5-1) 검색 대상: 고른 의미가 답변 프롬프트의 [검색 대상]으로 들어간다
+assert Q.answer_subject(sel) == "강남 (방송인 강남: M.I.B 출신)"
+assert Q.answer_subject(SelectedSense(query="베라", sense=Sense(name="배스킨라빈스", definition=""))) == "베라 (배스킨라빈스)"
+assert Q.answer_subject(None) == Q.NO_SUBJECT
+Q.generate_answer_from_chunks("아내가 누구야?", hits, subject=Q.answer_subject(sel))
+assert FakeChain.subject == "강남 (방송인 강남: M.I.B 출신)"
+Q.generate_answer("아내가 누구야?", [], subject=Q.answer_subject(sel))       # 메모리 버전도 같은 대상을 넘긴다
+assert FakeChain.subject == "강남 (방송인 강남: M.I.B 출신)"
+msgs = Q._prompt.format_messages(subject="강남 (방송인 강남)", period="2026-10-14 ~ 2026-11-13",
+                                 question="아내가 누구야?", context="-")
+assert msgs[1].content.startswith("[검색 대상] 강남 (방송인 강남)\n[참고 가능한 기사 기간] 2026-10-14 ~ 2026-11-13\n"
+                                  "질문: 아내가 누구야?")
+print("5-1 ok: 답변 프롬프트에 검색 대상")
+
+# 5-2) 기사 기간: 가장 오래된 기사 날짜 ~ 오늘 (한국 시간 기준), 기사가 없으면 "(알 수 없음)"
+kst_late = datetime(2026, 10, 13, 16, tzinfo=timezone.utc)                 # 한국 시간 10월 14일 새벽 1시
+assert Q.answer_period(kst_late, today=datetime(2026, 11, 13, 1, tzinfo=timezone.utc)) == "2026-10-14 ~ 2026-11-13"
+assert Q.answer_period(None) == Q.NO_PERIOD
+arts = [Article(title="a", link="a", pub_date=datetime(2026, 11, 1, tzinfo=timezone.utc)),
+        Article(title="b", link="b", pub_date=kst_late), Article(title="c", link="c")]
+assert Q.oldest_date(arts) == kst_late and Q.oldest_date([Article(title="c", link="c")]) is None
+Q.generate_answer_from_chunks("아내가 누구야?", [], period="2026-10-14 ~ 2026-11-13")
+assert FakeChain.period == "2026-10-14 ~ 2026-11-13"
+Q.generate_answer_from_chunks("아내가 누구야?", [])
+assert FakeChain.period == Q.NO_PERIOD                                      # 안 주면 "(알 수 없음)"
+print("5-2 ok: 기사 기간")
 
 # 6) describe_image: 주소 먼저 → 실패하면 내려받아 파일로
 sent = []

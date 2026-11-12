@@ -26,6 +26,11 @@ _embeddings: OpenAIEmbeddings | None = None
 # 게이트웨이 한도(요청당 30만 토큰)를 넘는다. 100건이면 기사 기준 약 13만 토큰.
 EMBED_BATCH_SIZE = 100
 
+# 요청이 실패하거나 제한 시간(config.py의 llm_timeout_seconds · embed_timeout_seconds)을 넘으면 다시 보내는 횟수.
+# 라이브러리 기본값과 같은 2번 (처음 1번 + 재시도 2번 = 최대 3번). 제한 시간이 생겨서 값을 드러내 적었다.
+# 가장 오래 기다리는 경우: 제한 시간 × 3 + 재시도 사이 쉬는 시간(합 약 1.5초).
+MAX_RETRIES = 2
+
 
 def _base_url() -> str | None:
     return settings.openai_base_url or None
@@ -38,6 +43,8 @@ def get_chat_model(temperature: float = 0) -> ChatOpenAI:
         api_key=settings.openai_api_key,
         base_url=_base_url(),
         temperature=temperature,
+        timeout=settings.llm_timeout_seconds,     # 답이 없으면 끊는다 (예전: 제한 없음 = 10분)
+        max_retries=MAX_RETRIES,
     )
 
 
@@ -78,5 +85,7 @@ def get_embeddings() -> OpenAIEmbeddings:
             api_key=settings.openai_api_key,
             base_url=_base_url(),
             chunk_size=EMBED_BATCH_SIZE,
+            timeout=settings.embed_timeout_seconds,   # 답이 없으면 끊는다 (예전: 제한 없음 = 10분)
+            max_retries=MAX_RETRIES,
         )
     return _embeddings
