@@ -3,7 +3,7 @@ QuPicT 평가 실행 파일 — 정답 라벨, 질문 세트, 실험 A·B·C (�
 
     python evaluate.py label   [--target 강남] [--limit 150]  최신 대표 기사 150건에 정답 라벨 (관련 / 무관 / 보류)
     python evaluate.py make-qa [--target 강남] [--suggest]    실험 B·C용 질문 세트 만들기 (experiments/qa_set.yaml)
-    python evaluate.py exp-a   [--target 강남]                실험 A: 필터링 방법 비교 (정답 JSON evalset/labeled_set.json 기준)
+    python evaluate.py exp-a   [--target 강남]                실험 A: 필터링 방법 비교 (정답 JSON evalset/labeled_set_*.json 기준)
     python evaluate.py exp-b   [--target 강남] [--faiss]      실험 B: 검색 방식 비교 (Recall@5, MRR)
     python evaluate.py exp-c   [--target 강남] [--limit 10]   실험 C: LLM 단독 vs 기본 RAG vs QuPicT 답변 채점
     python evaluate.py sim     [--target 강남] ["질문"]       유사도 확인: 기준값 없이 청크 유사도 보기
