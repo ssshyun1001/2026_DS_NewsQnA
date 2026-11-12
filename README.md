@@ -5,7 +5,7 @@
 > (검증 키워드 입력은 없어졌고, 검색어의 **의미를 고르는 단계**가 그 역할을 대신합니다.)
 >
 > **최근 변경 (2026-11-09)** — 자세한 내용은 [docs/PROGRESS.md 1-1](docs/PROGRESS.md)
-> - 정답 라벨은 **JSON 평가셋**(`evalset/labeled_set.json`)으로 붙입니다: `python evalset/build_labeled_set.py` (검색어를 계속 받아 라벨링, `q`로 종료, 한 파일에 누적)
+> - 정답 라벨은 **JSON 평가셋**(`evalset/labeled_set_1.json`, `_2.json`, …)으로 붙입니다: `python evalset/build_labeled_set.py` (검색어를 계속 받아 라벨링, `q`로 종료, 검색어 단위로 파일을 나눠 누적)
 > - **실험 A(필터링)는 `evalset/exp_a_filtering.py`로 옮겨 정답 JSON으로 평가**합니다 (`python evaluate.py exp-a`, DB 안 씀)
 > - 뉴스 검색은 **"검색어 + 연관어"와 별칭만** 씁니다 (검색어 단독 검색 제거 → 고른 의미의 기사가 더 많이 들어옴)
 > - `targets.yaml` 삭제: 의미·별칭·연관어는 **LLM 의미 후보만** 씁니다. 서비스 DB 대상은 `python admin.py collect 검색어`로 추가
@@ -517,7 +517,7 @@ python run.py 애플 30
 
 ```bash
 python evalset/build_labeled_set.py   # 검색어 입력 → 의미 고르기 → 라벨(1 관련 / 2 무관) → 다음 검색어 … q로 종료
-python evaluate.py exp-a              # evalset/labeled_set.json으로 필터링 방법 비교 → evalset/results/
+python evaluate.py exp-a              # evalset/labeled_set_*.json으로 필터링 방법 비교 → evalset/results/
 ```
 
 서비스 DB 관리 명령(`collect 검색어`, `collect-all`, `filter-all`, `index-all`, `status`)은 [docs/PROGRESS.md](docs/PROGRESS.md)의 3-5를 보세요.

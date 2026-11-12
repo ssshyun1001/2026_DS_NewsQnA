@@ -29,8 +29,8 @@
 ├── old/                  예전 평가·라벨링 스크립트 (지금 구조에 맞게 고침, 아래 표)
 │
 ├── evalset/              정답 JSON 평가셋 (DB 안 씀)
-│   ├── build_labeled_set.py  라벨링 → labeled_set.json
-│   ├── exp_a_filtering.py    실험 A: 필터링 방법 비교 (labeled_set.json 기준, 결과 evalset/results/)
+│   ├── build_labeled_set.py  라벨링 → labeled_set_N.json (검색어 단위로 나눔)
+│   ├── exp_a_filtering.py    실험 A: 필터링 방법 비교 (labeled_set_*.json 기준, 결과 evalset/results/)
 │
 ├── experiments/          [7단계] 실험 (python evaluate.py exp-b / exp-c / make-qa / sim)
 │   ├── exp_b_retrieval.py  실험 B: 검색 방식 비교
@@ -46,8 +46,8 @@
 
 | 파일 | 하는 일 | 실행 | 같은 일을 하는 run.py 명령 |
 | --- | --- | --- | --- |
-| `evalset/build_labeled_set.py` (옮김) | 검색어 반복 입력(q=종료) → LLM 의미 고르기 → 수집 → 중복 제거 → 최신 대표 기사 150건에 1 관련 / 2 무관 라벨 → `evalset/labeled_set.json` 하나에 계속 누적 | `python evalset/build_labeled_set.py` | `run.py label` (DB에 저장) |
-| `eval_filter.py` | `labeled_set.json`으로 V0 필터 없음 / V1 규칙 필터 / V2 규칙 + LLM 검증 비교 (Precision·Recall·F1·Accuracy) | `python old/eval_filter.py` | `run.py exp-a` (방법 6가지) |
+| `evalset/build_labeled_set.py` (옮김) | 검색어 반복 입력(q=종료) → LLM 의미 고르기 → 수집 → 중복 제거 → 최신 대표 기사 150건에 1 관련 / 2 무관 라벨 → `evalset/labeled_set_N.json`에 검색어 단위로 나눠 누적 | `python evalset/build_labeled_set.py` | `run.py label` (DB에 저장) |
+| `eval_filter.py` | `labeled_set_*.json`으로 V0 필터 없음 / V1 규칙 필터 / V2 규칙 + LLM 검증 비교 (Precision·Recall·F1·Accuracy) | `python old/eval_filter.py` | `run.py exp-a` (방법 6가지) |
 | `eval_retrieval.py` | 골든셋(제논·당근·서울여대·강남 39문항)으로 Base / HyDE / Multi-Query / Both 검색 성공률 (키워드 포함 여부) | `python old/eval_retrieval.py 강남` | `run.py exp-b` (Recall@5·MRR) |
 | `debug_similarity.py` | 기준값 없이 질문과의 유사도 출력 (HyDE 없음 / HyDE) | `python old/debug_similarity.py 강남 "방송인 강남" "질문"` | `run.py sim` (방식 4가지, 질문 세트 전체) |
 | `_common.py` | 위 스크립트 공용: 의미 정하기 (LLM 의미 후보에서 이름으로 찾기 → 없으면 후보에서 고르기) | — | — |

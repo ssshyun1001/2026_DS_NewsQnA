@@ -1,14 +1,16 @@
 """
-build_labeled_set.py — 평가용 정답 라벨링 도구 (DB 없이 JSON 파일 하나에 계속 쌓는다)
+build_labeled_set.py — 평가용 정답 라벨링 도구 (DB 없이 JSON 파일에 계속 쌓는다)
 
 한 번 실행하면 아래를 반복한다. 검색어에 q를 입력하면 끝난다.
 
   검색어 입력 → 기간 입력 → 의미 고르기(0단계) → 수집(1단계) → 중복 제거(2단계, 대표 기사만)
   → 최신 대표 기사부터 1 관련 / 2 무관 라벨 → 다시 검색어 입력 ...
 
-  - 결과는 모두 evalset/labeled_set.json 하나에 저장한다. 라벨 하나 붙일 때마다 바로 저장하므로
-    중간에 꺼져도 그때까지 붙인 라벨은 남는다.
-  - 다시 실행하면 같은 파일 뒤에 이어서 쓴다. 이미 라벨을 붙인 기사(검색어 × 의미 × 주소)는 다시 묻지 않는다.
+  - 결과는 evalset/labeled_set_1.json, labeled_set_2.json, ... 에 검색어 단위로 나눠 저장한다
+    (파일 하나가 너무 커지지 않게. 나누는 규칙은 evalset/labeled_store.py).
+    라벨 하나 붙일 때마다 바로 저장하므로 중간에 꺼져도 그때까지 붙인 라벨은 남는다.
+  - 다시 실행하면 이어서 쓴다. 이미 있는 검색어는 그 검색어가 든 파일에, 새 검색어는 마지막 파일
+    (자리가 모자라면 다음 번호 파일)에 쓴다. 이미 라벨을 붙인 기사(검색어 × 의미 × 주소)는 다시 묻지 않는다.
   - 검색어 × 의미 하나당 최신 대표 기사 LABEL_PER_TARGET(150)건까지만 묻는다.
   - 라벨링 중 s = 이 기사 건너뛰기, q = 이 검색어 그만하고 다음 검색어로.
   - 의미·연관어·별칭은 LLM이 만든 후보만 쓴다.
@@ -26,7 +28,6 @@ build_labeled_set.py — 평가용 정답 라벨링 도구 (DB 없이 JSON 파�
 from __future__ import annotations
 
 import asyncio
-import json
 import sys
 from pathlib import Path
 
@@ -40,8 +41,9 @@ from qupict.filtering import embed_for_dedup, find_duplicates                   
 from qupict.pipeline import COLLECT_MAX_PER_TARGET, LABEL_PER_TARGET             # noqa: E402
 from qupict.schemas import Article, SelectedSense                                # noqa: E402
 from qupict.sense import choose_sense_interactively, load_sense_candidates      # noqa: E402
+from evalset.labeled_store import LabeledStore                                   # noqa: E402
 
-_OUTPUT_PATH = Path(__file__).resolve().parent / "labeled_set.json"
+_OUTPUT_DIR = Path(__file__).resolve().parent      # labeled_set_N.json 이 쌓이는 폴더
 DEFAULT_PERIOD_DAYS = 30
 _LABEL_KEYS = {"1": True, "2": False}      # 1 관련 / 2 무관
 _QUIT = "q"
@@ -50,20 +52,6 @@ _QUIT = "q"
 # ---------------------------------------------------------------------------
 # 파일
 # ---------------------------------------------------------------------------
-
-def _load_existing() -> list[dict]:
-    if not _OUTPUT_PATH.exists():
-        return []
-    text = _OUTPUT_PATH.read_text(encoding="utf-8").strip()
-    return json.loads(text) if text else []
-
-
-def _save(entries: list[dict]) -> None:
-    """임시 파일에 다 쓴 뒤 바꿔치기한다 (쓰는 도중 꺼져도 기존 파일이 깨지지 않게)."""
-    tmp = _OUTPUT_PATH.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(_OUTPUT_PATH)
-
 
 def _sense_json(selected: SelectedSense) -> dict:
     s = selected.sense
@@ -141,8 +129,8 @@ def _ask_label(article: Article, selected: SelectedSense, index: int, total: int
 # 검색어 하나 라벨링
 # ---------------------------------------------------------------------------
 
-async def label_query(query: str, entries: list[dict]) -> int:
-    """검색어 하나를 수집·중복 제거하고 라벨을 붙여 entries에 추가·저장한다. 붙인 라벨 수를 돌려준다."""
+async def label_query(query: str, store: LabeledStore) -> int:
+    """검색어 하나를 수집·중복 제거하고 라벨을 붙여 store에 추가·저장한다. 붙인 라벨 수를 돌려준다."""
     period_days = _read_period_days()
     selected = _pick_sense(query)
     print(f"기준: {describe(selected)}")
@@ -160,7 +148,7 @@ async def label_query(query: str, entries: list[dict]) -> int:
     reps.sort(key=lambda a: a.pub_date.timestamp() if a.pub_date else 0, reverse=True)   # 최신순
     print(f"중복 제거 → 중복 {len(duplicates)}건, 대표 기사 {len(reps)}건")
 
-    mine = [e for e in entries if e.get("query") == selected.query
+    mine = [e for e in store.entries if e.get("query") == selected.query
             and isinstance(e.get("sense"), dict) and e["sense"].get("name") == selected.sense.name]
     done_urls = {e["url"] for e in mine}
     remaining = max(0, LABEL_PER_TARGET - len(mine))
@@ -169,6 +157,7 @@ async def label_query(query: str, entries: list[dict]) -> int:
     if len(todo) < remaining:
         print(f"  ※ 새 대표 기사가 모자라 목표보다 {remaining - len(todo)}건 적습니다. 기간을 늘려 다시 해 보세요.")
 
+    print(f"저장 파일: {store.path_for(selected.query).name}")
     added = 0
     for i, article in enumerate(todo, 1):
         label = _ask_label(article, selected, i, len(todo))
@@ -176,23 +165,23 @@ async def label_query(query: str, entries: list[dict]) -> int:
             break
         if label is None:
             continue
-        entries.append(_entry(article, selected, label))
-        _save(entries)              # 매 라벨마다 저장 (중간에 꺼져도 안전)
+        store.add(_entry(article, selected, label))      # 매 라벨마다 저장 (중간에 꺼져도 안전)
         added += 1
     print(f"\n'{describe(selected)}' 라벨 {added}건 추가 (이 기준 누적 {len(mine) + added}건)")
     return added
 
 
 async def main() -> None:
-    entries = _load_existing()
-    print(f"라벨 파일: {_OUTPUT_PATH} (기존 {len(entries)}건)")
+    store = LabeledStore(_OUTPUT_DIR, per_query=LABEL_PER_TARGET)
+    print(f"라벨 폴더: {_OUTPUT_DIR} (파일 {len(store.files)}개, 기존 {len(store.entries)}건)")
     added = 0
     while True:
         query = read_line("\n검색어 (q=종료)> ")
         if query.lower() == _QUIT:
             break
-        added += await label_query(query, entries)
-    print(f"\n종료. 이번에 {added}건 추가, 총 {len(entries)}건이 {_OUTPUT_PATH}에 저장되어 있습니다.")
+        added += await label_query(query, store)
+    print(f"\n종료. 이번에 {added}건 추가, 총 {len(store.entries)}건이 "
+          f"{', '.join(p.name for p in store.files)}에 저장되어 있습니다.")
 
 
 if __name__ == "__main__":

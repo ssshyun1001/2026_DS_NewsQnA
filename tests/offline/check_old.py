@@ -55,7 +55,8 @@ cands = SenseCandidates(query="강남", model="m", senses=[
     Sense(name="방송인 강남", definition="가수 겸 방송인", related_terms=["이상화", "예능"])])
 B.collect_articles = fake_collect
 B.load_sense_candidates = lambda q: (cands.model_copy(update={"query": q}), "DB")
-B._OUTPUT_PATH = tmp / "labeled_set.json"
+B._OUTPUT_DIR = tmp
+from evalset.labeled_store import load_entries
 # 검색어 → 기간(Enter=30) → 의미 2번 → 라벨 3건 → 다음 검색어 "서울여대"는 라벨 도중 q → 검색어 q로 종료
 keys = iter(["강남", "", "2", "1", "2", "2", "서울여대", "7", "2", "q", "q"])
 builtins_input = builtins.input
@@ -63,7 +64,8 @@ builtins.input = lambda prompt="": next(keys)
 with quiet():
     asyncio.run(B.main())
 assert next(keys, None) is None                                                  # 입력을 남기지 않고 끝남
-entries = json.loads(B._OUTPUT_PATH.read_text(encoding="utf-8"))
+assert [p.name for p in tmp.glob("labeled_set_*.json")] == ["labeled_set_1.json"]
+entries = load_entries(tmp)
 assert [(e["url"], e["label"]) for e in entries] == [("new", True), ("mid", False), ("old", False)], entries  # dup 빠짐, 최신순
 assert set(entries[0]) == {"title", "url", "description", "content", "query", "sense", "label"}
 assert entries[0]["query"] == "강남" and entries[0]["content"].startswith("방송인 강남")
@@ -76,9 +78,27 @@ builtins.input = lambda prompt="": (asked.append(prompt), next(keys))[1]
 with quiet():
     asyncio.run(B.main())
 assert [p.strip() for p in asked] == ["검색어 (q=종료)>", "기간(최근 며칠, Enter = 30)>", "번호>", "검색어 (q=종료)>"], asked
-assert len(json.loads(B._OUTPUT_PATH.read_text(encoding="utf-8"))) == 3
+assert len(load_entries(tmp)) == 3
 builtins.input = builtins_input
 print("1 ok: build_labeled_set (의미 후보 선택 → 중복 제거 → 최신순 → 라벨 → JSON, 이어서 하기)")
+
+# 1-1) 라벨 파일 나누기: 검색어 단위, 마지막 파일에 한 검색어 분량이 안 들어가면 다음 번호 파일
+from evalset.labeled_store import LabeledStore
+split_dir = tmp / "split"
+split_dir.mkdir()
+st = LabeledStore(split_dir, max_bytes=1_000, per_query=3)
+e = lambda q, i: {"query": q, "url": f"{q}{i}", "content": "x" * 100}
+for i in range(3):
+    st.add(e("A", i))
+st.add(e("B", 0))                                  # A 3건 488B + 한 검색어 분량(162B × 3) = 974B ≤ 1000 → 같은 파일
+for i in range(3):
+    st.add(e("C", i))                              # 650B + 486B > 1000 → C는 2번 파일
+st.add(e("A", 9))                                  # 이미 있는 검색어는 원래 파일에
+st2 = LabeledStore(split_dir, max_bytes=1_000, per_query=3)   # 다시 읽어도 같은 배치
+assert {p.name: sorted({x["query"] for x in es}) for p, es in st2.files.items()} == \
+    {"labeled_set_1.json": ["A", "B"], "labeled_set_2.json": ["C"]}, st2.files.keys()
+assert len(load_entries(split_dir)) == 8 and len(load_entries(split_dir / "labeled_set_2.json")) == 3
+print("1-1 ok: 라벨 파일 검색어 단위로 나누기")
 
 # 2) eval_filter: V0(필터 없음) / V1(규칙) / V2(규칙 + LLM), 보류 정답 제외, 예전 형식 건너뜀
 labeled = [
@@ -114,7 +134,7 @@ assert (v1.tp, v1.fp, v1.fn, v1.tn) == (2, 1, 0, 1)                 # 규칙이 
 assert sorted(llm_seen) == ["a", "c", "d"]                          # 규칙이 미룬 기사만 LLM
 assert (v2.tp, v2.fp, v2.fn, v2.tn) == (2, 0, 0, 2)                 # LLM이 c(맛집)도 거름
 # evalset 형식(라벨 true/false, 기준이 항목 안에 있음)을 읽으면 저장된 기준을 그대로 쓴다
-E.LABELED_SET_PATH = B._OUTPUT_PATH
+E.LABELED_SET_PATH = B._OUTPUT_DIR                                   # 폴더 → labeled_set_*.json 전부
 E.pick_sense = lambda q, s=None: (_ for _ in ()).throw(AssertionError("저장된 기준을 써야 함"))
 seen_sel = []
 async def spy2(labeled_articles, selected):

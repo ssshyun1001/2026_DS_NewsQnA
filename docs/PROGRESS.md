@@ -31,7 +31,7 @@
 **정답 라벨링 → JSON 평가셋 (`evalset/`)**
 - `python evalset/build_labeled_set.py`: 한 번 실행하면 **검색어를 계속 받아** 라벨링하고, 검색어에 `q`를 넣으면 끝납니다.
   - 흐름: 검색어 → 기간(Enter = 30일) → LLM 의미 후보에서 고르기 → 수집 → 중복 제거(대표 기사만) → 최신 대표 기사부터 **1 관련 / 2 무관** (s 건너뛰기, q 이 검색어 그만)
-  - 결과는 모두 **`evalset/labeled_set.json` 하나**에 쌓입니다. 라벨마다 바로 저장하고, 다시 실행하면 같은 파일 뒤에 이어서 씁니다 (이미 붙인 기사는 다시 안 물어봄, 검색어 × 의미당 150건까지).
+  - 결과는 **`evalset/labeled_set_1.json`, `labeled_set_2.json`, …** 에 검색어 단위로 나눠 쌓입니다 (파일당 약 3.5MB, 한 검색어는 한 파일에만, `evalset/labeled_store.py`). 라벨마다 바로 저장하고, 다시 실행하면 그 검색어가 든 파일(새 검색어면 마지막 파일, 자리가 없으면 다음 번호)에 이어서 씁니다 (이미 붙인 기사는 다시 안 물어봄, 검색어 × 의미당 150건까지).
   - 항목 형식: `title`, `url`, `description`, `content`, `query`, `sense`(고른 의미 + 별칭·연관어·배제어·고르지 않은 의미), `label`(true/false)
   - `old/build_labeled_set.py`를 옮긴 것입니다. 라벨은 DB에 쓰지 않습니다.
 - **실험 A를 `evalset/exp_a_filtering.py`로 옮기고 정답 JSON으로 평가**합니다 (`python evaluate.py exp-a`도 같은 실험, 자세히는 10장).
@@ -76,8 +76,8 @@
 │   ├── retrieval.py    [5단계] pgvector 검색 (+HyDE·Multi-Query), FAISS는 비교 실험용
 │   └── qa.py           [5단계] 답변 생성
 ├── evalset/            정답 JSON 평가셋 (DB 안 씀)
-│   ├── build_labeled_set.py  라벨링 → labeled_set.json (한 파일에 누적)
-│   ├── exp_a_filtering.py    [7단계] 실험 A: labeled_set.json으로 필터링 방법 비교
+│   ├── build_labeled_set.py  라벨링 → labeled_set_N.json (검색어 단위로 나눠 누적)
+│   ├── exp_a_filtering.py    [7단계] 실험 A: labeled_set_*.json으로 필터링 방법 비교
 │   └── results/              실험 A 결과 + LLM 판정 캐시(llm_cache.json)
 ├── experiments/        [7단계] 실험 B·C, 질문 세트(qa_set.yaml), 유사도 확인, 결과(results/)
 ├── tests/
@@ -183,7 +183,7 @@ docker exec -it qupict-postgres psql -U qupict -d qupict
 | --- | --- | --- |
 | `run.py` | **서비스** 사용자 (질문하고 답 받기) | 서비스 DB |
 | `admin.py` | 서비스 DB 관리 (12개 대상 미리 채우기, 현황) | 서비스 DB |
-| `evaluate.py` | 평가 (정답 라벨, 질문 세트, 실험 A·B·C) | 실험 A는 **정답 JSON**(`evalset/labeled_set.json`), 나머지는 아직 서비스 DB |
+| `evaluate.py` | 평가 (정답 라벨, 질문 세트, 실험 A·B·C) | 실험 A는 **정답 JSON**(`evalset/labeled_set_*.json`), 나머지는 아직 서비스 DB |
 | `evalset/build_labeled_set.py` | 정답 라벨링 (JSON) | 정답 JSON |
 
 **서비스 (`run.py`)**
@@ -239,7 +239,7 @@ python admin.py filter-all
 python admin.py status
 ```
 
-0. **라벨링 (JSON)**: 사람마다 다른 검색어를 맡아 `build_labeled_set.py`로 라벨링 → 각자 만든 `labeled_set.json`을 합치거나 한 사람이 이어서 작업. `evaluate.py label`(DB에 라벨 저장)은 예전 방식이라 실험 A에는 쓰이지 않습니다
+0. **라벨링 (JSON)**: 사람마다 다른 검색어를 맡아 `build_labeled_set.py`로 라벨링 → 각자 만든 `labeled_set_N.json`을 합치거나 한 사람이 이어서 작업. `evaluate.py label`(DB에 라벨 저장)은 예전 방식이라 실험 A에는 쓰이지 않습니다
 1. **collect**: 대상마다 의미를 골라 추가 → 최대 300건 수집 → 중복 제거. 이후 다시 모을 때는 `collect-all`. 네이버 검색은 무료, 처음 보는 검색어만 의미 후보 LLM 호출 (약 0.3 크레딧씩), 중복 제거는 임베딩만 (거의 0). 대상마다 "대표 기사 N건"이 150 이상인지 확인
 2. **label**: 대상당 최신 대표 기사 150건을 사람이 나눠서 라벨링 (12개 × 150 = 1,800건) — topic마다 번호를 골라서 하므로 **사람마다 다른 topic**을 맡으면 됩니다. 중복 제거는 LLM 비용이 없고, 시스템 판정 없이 라벨을 붙이므로 정답이 시스템에 끌려가지 않습니다
 3. **filter-all**: 중복이 아닌 대표 기사 전부를 규칙·LLM으로 판정 (100건당 약 10~15 크레딧 → 대상당 대표 기사 약 200~250건이면 12개 합쳐 약 250~450 크레딧 예상). 라벨과 판정은 따로 저장되므로 label과 순서를 바꿔도 됩니다
@@ -610,7 +610,7 @@ python tests/check_db.py
 
 | 명령 | 실험 | 비교 | 지표 | 필요한 것 |
 | --- | --- | --- | --- | --- |
-| `python evaluate.py exp-a` (= `python evalset/exp_a_filtering.py`) | A. 필터링 | baseline / 1-a 별칭 / 1-b 검증어 / 1-c 규칙 점수 / 2-b LLM만 / **제안(규칙+LLM)** | Precision·Recall·F1·Accuracy·무관 유입률·LLM 호출 수 | **정답 JSON** (`evalset/labeled_set.json`, DB 안 씀) |
+| `python evaluate.py exp-a` (= `python evalset/exp_a_filtering.py`) | A. 필터링 | baseline / 1-a 별칭 / 1-b 검증어 / 1-c 규칙 점수 / 2-b LLM만 / **제안(규칙+LLM)** | Precision·Recall·F1·Accuracy·무관 유입률·LLM 호출 수 | **정답 JSON** (`evalset/labeled_set_*.json`, DB 안 씀) |
 | `python evaluate.py make-qa` | B·C 질문 세트 | — | — | 관련 기사 |
 | `python evaluate.py exp-b` | B. 검색 | base / HyDE / Multi-Query / both (`--faiss`: 예전 FAISS도) | Recall@5·MRR·검색 시간 | 질문 세트 + `index-all` |
 | `python evaluate.py exp-c` | C. 답변 | LLM 단독 / 기본 RAG(필터 없음) / **QuPicT** | 정답률·근거 일치율·환각 비율·출처 정확도 (LLM 채점) | 질문 세트 + `index-all` |
