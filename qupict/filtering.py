@@ -10,7 +10,7 @@
                            noun     제목의 드문 고유명사 겹침 (TF-IDF)   (DEDUP_NOUN_THRESHOLD)
                          여러 기준을 묶는 방법 DEDUP_RULE: "and"(모두 넘어야 중복) | "or"(하나만 넘어도)
   [2단계] 1차 규칙 필터  분명히 무관한 기사만 규칙으로 걸러 LLM 호출을 줄인다      → stage = "rule"
-  [3단계] 2차 LLM 검증   나머지를 LLM이 관련 / 무관 / 보류로 판정하고 근거 한 줄을 남긴다 → stage = "llm"
+  [3단계] 2차 LLM 검증   나머지를 LLM이 관련 / 무관으로 판정하고 근거 한 줄을 남긴다 → stage = "llm"
 
   filter_articles(articles, selected)   메모리 버전 (run.py가 사용)
   filter_topic(topic_id, selected)      DB 버전 (DB의 기사를 판정하고 결과를 article_topics에 저장)
@@ -34,7 +34,7 @@
   LLM에게 고른 의미(정의·별칭·연관어)와 고르지 않은 의미들을 함께 보여 주고 대조하게 한다.
     관련  찾는 대상이 기사의 주요 소재다
     무관  다른 의미의 기사이거나, 찾는 대상이 스쳐 지나가듯 언급만 된다
-    보류  주어진 내용만으로는 판단하기 어렵다 (Recall을 지키기 위해 바로 버리지 않는다)
+    보류 없음: 애매해도 관련 / 무관 중 더 가까운 쪽으로 반드시 판정한다 (예전에는 보류가 있었지만 한 번도 나오지 않았다)
   LLM이 답하지 못한 기사는 판정하지 않고 남겨 둔다 (DB 버전은 다음 실행 때 다시 시도).
 """
 from __future__ import annotations
@@ -362,7 +362,9 @@ class _LLMVerdict(BaseModel):
     # 근거를 먼저 쓰고 그에 맞춰 판정하게 한다.
     index: int = Field(description="기사 번호")
     reason: str = Field(description="판단 근거 한 줄 (40자 이내, 근거가 된 단어나 내용)")
-    status: Literal["관련", "무관", "보류"] = Field(description="위 근거에 따른 판정")
+    # 보류는 받지 않는다: 관련 / 무관 중 하나로 반드시 판정하게 한다 (실제로도 보류는 한 번도 나오지 않았다).
+    # DB·검색 쪽의 '보류'(STATUSES 등)는 예전 판정 · 사람 라벨과 맞추려고 그대로 둔다.
+    status: Literal["관련", "무관"] = Field(description="위 근거에 따른 판정")
 
 
 class _LLMVerdictBatch(BaseModel):
@@ -384,9 +386,9 @@ _VERIFY_SYSTEM_PROMPT = """\
 판정 기준:
 - 관련: 찾는 대상이 기사의 주요 소재이거나, 기사에서 의미 있게 다뤄진다.
 - 무관: 다른 의미의 기사이거나, 찾는 대상이 한두 줄 스쳐 지나가듯 언급만 된다.
-- 보류: 주어진 내용만으로는 판단하기 어렵다. (예: 대상이 실제로 관여하는지 불분명)
 
 규칙:
+- 모든 기사를 반드시 '관련' 또는 '무관' 중 하나로 판정하라. 판단이 애매해도 둘 중 더 가까운 쪽을 골라라.
 - 검색어 글자가 들어 있다는 이유만으로 '관련'이라고 하지 마라. 어떤 의미로 쓰였는지 봐라.
 - reason은 한국어 한 줄(40자 이내)로, 판단 근거가 된 단어나 내용을 적어라.
 - 입력된 모든 기사 번호에 대해 하나씩 답하라.
@@ -412,7 +414,7 @@ def _articles_block(articles: list[Article]) -> str:
 
 
 async def llm_verify(articles: list[Article], selected: SelectedSense) -> tuple[list[Verdict], list[str]]:
-    """LLM으로 관련 / 무관 / 보류를 판정한다. (판정 목록, 판정 못 한 기사 link 목록)"""
+    """LLM으로 관련 / 무관을 판정한다 (보류 없음). (판정 목록, 판정 못 한 기사 link 목록)"""
     if not articles:
         return [], []
     llm = get_structured_model(_LLMVerdictBatch)
