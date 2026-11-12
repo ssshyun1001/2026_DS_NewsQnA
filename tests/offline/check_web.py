@@ -46,11 +46,16 @@ def main() -> None:
 
     import run
     run.image_text_mode = lambda: "ocr"               # EasyOCR 설치 여부와 상관없이 OCR 모드로
+    waited = []
+    run.wait_after_prepare = lambda log=print: waited.append(True)   # 실제로 3초 기다리지 않게
 
     collect.collect_to_db, filtering.filter_topic, indexing.index_topic = fake_collect, fake_filter, fake_index
     db.get_topic_articles = lambda *a, **k: [Article(title="t", link="L")] * 4
     retrieval.search_topic = lambda tid, q, sel, period_days=None: calls.setdefault("search", (tid, q)) and []
-    def fake_answer(q, hits, on_token=None):
+    from datetime import datetime as _dt, timezone as _tz
+    retrieval.oldest_searchable_date = lambda tid, days=None: _dt(2026, 10, 14, 3, tzinfo=_tz.utc)
+    def fake_answer(q, hits, on_token=None, subject="", period=""):
+        calls["subject"], calls["period"] = subject, period
         if q == "터짐":
             raise RuntimeError("LLM 오류")
         pieces = ["강남은 ", "예능에 나왔다 ", "(기사 1)."]
@@ -62,6 +67,11 @@ def main() -> None:
 
     client = TestClient(web.app)
     assert client.get("/").status_code == 200
+    # 고정 첫 질문: 화면(JS)과 qa.py의 문장이 같아야 한다
+    page = client.get("/").text
+    assert "`" + qa.FIRST_QUESTION_TEMPLATE.replace("{query}", "${state.query}") + "`" in page
+    assert "enqueueQuestion(`${state.query}" in page
+    assert qa.first_question(" 강남 ") == "강남에 대해 수집된 기사들의 전체적인 요약을 제공해줘."
     assert client.get("/api/info").json() == {"has_db": True, "chat_model": "가짜 모델"}
     r = client.post("/api/senses", json={"query": "강남"}).json()
     assert [s["name"] for s in r["senses"]] == ["방송인 강남", "지역 강남"]
@@ -76,6 +86,8 @@ def main() -> None:
         time.sleep(0.05)
     assert status["status"] == "done", status
     assert calls["collect"] == ("방송인 강남", 30, 20)
+    assert waited == [True]                           # 준비 완료 전에 한 번 기다린다
+    assert run.PREPARE_SETTLE_SECONDS == 3
     assert calls["index"][0] == (False, False)        # 준비 단계: 본문만 (이미지는 준비 완료 뒤)
     assert status["images"] == "running", status      # 준비 완료 직후: 이미지 글자 읽기가 뒤에서 도는 중
     for _ in range(100):
@@ -91,6 +103,8 @@ def main() -> None:
 
     ans = client.post("/api/ask", json={"session_id": status["session_id"], "question": "강남 근황?"}).json()
     assert calls["search"] == (19, "강남 근황?") and ans["sources"][0]["press"] == "연합뉴스", ans
+    assert calls["subject"].startswith("강남 (방송인 강남"), calls["subject"]    # 고른 의미가 답변의 검색 대상으로
+    assert calls["period"].startswith("2026-10-14 ~ "), calls["period"]         # 가장 오래된 기사 날짜 ~ 오늘
     assert client.post("/api/ask", json={"session_id": "없음", "question": "q"}).status_code == 404
     print("3 ok: 질문 · 답변")
 

@@ -25,6 +25,7 @@ import argparse
 import asyncio
 import sys
 import threading
+import time
 from dataclasses import dataclass
 from typing import Callable
 
@@ -77,8 +78,14 @@ def print_answer(answer: Answer, streamed: bool = False) -> None:
     print("=" * 60)
 
 
-def run_qa_loop(label: str, answer_fn: Callable[[str], Answer], streamed: bool = False) -> None:
-    """streamed=True: answer_fn이 질문 머리와 답변 글을 스트리밍으로 직접 찍는다."""
+def run_qa_loop(label: str, answer_fn: Callable[[str], Answer], streamed: bool = False,
+                first_question: str | None = None) -> None:
+    """streamed=True: answer_fn이 질문 머리와 답변 글을 스트리밍으로 직접 찍는다.
+    first_question: 주면 사용자 입력을 받기 전에 이 질문에 먼저 답한다 (고정 첫 질문: 수집된 기사 전체 요약)."""
+    if first_question:
+        timing.reset()
+        print_answer(answer_fn(first_question), streamed=streamed)
+        timing.report(f"질문 답변 — {first_question[:20]}")
     print(f"\n'{label}' 뉴스에 대해 자유롭게 질문하세요. (종료: {'/'.join(sorted(_EXIT_COMMANDS))})\n")
     while True:
         question = read_line("질문> ")
@@ -182,11 +189,38 @@ def start_image_text_in_background(topic_id: int, log: Callable[[str], None] = p
     return thread
 
 
+# 준비(수집 → 필터링 → 인덱싱)가 끝난 뒤 "준비 완료"를 알리기 전에 기다리는 시간(초).
+# 팀 결정(2026-11-13): 준비 직후 첫 질문에서 저장된 내용을 가끔 못 찾는 것 같아 여유를 둔다.
+# 참고: 저장은 각 단계 안에서 commit까지 끝난 뒤 다음 단계로 넘어가므로(db.connect), 이 대기가 없어도
+#   저장 자체는 끝나 있다. 원인이 확인되면 0으로 줄여도 된다.
+PREPARE_SETTLE_SECONDS = 3
+
+
+def wait_after_prepare(log: Callable[[str], None] = print) -> None:
+    """준비가 끝난 뒤 PREPARE_SETTLE_SECONDS초 기다린다 (0이면 바로 돌아온다)."""
+    if PREPARE_SETTLE_SECONDS > 0:
+        log(f"저장 내용을 정리하는 중… ({PREPARE_SETTLE_SECONDS}초)")
+        time.sleep(PREPARE_SETTLE_SECONDS)
+
+
+def oldest_searchable_or_none(topic_id: int, period_days: int | None):
+    """질문에 쓸 수 있는 기사 중 가장 오래된 발행일 (답변에서 "○○부터 오늘까지" 기간을 밝힐 때).
+    조회가 실패해도 질문 답변은 해야 하므로 None을 돌려준다 (그때 답변은 기간 없이 "최신 뉴스를 못 찾았다"고 한다)."""
+    from qupict.retrieval import oldest_searchable_date
+    try:
+        return oldest_searchable_date(topic_id, period_days)
+    except Exception as e:
+        print(f"  [경고] 기사 기간 조회 실패 ({type(e).__name__}) — 답변에 기간을 표시하지 않습니다")
+        return None
+
+
 def run_ask_db(selected: SelectedSense, period_days: int, max_articles: int = 100) -> None:
-    from qupict.qa import generate_answer_from_chunks
+    from qupict.qa import answer_period, answer_subject, first_question, generate_answer_from_chunks
     from qupict.retrieval import search_topic
 
     topic_id = asyncio.run(prepare_topic(selected, period_days, max_articles))
+    wait_after_prepare()
+    oldest = oldest_searchable_or_none(topic_id, period_days)
     if image_text_mode():
         # 질문 입력 줄과 섞이지 않게 한 줄 띄우고 찍는다
         start_image_text_in_background(topic_id, log=lambda s: print(f"\n{s}"))
@@ -197,11 +231,13 @@ def run_ask_db(selected: SelectedSense, period_days: int, max_articles: int = 10
             t.note = f"기준 통과 청크 {len(hits)}개"
         # 답변은 스트리밍: 만들어지는 글자를 바로 화면에 찍는다 (첫 글자가 빨리 보임, 완성된 답변은 같음)
         print_answer_header(question)
-        result = generate_answer_from_chunks(question, hits, on_token=lambda s: print(s, end="", flush=True))
+        result = generate_answer_from_chunks(question, hits, on_token=lambda s: print(s, end="", flush=True),
+                                             subject=answer_subject(selected), period=answer_period(oldest))
         print()
         return result
 
-    run_qa_loop(f"{selected.query} ({selected.sense.name})", answer, streamed=True)
+    run_qa_loop(f"{selected.query} ({selected.sense.name})", answer, streamed=True,
+                first_question=first_question(selected.query))
 
 
 # ---------------------------------------------------------------------------
@@ -252,19 +288,20 @@ async def collect_news(selected: SelectedSense, period_days: int, max_articles: 
 
 
 def run_ask_memory(selected: SelectedSense, period_days: int, max_articles: int = 100) -> None:
-    from qupict.qa import generate_answer
+    from qupict.qa import answer_period, answer_subject, first_question, generate_answer, oldest_date
     from qupict.retrieval import retrieve_relevant_articles
 
     session = asyncio.run(collect_news(selected, period_days, max_articles))
     if session is None:
         return
+    oldest = oldest_date(session.articles)
 
     def answer(question: str) -> Answer:
         with timing.timed("[5단계] 근거 검색"):
             relevant = retrieve_relevant_articles(session.store, session.articles, question, topic=session.topic)
-        return generate_answer(question, relevant)
+        return generate_answer(question, relevant, subject=answer_subject(selected), period=answer_period(oldest))
 
-    run_qa_loop(session.topic, answer)
+    run_qa_loop(session.topic, answer, first_question=first_question(selected.query))
 
 
 def cmd_ask(words: list[str], memory: bool, max_articles: int = 100) -> None:

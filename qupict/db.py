@@ -342,7 +342,7 @@ def get_topic_articles(
         where.append("a.pub_date BETWEEN %(since)s AND %(until)s")
         params.update(since=since, until=until)
     if statuses is not None:
-        where.append("at.status = ANY(%(statuses)s)")
+        where.append("at.status = ANY(%(statuses)s) AND at.duplicate_of IS NULL")
         params["statuses"] = list(statuses)
     if not include_duplicates:
         where.append("at.duplicate_of IS NULL")
@@ -398,16 +398,14 @@ def reset_topic_filter(topic_id: int) -> None:
 
 
 def save_duplicates(topic_id: int, duplicates: dict[str, str]) -> None:
-    """2단계 결과 저장. duplicates = {중복 기사 link: 대표 기사 link}. 중복 기사는 판정을 비운다."""
+    """2단계 결과 저장. duplicates = {중복 기사 link: 대표 기사 link}. 판정은 copy_duplicate_judgments가 채운다."""
     with connect() as conn:
         ids = _article_ids(conn, [*duplicates.keys(), *duplicates.values()])
         rows = [(ids[rep], ids[dup], topic_id) for dup, rep in duplicates.items()
                 if dup in ids and rep in ids and dup != rep]
         with conn.cursor() as cur:
             cur.executemany(
-                """UPDATE article_topics SET duplicate_of = %s, status = NULL, stage = NULL, reason = NULL,
-                       judged_model = NULL, judged_at = NULL
-                   WHERE article_id = %s AND topic_id = %s""",
+                "UPDATE article_topics SET duplicate_of = %s WHERE article_id = %s AND topic_id = %s",
                 rows,
             )
 
@@ -431,11 +429,27 @@ def save_judgments(topic_id: int, judgments: list[Judgment]) -> None:
         with conn.cursor() as cur:
             cur.executemany(
                 """UPDATE article_topics SET status = %s, stage = %s, reason = %s, judged_model = %s,
-                       judged_at = now(), duplicate_of = NULL
+                       judged_at = now()
                    WHERE article_id = %s AND topic_id = %s""",
                 [(j.status, j.stage, j.reason, j.model, ids[j.link], topic_id)
                  for j in judgments if j.link in ids],
             )
+
+
+def copy_duplicate_judgments(topic_id: int) -> int:
+    """중복 기사에 대표 기사의 판정(관련/무관)을 복사한다. 판정이 끝난 뒤 부른다. 바꾼 행 수를 돌려준다."""
+    with connect() as conn:
+        cur = conn.execute(
+            """UPDATE article_topics d
+               SET status = r.status, stage = r.stage, judged_model = r.judged_model, judged_at = now(),
+                   reason = '중복: 대표 기사 판정을 따름'
+               FROM article_topics r
+               WHERE d.topic_id = %(t)s AND r.topic_id = %(t)s
+                 AND d.duplicate_of = r.article_id AND r.status IS NOT NULL
+                 AND d.status IS DISTINCT FROM r.status""",
+            {"t": topic_id},
+        )
+        return cur.rowcount
 
 
 def save_labels(topic_id: int, labels: dict[str, str]) -> None:
@@ -469,7 +483,8 @@ def get_images_to_describe(topic_id: int, statuses: Iterable[str] = ("관련",))
             """SELECT i.id, a.link, i.url, i.caption FROM article_images i
                JOIN articles a ON a.id = i.article_id
                JOIN article_topics at ON at.article_id = a.id
-               WHERE at.topic_id = %s AND at.status = ANY(%s) AND i.llm_description IS NULL
+               WHERE at.topic_id = %s AND at.status = ANY(%s) AND at.duplicate_of IS NULL
+                 AND i.llm_description IS NULL
                ORDER BY a.id, i.position""",
             (topic_id, list(statuses)),
         ).fetchall()
@@ -497,7 +512,7 @@ def get_articles_without_chunks(topic_id: int, statuses: Iterable[str] = ("관�
     with connect() as conn:
         links = [r["link"] for r in conn.execute(
             """SELECT a.link FROM articles a JOIN article_topics at ON at.article_id = a.id
-               WHERE at.topic_id = %s AND at.status = ANY(%s)
+               WHERE at.topic_id = %s AND at.status = ANY(%s) AND at.duplicate_of IS NULL
                  AND NOT EXISTS (SELECT 1 FROM article_chunks c WHERE c.article_id = a.id)""",
             (topic_id, list(statuses)),
         ).fetchall()]
@@ -570,7 +585,7 @@ def search_chunks(
                FROM article_chunks c
                JOIN articles a ON a.id = c.article_id
                JOIN article_topics at ON at.article_id = a.id
-               WHERE at.topic_id = %(topic_id)s AND at.status = ANY(%(statuses)s)
+               WHERE at.topic_id = %(topic_id)s AND at.status = ANY(%(statuses)s) AND at.duplicate_of IS NULL
                  AND c.embedding IS NOT NULL
                  AND (%(since)s::timestamptz IS NULL
                       OR a.pub_date BETWEEN %(since)s::timestamptz AND %(until)s::timestamptz)
