@@ -120,7 +120,7 @@
   <!-- 3과 4 사이. 많이 보도된 기사: 수집한 기사 중 비슷한 기사(중복)가 가장 많이 묶인 기사 Top 5 -->
   <section id="c-hot" class="card hidden">
     <h2><span class="step">★</span>많이 보도된 기사 Top 5</h2>
-    <p class="note">수집한 기사 중 같은 내용을 다룬 기사(중복)가 가장 많은 순서입니다. 제목을 누르면 원문이 열립니다.</p>
+    <p class="note">수집한 기사 중 같은 내용을 다룬 기사(중복)가 가장 많은 순서입니다. 요약은 여러 언론사가 공통으로 쓴 기사 속 문장 그대로이며, 제목을 누르면 원문이 열립니다.</p>
     <div id="hot"></div>
   </section>
 
@@ -305,6 +305,7 @@ async function poll(jobId) {
 }
 
 // 많이 보도된 기사 Top 5: 중복이 많이 묶인 기사 순으로 제목(원문 링크) · 한 줄 요약 · 비슷한 기사 수
+// 한 줄 요약은 LLM이 쓴 글이 아니라, 묶인 기사들이 공통으로 쓴 기사 속 문장 그대로다 (qupict/hot.py). 없으면 줄을 뺀다
 function renderHot(j) {
   $("c-hot").classList.remove("hidden");
   if (j.hot === "running") {
@@ -317,7 +318,7 @@ function renderHot(j) {
     $("hot").innerHTML = `<ol class="hot">` + j.hot_articles.map((h, i) => `
       <li><span class="rank">${i + 1}</span>
         <div><a href="${esc(h.link)}" target="_blank" rel="noopener">${esc(h.title)}</a>
-          <div class="sum">${esc(h.summary)}</div>
+          ${h.summary ? `<div class="sum">${esc(h.summary)}</div>` : ""}
           <div class="meta">${esc(h.press)}${h.pub_date ? " · " + esc(h.pub_date) : ""} ·
             <span class="dup">비슷한 기사 ${h.duplicates}건</span></div></div></li>`).join("") + `</ol>`;
   }

@@ -291,6 +291,8 @@ class NewsSession:
     store: object  # FAISS
     # {중복 기사 link: 대표 기사 link} — 웹 화면의 "많이 보도된 기사"(qupict/hot.py)가 센다
     duplicates: dict[str, str] = field(default_factory=dict)
+    # 중복 기사까지 포함한 수집 기사 전체 — "많이 보도된 기사" 한 줄 요약이 묶인 기사들의 본문을 볼 때 쓴다
+    pool: list[Article] = field(default_factory=list)
 
 
 async def collect_news(selected: SelectedSense, period_days: int, max_articles: int = 100,
@@ -322,7 +324,8 @@ async def collect_news(selected: SelectedSense, period_days: int, max_articles: 
         store = build_in_memory_store(filtered)
     log(f"[4/4] 인메모리 벡터스토어 구축 완료 → {len(filtered)}건(관련·보류)")
     timing.report("수집 → 필터링 → 벡터스토어 (메모리 버전)")
-    return NewsSession(topic=selected.query, articles=filtered, store=store, duplicates=outcome.duplicates)
+    return NewsSession(topic=selected.query, articles=filtered, store=store, duplicates=outcome.duplicates,
+                       pool=articles)
 
 
 def run_ask_memory(selected: SelectedSense, period_days: int, max_articles: int = 100) -> None:

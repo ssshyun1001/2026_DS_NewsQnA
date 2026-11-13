@@ -201,7 +201,7 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
             if news is None:
                 raise RuntimeError("질문에 쓸 기사가 없습니다. 다른 검색어·의미·기간으로 다시 시도해 주세요.")
             oldest = oldest_date(news.articles)
-            find_hot = lambda: hot.top_duplicated(news.articles, news.duplicates)
+            find_hot = lambda: hot.top_duplicated(news.articles, news.duplicates, pool=news.pool)
 
             def answer_fn(question: str, on_token=None, history: str = "") -> Answer:
                 relevant = retrieve_relevant_articles(news.store, news.articles, question, topic=news.topic)
@@ -250,7 +250,7 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
         log(f"[오류] {job.error}")
         return
 
-    # 준비 완료 뒤: 많이 보도된 기사 Top 5 (중복이 많이 묶인 대표 기사 + 한 줄 요약, LLM 한 번).
+    # 준비 완료 뒤: 많이 보도된 기사 Top 5 (중복이 많이 묶인 대표 기사 + 한 줄 요약. LLM 없이 묶음이 공통으로 쓴 문장을 고른다).
     # 질문은 그동안에도 받는다. 실패해도 질문 답변에는 영향이 없다.
     try:
         job.hot_articles = [_hot_payload(h) for h in hot.summarize(find_hot())]
