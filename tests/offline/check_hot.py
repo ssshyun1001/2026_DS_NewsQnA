@@ -95,4 +95,44 @@ assert top[0].members == [("중복4", "중복 본문4")]                        
 assert top[1].members == [("중복2", "중복 본문2"), ("중복3", "중복 본문3")]
 assert hot.top_duplicated(reps, {}) == []                                 # 중복이 없으면 보여 줄 기사 없음
 print("4 ok: 메모리 버전 순위 · 묶인 기사")
+
+# 5) 검색어가 든 문장: 독립된 단어로 쓰였을 때만 (조사 · 따옴표는 됨, 다른 단어의 일부는 안 됨)
+has = hot._has_term
+assert has("애플의 첫 폴더블폰이 나왔다.", ["애플"]) and has("남편 강남과 기안84가 만났다.", ["강남"])
+assert has("회사 비품을 '당근'에 판매했다.", ["당근"]) and has("이윤선 서울여대 총장이 참석했다.", ["서울여대"])
+assert has("APPLE이 발표했다.", ["Apple"])                                 # 영문은 대소문자 무시
+assert not has("사과를 따고 애플파이를 만들었다.", ["애플"])               # 애플 + 파이 (붙은 명사)
+assert not has("희귀 사과 '골든피치애플'이 대표적이다.", ["애플"])
+assert not has("뮤즈를 애플워치로 확대했다.", ["애플"]) and not has("강남구청이 발표했다.", ["강남"])
+assert has("애플컴퓨터 시절 이야기다.", ["애플컴퓨터"])                    # Kiwi가 한 단어로 못 읽는 검색어는 글자로
+assert not has("검색어가 없는 문장이다.", ["애플"]) and not has("아무 문장이다.", [])
+print("5 ok: 검색어가 독립된 단어로 든 문장")
+
+# 6) 검색어를 주면: 본문 앞부분이 아니라 검색어가 든 문장 중에서, 묶인 기사들의 검색어 문장과 비교해 고른다
+gangnam = hot.HotArticle(
+    title="이서진, 150만 원 밥값 강남에 넘겼다", link="G", press=None, pub_date=None, description="", duplicates=2,
+    content=("지상파 예능 팀과 개인 유튜버가 싱가포르에서 밥값을 걸고 맞붙었다. "     # 첫 문장에 검색 대상이 없다
+             "결과는 예상대로였다. "
+             "가수 강남이 싱가포르에서 배우 이서진과 밥값 내기를 했다가 졌다. "
+             "현지 날씨는 무더웠다."),
+    members=[("강남, 이서진과 밥값 내기서 패배", "날씨가 맑았다. 강남이 이서진과의 밥값 내기에서 졌다."),
+             ("이서진 앞 강남 지갑 탈탈", "방송인 강남이 이서진에게 밥값 내기에서 패배했다.")])
+assert hot.candidate_sentences(gangnam.content, ["강남"]) == ["가수 강남이 싱가포르에서 배우 이서진과 밥값 내기를 했다가 졌다."]
+assert hot.candidate_sentences(gangnam.content)[0].startswith("지상파 예능 팀과")              # 검색어 없으면 앞 문장
+assert hot.summarize([gangnam], ["강남"])[0].summary == "가수 강남이 싱가포르에서 배우 이서진과 밥값 내기를 했다가 졌다."
+# 검색어가 든 문장이 없으면(단어 일부로만 나오는 경우 포함) 예전처럼 앞 문장에서 고른다
+fruit = hot.HotArticle(title="홍천 사과축제 개최", link="F", press=None, pub_date=None, description="", duplicates=1,
+                       content="홍천군이 사과축제를 사흘간 열었다고 밝혔다. 행사장에서는 애플파이 등 디저트를 선보였다.",
+                       members=[("홍천 사과축제 열려", "홍천군 사과축제가 열렸다.")])
+assert hot.summarize([fruit], ["애플"])[0].summary == "홍천군이 사과축제를 사흘간 열었다고 밝혔다."
+# 앞 문장 가중치: 공통도가 비슷하면 본문 앞쪽 문장 (모든 언론사가 그대로 옮긴 뒤쪽 인용문이 리드를 밀어내지 않게)
+assert 0 < hot.POSITION_DECAY < 1
+press = hot.HotArticle(
+    title="당근 중고 전기차 거래 54% 늘어", link="P", press=None, pub_date=None, description="", duplicates=2,
+    content=("당근은 중고 전기차 거래완료 건수가 54% 늘었다고 5일 밝혔다. "
+             "당근 관계자는 중고 전기차 거래가 늘었다고 밝혔다."),
+    members=[("당근 중고 전기차 거래 54%↑", "당근은 중고 전기차 거래가 54% 늘었다고 밝혔다. 당근 관계자는 중고 전기차 거래가 늘었다고 밝혔다."),
+             ("당근, 중고 전기차 거래 증가", "당근은 중고 전기차 거래완료가 54% 늘었다. 당근 관계자는 중고 전기차 거래가 늘었다고 밝혔다.")])
+assert hot.summarize([press], ["당근"])[0].summary == "당근은 중고 전기차 거래완료 건수가 54% 늘었다고 5일 밝혔다."
+print("6 ok: 검색어 문장끼리 비교 · 없으면 앞 문장 · 앞 문장 가중치")
 print("ALL PASS")

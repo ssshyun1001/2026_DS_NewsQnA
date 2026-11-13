@@ -253,7 +253,7 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
     # 준비 완료 뒤: 많이 보도된 기사 Top 5 (중복이 많이 묶인 대표 기사 + 한 줄 요약. LLM 없이 묶음이 공통으로 쓴 문장을 고른다).
     # 질문은 그동안에도 받는다. 실패해도 질문 답변에는 영향이 없다.
     try:
-        job.hot_articles = [_hot_payload(h) for h in hot.summarize(find_hot())]
+        job.hot_articles = [_hot_payload(h) for h in hot.summarize(find_hot(), terms=selected.match_terms)]
         job.hot = "done"
     except Exception as e:
         traceback.print_exc()

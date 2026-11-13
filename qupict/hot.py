@@ -6,18 +6,23 @@
 
     top_duplicated_db(topic_id, period_days)      DB 버전: article_topics에서 센다
     top_duplicated(articles, duplicates, pool)    메모리 버전: {중복 link: 대표 link}에서 센다
-    summarize(hot)                                기사마다 한 줄 요약을 채운다 (LLM 없이, 아래)
+    summarize(hot, terms)                         기사마다 한 줄 요약을 채운다 (LLM 없이, 아래)
 
 ## 한 줄 요약: 묶음이 공통으로 쓴 문장 고르기 (LLM 0번)
 
 여러 언론사가 같은 사건을 쓰면, 핵심 사실(누가 · 무엇을)에 쓰는 단어는 거의 모든 기사에 나오고
-각 언론사가 덧붙인 배경 · 해설은 그 기사에만 나온다. 그래서 대표 기사 앞 몇 문장 중에서
+각 언론사가 덧붙인 배경 · 해설은 그 기사에만 나온다. 그래서 대표 기사에서 검색어가 들어간 문장 중
 "같은 묶음의 다른 기사들도 쓴 단어"를 가장 많이 담은 문장을 고른다.
 
-    1) 후보 문장   대표 기사 본문 앞 CANDIDATE_SENTENCES문장 (Kiwi 문장 분리). 기자명 · 매체 머리말을 떼고,
-                   "~다."로 끝나는 문장만 남긴다. 너무 짧거나 긴 문장, 연락처 · 저작권 · 방송 대본 문장은 뺀다
+    1) 후보 문장   대표 기사 본문 전체에서 검색어(또는 별칭)가 들어간 문장 (Kiwi 문장 분리).
+                   기사 첫 문장에 검색 대상이 없는 경우가 많아서다 (예: 강남 1위 기사 첫 문장 "지상파 예능 팀과
+                   개인 유튜버가 …"). 저장된 본문에 문단 구분이 없어서 문단 대신 문장 단위로 찾는다.
+                   검색어가 든 문장이 없으면 본문 앞 CANDIDATE_SENTENCES문장 (예전 방식).
+                   기자명 · 매체 머리말을 떼고, "~다."로 끝나는 문장만 남긴다.
+                   너무 짧거나 긴 문장, 연락처 · 저작권 · 방송 대본 문장은 뺀다
     2) 단어        명사를 뽑는다 (filtering.extract_nouns, 중복 제거와 같은 Kiwi). 고유명사 · 영문은 1, 일반명사는 0.5
-    3) 공통도      그 단어가 묶음의 다른 기사(제목 + 앞부분) 중 몇 %에 나오나
+    3) 공통도      그 단어가 묶음의 다른 기사(제목 + 검색어가 든 문장) 중 몇 %에 나오나
+                   → 각 언론사가 검색 대상에 대해 쓴 부분끼리 비교한다
     4) 흔함 빼기   Top N 묶음 전체에 다 나오는 단어(검색어 "애플" 등)는 IDF로 낮춘다 → 묶음마다 다른 사건을 가리키는 단어가 남는다
     5) 점수        Σ(품사 가중치 × 공통도 × IDF) / (문장의 단어 수)^0.3 — 긴 문장이 단어 수로만 이기지 않게
 
@@ -33,6 +38,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from typing import Iterable, Optional
 
 from qupict.schemas import Article
@@ -41,6 +47,9 @@ TOP_N = 5
 ANSWER_STATUSES = ("관련", "보류")     # 질문 답변에 쓰는 기사와 같은 판정만 (다른 의미의 기사는 보여 주지 않는다)
 SUMMARY_MAX_CHARS = 120                # 한 줄 요약 길이 상한 (화면에서 한두 줄)
 
+BODY_SCAN_CHARS = 4000                 # 검색어가 들어간 문장을 찾을 본문 범위 (기사 대부분이 이 안에 끝난다)
+MEMBER_TERM_SENTENCES = 5              # 묶음의 다른 기사는 제목 + 검색어가 든 문장 몇 개로 단어를 센다
+# 검색어가 든 문장이 없을 때(또는 검색어를 안 줬을 때)의 예전 방식
 CANDIDATE_SENTENCES = 5                # 대표 기사 본문 앞 몇 문장에서 고를지 (뉴스는 핵심을 앞에 쓴다)
 MEMBER_LEAD_SENTENCES = 3              # 묶음의 다른 기사는 제목 + 앞 몇 문장으로 단어를 센다
 MIN_SENTENCE_CHARS = 20                # 이보다 짧은 문장은 후보에서 뺀다 ("세 기업의 전략은 다르다." 같은 연결 문장)
@@ -55,6 +64,11 @@ TAG_WEIGHT = {"NNG": 0.5}              # 일반명사는 절반만 (고유명사
 # 측정(당근 1위 묶음): √이면 "거래완료 건수는 약 2.7배 증가했다."(주어 없음),
 #   0.3이면 "모델 Y의 문의자 수는 지난해 같은 기간보다 88%, 개인 매물 등록 수는 약 2.9배 늘었다."
 LENGTH_PENALTY = 0.3
+# 후보 문장(검색어가 든 문장)이 본문에서 하나 뒤로 갈 때마다 점수에 곱하는 값. 뉴스는 핵심을 앞에 쓴다.
+# 측정(2026-11-14, 5개 topic Top 5): 1(위치 무시)이면 모든 언론사가 그대로 옮긴 보도자료 인용문
+#   ("당근 관계자는 …"), 참석자 명단 같은 뒷부분이 공통도로 이겨 리드를 밀어냈다. 0.85면 리드로 돌아오고
+#   강남 묶음에서 좋아진 결과(검색 대상이 주어인 문장)는 그대로. 0.7은 서울여대 2위가 인용문으로 바뀌었다.
+POSITION_DECAY = 0.85
 
 
 @dataclass
@@ -166,18 +180,75 @@ _SENTENCE_END_SPLIT_RE = re.compile(r"(?<=다\.)\s+|(?<=다\.[\"'”’)\]])\s+"
 SPLIT_CHARS_PER_SENTENCE = 250
 
 
-def _sentences(text: str, n: int) -> list[str]:
-    """본문 앞 n문장. Kiwi 문장 분리기로 나눈다: 따옴표 안의 "!" "?"("'장한, 나!' 특집으로 꾸며졌다.")에서
-    끊지 않는다 (마침표 기준으로 나누면 "…누가 밥 살까?"처럼 문장 중간이 잘렸다)."""
+@lru_cache(maxsize=1024)
+def _split(head: str) -> tuple[str, ...]:
+    """Kiwi 문장 분리기로 나눈다: 따옴표 안의 "!" "?"("'장한, 나!' 특집으로 꾸며졌다.")에서
+    끊지 않는다 (마침표 기준으로 나누면 "…누가 밥 살까?"처럼 문장 중간이 잘렸다).
+    같은 기사를 대표 · 묶음 · IDF 계산에서 여러 번 나누므로 결과를 기억해 둔다."""
     from qupict.filtering import get_kiwi
 
-    if not (text or "").strip():
-        return []
-    head = text[:n * SPLIT_CHARS_PER_SENTENCE + 300]       # 머리말 · 부제목 몫으로 조금 더
-    out = []
+    out: list[str] = []
     for s in get_kiwi().split_into_sents(head):
         out += [part.strip() for part in _SENTENCE_END_SPLIT_RE.split(s.text) if part.strip()]
-    return out[:n]
+    return tuple(out)
+
+
+def _sentences(text: str, n: int) -> list[str]:
+    """본문 앞 n문장."""
+    if not (text or "").strip():
+        return []
+    return list(_split(text[:n * SPLIT_CHARS_PER_SENTENCE + 300]))[:n]      # 머리말 · 부제목 몫으로 조금 더
+
+
+@lru_cache(maxsize=256)
+def _single_token(term: str) -> bool:
+    """Kiwi가 검색어를 한 단어로 읽나 ("애플" O, "애플컴퓨터"는 "애플" + "컴퓨터"로 나뉨 → X)."""
+    from qupict.filtering import get_kiwi
+
+    return len(get_kiwi().tokenize(term)) == 1
+
+
+def _has_term(sentence: str, terms: Iterable[str]) -> bool:
+    """문장에 검색어(또는 별칭)가 독립된 단어로 들어 있나. 영문 별칭("Apple")은 대소문자를 가리지 않는다.
+
+    글자만 들어 있는 것으로는 부족하다: 과일 사과의 "애플파이" · "골든피치애플", 기업 Apple 기사 속
+    메타 제품 설명의 "애플워치"처럼 검색어가 다른 단어의 일부인 문장이 뽑혔다 (측정 2026-11-14).
+    Kiwi로 나눠서 검색어가 한 단어로 나오고, 바로 뒤에(띄어쓰기 없이) 명사가 붙지 않은 경우만 인정한다.
+      O "애플의" "강남과" "'당근'에" "서울여대 총장"    X "애플파이"(애플+파이) "애플워치" "강남구청"
+    Kiwi가 한 단어로 읽지 못하는 검색어("애플컴퓨터")는 글자가 들어 있으면 인정한다."""
+    from qupict.filtering import get_kiwi
+
+    lowered = sentence.lower()
+    present = [t for t in terms if t and t.lower() in lowered]
+    if not present:
+        return False
+    if any(not _single_token(t) for t in present):
+        return True
+    wanted = {t.lower() for t in present}
+    tokens = get_kiwi().tokenize(sentence)
+    for i, tok in enumerate(tokens):
+        if tok.form.lower() not in wanted:
+            continue
+        nxt = tokens[i + 1] if i + 1 < len(tokens) else None
+        if nxt is None or nxt.start != tok.start + tok.len or not nxt.tag.startswith("NN"):
+            return True
+    return False
+
+
+def term_sentences(text: str, terms: Iterable[str], limit: Optional[int] = None) -> list[str]:
+    """본문(앞 BODY_SCAN_CHARS자)에서 검색어(또는 별칭)가 들어간 문장만, 본문 순서대로 최대 limit개.
+    저장된 본문에는 문단 구분(줄바꿈)이 없어서(크롤링할 때 사라짐) 문단 대신 문장 단위로 찾는다."""
+    terms = tuple(t for t in terms if t)
+    if not terms or not (text or "").strip():
+        return []
+    found = _term_sentences(text[:BODY_SCAN_CHARS], terms)
+    return list(found if limit is None else found[:limit])
+
+
+@lru_cache(maxsize=1024)
+def _term_sentences(head: str, terms: tuple[str, ...]) -> tuple[str, ...]:
+    """term_sentences의 실제 계산. 같은 기사를 IDF 계산 · 묶음 비교에서 다시 보므로 결과를 기억해 둔다."""
+    return tuple(s for s in _split(head) if _has_term(s, terms))
 
 
 def _clean(sentence: str) -> str:
@@ -185,16 +256,25 @@ def _clean(sentence: str) -> str:
     return " ".join(_BYLINE_RE.sub("", _CAPTION_RE.sub("", sentence)).split())
 
 
-def candidate_sentences(content: str) -> list[str]:
-    """한 줄 요약 후보: 본문 앞 CANDIDATE_SENTENCES문장에서 머리말을 떼고, "~다."로 끝나는 문장만 남긴다.
-    연락처 · 저작권 · 방송 대본 문장과 너무 짧거나 긴 문장은 뺀다. 순서는 본문 순서 그대로."""
+def _usable(sentences: Iterable[str]) -> list[str]:
+    """머리말을 떼고, "~다."로 끝나는 문장만 남긴다.
+    연락처 · 저작권 · 방송 대본 문장과 너무 짧거나 긴 문장은 뺀다. 순서는 그대로."""
     out = []
-    for s in _sentences(content, CANDIDATE_SENTENCES):
+    for s in sentences:
         s = _clean(s)
         if (MIN_SENTENCE_CHARS <= len(s) <= MAX_SENTENCE_CHARS and _DECLARATIVE_END_RE.search(s)
                 and not _SKIP_RE.search(s)):
             out.append(s)
     return out
+
+
+def candidate_sentences(content: str, terms: Iterable[str] = ()) -> list[str]:
+    """한 줄 요약 후보.
+    terms(검색어 · 별칭)를 주면 본문 전체에서 검색어가 들어간 문장 중 쓸 수 있는 것.
+    없거나(terms를 안 줌 · 검색어가 든 문장이 다 빠짐) 하면 예전처럼 본문 앞 CANDIDATE_SENTENCES문장에서 고른다."""
+    terms = list(terms)
+    return (_usable(term_sentences(content, terms)) if terms else []) or \
+        _usable(_sentences(content, CANDIDATE_SENTENCES))
 
 
 def _words(text: str) -> dict[str, float]:
@@ -209,16 +289,20 @@ def _words(text: str) -> dict[str, float]:
     return weights
 
 
-def _member_doc(title: str, content: str) -> set[str]:
-    return set(_words(title + "\n" + " ".join(_sentences(content, MEMBER_LEAD_SENTENCES))))
+def _member_doc(title: str, content: str, terms: Iterable[str] = ()) -> set[str]:
+    """묶인 기사 하나에서 비교할 단어: 제목 + 검색어가 들어간 문장(앞에서 MEMBER_TERM_SENTENCES개).
+    검색어가 든 문장이 없거나 terms를 안 주면 제목 + 앞 MEMBER_LEAD_SENTENCES문장 (예전 방식)."""
+    body = term_sentences(content, terms, MEMBER_TERM_SENTENCES) or _sentences(content, MEMBER_LEAD_SENTENCES)
+    return set(_words(title + "\n" + " ".join(body)))
 
 
-def pick_common_sentence(h: HotArticle, idf: dict[str, float]) -> str:
-    """대표 기사 앞 문장 중, 묶인 다른 기사들도 쓴 단어를 가장 많이 담은 문장. 후보가 없으면 ""."""
-    candidates = candidate_sentences(h.content)
+def pick_common_sentence(h: HotArticle, idf: dict[str, float], terms: Iterable[str] = ()) -> str:
+    """대표 기사의 후보 문장 중, 묶인 다른 기사들도 쓴 단어를 가장 많이 담은 문장. 후보가 없으면 ""."""
+    terms = list(terms)
+    candidates = candidate_sentences(h.content, terms)
     if not candidates:
         return ""
-    member_docs = [_member_doc(t, c) for t, c in h.members] or [_member_doc(h.title, "")]
+    member_docs = [_member_doc(t, c, terms) for t, c in h.members] or [_member_doc(h.title, "")]
     share = Counter(w for doc in member_docs for w in doc)          # 단어 → 그 단어를 쓴 기사 수
 
     def score(sentence: str) -> float:
@@ -228,8 +312,10 @@ def pick_common_sentence(h: HotArticle, idf: dict[str, float]) -> str:
         total = sum(weight * share[w] / len(member_docs) * idf.get(w, 1.0) for w, weight in words.items())
         return total / len(words) ** LENGTH_PENALTY
 
+    # 뉴스는 중요한 내용을 앞에 쓴다: 후보 순서(본문 순서)대로 POSITION_DECAY를 곱해 앞 문장을 조금 더 쳐준다.
     # 점수가 같으면 앞 문장 (max는 처음 나온 것을 고른다)
-    return max(candidates, key=score)
+    best = max(range(len(candidates)), key=lambda i: score(candidates[i]) * POSITION_DECAY ** i)
+    return candidates[best]
 
 
 def _one_line(text: str) -> str:
@@ -237,17 +323,19 @@ def _one_line(text: str) -> str:
     return text if len(text) <= SUMMARY_MAX_CHARS else text[:SUMMARY_MAX_CHARS - 1].rstrip() + "…"
 
 
-def summarize(hot: list[HotArticle]) -> list[HotArticle]:
+def summarize(hot: list[HotArticle], terms: Iterable[str] = ()) -> list[HotArticle]:
     """기사마다 한 줄 요약(summary)을 채운다. LLM을 부르지 않는다 (위 설명).
+    terms: 검색어와 별칭 (SelectedSense.match_terms). 주면 본문 앞부분 대신 검색어가 들어간 문장끼리 비교한다.
     IDF는 Top N 묶음 전체(대표 + 묶인 기사)를 한 문서 집합으로 보고 계산한다:
     idf = log((1 + 문서 수) / (1 + 그 단어가 나온 문서 수)) + 1 (filtering.noun_tfidf와 같은 식).
     고를 문장이 없으면(방송 대본 · 표처럼 "~다."로 끝나는 문장이 없는 기사) summary를 비워 둔다 →
     화면은 제목 · 링크만 보여 준다. 네이버 요약문은 "…"로 이어 붙인 조각이라 대신 쓰지 않는다."""
     if not hot:
         return hot
-    docs = [_member_doc(t, c) for h in hot for t, c in [(h.title, h.content), *h.members]]
+    terms = list(terms)
+    docs = [_member_doc(t, c, terms) for h in hot for t, c in [(h.title, h.content), *h.members]]
     df = Counter(w for doc in docs for w in doc)
     idf = {w: math.log((1 + len(docs)) / (1 + n)) + 1 for w, n in df.items()}
     for h in hot:
-        h.summary = _one_line(pick_common_sentence(h, idf))
+        h.summary = _one_line(pick_common_sentence(h, idf, terms))
     return hot

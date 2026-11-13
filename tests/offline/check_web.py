@@ -91,8 +91,9 @@ def main() -> None:
                 hot.HotArticle(title="강남 귀화 소식", link="https://hot/2", press=None, pub_date=None,
                                description="", content="강남이 귀화했다. 뒷이야기.", duplicates=2)]
 
-    def fake_summarize(items):
-        time.sleep(0.2)                               # LLM 요약은 준비 완료 뒤에 돈다
+    def fake_summarize(items, terms=()):
+        time.sleep(0.2)                               # 한 줄 요약은 준비 완료 뒤에 돈다
+        calls["hot_terms"] = list(terms)
         items[0].summary = "강남이 새 예능에 나온다."
         return items
     hot.top_duplicated_db, hot.summarize = fake_top, fake_summarize
@@ -130,6 +131,7 @@ def main() -> None:
             break
         time.sleep(0.05)
     assert later["hot"] == "done" and calls["hot"] == (19, 30), (later, calls)
+    assert calls["hot_terms"] == ["강남"]               # 한 줄 요약은 검색어가 든 문장끼리 비교한다
     assert later["hot_articles"] == [
         {"title": "강남 새 예능 출연", "link": "https://hot/1", "press": "연합뉴스", "pub_date": "2026-11-01",
          "duplicates": 7, "summary": "강남이 새 예능에 나온다."},
