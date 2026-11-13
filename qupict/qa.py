@@ -63,9 +63,14 @@ _SYSTEM_PROMPT = """\
 8. 답변은 한국어로, 간결하고 자연스럽게 작성하세요.
 9. [참고 기사]에서 "[기사 이미지]"로 시작하는 부분은 기사 본문이 아니라 기사에 실린 사진을 글로 옮긴
    설명입니다. 이 내용을 근거로 쓸 때는 "(기사 N, 이미지)"로 표시하세요.
-10. 사용자는 [검색 대상]에 대해 묻고 있습니다. 질문에 주어가 없거나 "그", "여기"처럼 가리키는 말만
-    있어도, 검색 대상에 대한 질문으로 보고 되묻지 말고 바로 답하세요.
-11. 답변 첫 문장은 질문에 대한 직접적인 답으로 시작하고, 검색 대상의 이름을 주어로 넣으세요.
+10. 사용자는 [검색 대상]에 대해 묻고 있습니다. 질문에 주어가 없거나 "그", "그 사람", "여기"처럼
+    가리키는 말만 있으면, 되묻지 말고 아래 순서로 대상을 정해 바로 답하세요.
+    - [이전 대화]에 그 말이 가리키는 대상이 분명히 있으면 그 대상
+      (예: 앞 답변이 "강남의 아내는 이상화입니다"이고 질문이 "그 사람 직업은?"이면 이상화)
+    - 그렇지 않으면 [검색 대상]
+    [이전 대화]는 무엇을 가리키는지 알아내는 데만 쓰세요. 사실의 근거는 [참고 기사]이고,
+    [이전 대화]의 내용에는 (기사 N) 표시를 붙이지 마세요.
+11. 답변 첫 문장은 질문에 대한 직접적인 답으로 시작하고, 질문이 가리키는 대상의 이름을 주어로 넣으세요.
     대상을 부를 때는 괄호 앞의 검색어를 쓰세요. 배경 설명은 그 뒤에 이어 쓰세요.
     예: 검색 대상이 "강남 (방송인 강남)"이고 질문이 "아내가 누구야?"이면
         "강남의 아내는 ○○입니다(기사 N). …" 처럼 답하세요.
@@ -76,12 +81,33 @@ _SYSTEM_PROMPT = """\
 _prompt = ChatPromptTemplate.from_messages(
     [
         ("system", _SYSTEM_PROMPT),
-        ("human", "[검색 대상] {subject}\n[참고 가능한 기사 기간] {period}\n질문: {question}\n\n[참고 기사]\n{context}"),
+        ("human", "[검색 대상] {subject}\n[이전 대화]\n{history}\n[참고 가능한 기사 기간] {period}\n질문: {question}"
+                  "\n\n[참고 기사]\n{context}"),
     ]
 )
 
 NO_SUBJECT = "(지정 없음)"
 NO_PERIOD = "(알 수 없음)"
+NO_HISTORY = "(없음)"
+
+# [이전 대화]에 넣는 범위. 바로 앞 질문을 가리키는 말("그 사람", "거기")을 알아듣는 데는 최근 몇 번이면 충분하다.
+# 답변 전체를 넣으면 프롬프트가 길어지므로 앞부분만 (첫 문장에 답이 있다: 11번 규칙).
+HISTORY_TURNS = 2
+HISTORY_ANSWER_CHARS = 300
+_CITE_MARK_RE = re.compile(r"\s*\(기사\s*\d+[^)]*\)")
+
+
+def history_text(turns: list[tuple[str, str]]) -> str:
+    """앞서 한 질문·답변 [(질문, 답변), …] → 답변 프롬프트의 [이전 대화] 글 (최근 HISTORY_TURNS개).
+    답변의 "(기사 N)" 표시는 뺀다: 번호는 그 답변의 출처 번호라 이번 질문의 [참고 기사] 번호와 다르다.
+    LLM을 따로 부르지 않는다 (앞 대화를 요약하지 않고 그대로 앞부분만 넣는다)."""
+    lines = []
+    for question, answer in turns[-HISTORY_TURNS:]:
+        text = " ".join(_CITE_MARK_RE.sub("", answer).split())
+        if len(text) > HISTORY_ANSWER_CHARS:
+            text = text[:HISTORY_ANSWER_CHARS - 1].rstrip() + "…"
+        lines.append(f"사용자: {question.strip()}\n답변: {text}")
+    return "\n".join(lines) or NO_HISTORY
 
 # 뉴스 준비가 끝나면 자동으로 하는 첫 질문 (웹 화면 · 터미널 모두). 사용자 질문은 그 뒤에 답한다.
 # web/index.html에도 같은 문장이 있다 (tests/offline/check_web.py가 둘이 같은지 확인한다).
@@ -137,7 +163,7 @@ def _get_chain():
 
 def generate_answer(question: str, articles: list[Article],
                     on_token: Callable[[str], None] | None = None, subject: str = NO_SUBJECT,
-                    period: str = NO_PERIOD) -> Answer:
+                    period: str = NO_PERIOD, history: str = NO_HISTORY) -> Answer:
     """
     질문 + 관련 기사 목록을 받아 답변을 생성한다. (메모리 버전)
 
@@ -147,6 +173,7 @@ def generate_answer(question: str, articles: list[Article],
     on_token: 주면 답변을 스트리밍으로 받으며 조각마다 부른다 (generate_answer_from_chunks와 같음)
     subject: 사용자가 검색한 대상 (answer_subject로 만든 글). 질문에 주어가 없으면 이 대상에 대한 질문으로 본다
     period: 질문에 쓸 수 있는 기사의 기간 (answer_period로 만든 글). 관련 기사를 못 찾았을 때 이 기간을 밝힌다
+    history: 앞서 한 질문·답변 (history_text로 만든 글). "그 사람"처럼 앞 답변을 가리키는 질문을 알아듣는 데 쓴다
     """
     if articles:
         context = "\n\n".join(
@@ -156,7 +183,7 @@ def generate_answer(question: str, articles: list[Article],
         context = NO_ARTICLE_CONTEXT
 
     with timing.timed("답변 생성(LLM)") as t:
-        answer_text = _run_answer_chain(question, context, on_token, subject, period)
+        answer_text = _run_answer_chain(question, context, on_token, subject, period, history)
         t.note = f"입력 근거 {len(context)}자 → 답변 {len(answer_text)}자"
 
     return Answer(question=question, answer=answer_text, sources=articles)
@@ -187,7 +214,7 @@ def build_chunk_context(hits: list) -> tuple[str, list[Article], list[str]]:
 
 
 def _run_answer_chain(question: str, context: str, on_token: Callable[[str], None] | None,
-                      subject: str = NO_SUBJECT, period: str = NO_PERIOD) -> str:
+                      subject: str = NO_SUBJECT, period: str = NO_PERIOD, history: str = NO_HISTORY) -> str:
     """답변 LLM 호출. on_token을 주면 스트리밍: 글자가 만들어지는 대로 on_token(조각)을 부른다.
 
     스트리밍은 "다 만들어진 뒤 한 번에" 대신 "만들어지는 대로" 받는 것뿐이라 완성된 답변 글은 같다.
@@ -196,7 +223,7 @@ def _run_answer_chain(question: str, context: str, on_token: Callable[[str], Non
     """
     chain = _get_chain()
     inputs = {"question": question, "context": context, "subject": subject or NO_SUBJECT,
-              "period": period or NO_PERIOD}
+              "period": period or NO_PERIOD, "history": history or NO_HISTORY}
     if on_token is None:
         return chain.invoke(inputs)
     parts: list[str] = []
@@ -218,14 +245,16 @@ def _run_answer_chain(question: str, context: str, on_token: Callable[[str], Non
 
 def generate_answer_from_chunks(question: str, hits: list,
                                 on_token: Callable[[str], None] | None = None,
-                                subject: str = NO_SUBJECT, period: str = NO_PERIOD) -> Answer:
+                                subject: str = NO_SUBJECT, period: str = NO_PERIOD,
+                                history: str = NO_HISTORY) -> Answer:
     """[DB 버전] 검색된 청크로 답변을 만든다. 출처에 근거 종류(본문 / 이미지 설명)를 함께 돌려준다.
     on_token: 주면 답변을 스트리밍으로 받으며 조각마다 부른다 (run.py가 화면에 바로 찍는 데 씀)
     subject: 사용자가 검색한 대상 (answer_subject로 만든 글). 질문에 주어가 없으면 이 대상에 대한 질문으로 본다
-    period: 질문에 쓸 수 있는 기사의 기간 (answer_period로 만든 글). 관련 기사를 못 찾았을 때 이 기간을 밝힌다"""
+    period: 질문에 쓸 수 있는 기사의 기간 (answer_period로 만든 글). 관련 기사를 못 찾았을 때 이 기간을 밝힌다
+    history: 앞서 한 질문·답변 (history_text로 만든 글). 없으면 NO_HISTORY"""
     context, sources, kinds = build_chunk_context(hits) if hits else (NO_ARTICLE_CONTEXT, [], [])
     with timing.timed("답변 생성(LLM)") as t:
-        answer_text = _run_answer_chain(question, context, on_token, subject, period)
+        answer_text = _run_answer_chain(question, context, on_token, subject, period, history)
         t.note = f"입력 근거 {len(context)}자 → 답변 {len(answer_text)}자"
     return Answer(question=question, answer=answer_text, sources=sources, source_kinds=kinds,
                   cited=cited_numbers(answer_text, len(sources)))

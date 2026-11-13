@@ -128,10 +128,37 @@ assert FakeChain.subject == "강남 (방송인 강남: M.I.B 출신)"
 Q.generate_answer("아내가 누구야?", [], subject=Q.answer_subject(sel))       # 메모리 버전도 같은 대상을 넘긴다
 assert FakeChain.subject == "강남 (방송인 강남: M.I.B 출신)"
 msgs = Q._prompt.format_messages(subject="강남 (방송인 강남)", period="2026-10-14 ~ 2026-11-13",
-                                 question="아내가 누구야?", context="-")
-assert msgs[1].content.startswith("[검색 대상] 강남 (방송인 강남)\n[참고 가능한 기사 기간] 2026-10-14 ~ 2026-11-13\n"
-                                  "질문: 아내가 누구야?")
+                                 question="아내가 누구야?", context="-", history=Q.NO_HISTORY)
+assert msgs[1].content.startswith("[검색 대상] 강남 (방송인 강남)\n[이전 대화]\n(없음)\n"
+                                  "[참고 가능한 기사 기간] 2026-10-14 ~ 2026-11-13\n질문: 아내가 누구야?")
 print("5-1 ok: 답변 프롬프트에 검색 대상")
+
+# 5-3) 이전 대화: 최근 2번만, 답변은 앞부분만, (기사 N) 표시는 뺀다. 답변 · 검색에 넘어간다
+assert Q.history_text([]) == Q.NO_HISTORY
+long_answer = "강남의 아내는 이상화입니다(기사 1). " + "가" * 400
+h = Q.history_text([("첫 질문", "첫 답(기사 2)."), ("와이프가 누군데?", "강남의 아내는 이상화입니다(기사 1, 이미지)."),
+                    ("그 사람 직업은?", long_answer)])
+assert "첫 질문" not in h and h.startswith("사용자: 와이프가 누군데?\n답변: 강남의 아내는 이상화입니다.\n사용자: 그 사람 직업은?")
+assert "(기사" not in h and h.endswith("…") and len(h.splitlines()[-1]) <= len("답변: ") + Q.HISTORY_ANSWER_CHARS
+_plain_invoke = FakeChain.invoke
+FakeChain.invoke = lambda self, x: (setattr(FakeChain, "history", x["history"]), "답변")[1]
+Q.generate_answer_from_chunks("그 사람 직업은?", hits, history=h)
+assert FakeChain.history == h
+Q.generate_answer_from_chunks("질문", hits)
+assert FakeChain.history == Q.NO_HISTORY                                   # 안 주면 "(없음)"
+FakeChain.invoke = _plain_invoke
+seen_ctx = []
+R.build_search_texts = lambda q, ctx, hy, m: seen_ctx.append((q, ctx)) or ["q"]
+R.search_topic(3, "그 사람 직업은?", sel, history=h)
+assert seen_ctx[-1][0] == "그 사람 직업은?"                               # 이전 대화가 있으면 검색어를 붙이지 않는다
+assert seen_ctx[-1][1].startswith(R.topic_context(sel)) and "이상화" in seen_ctx[-1][1]   # HyDE·변형 질문 맥락에 이전 대화
+R.search_topic(3, "근황은?", sel)
+assert seen_ctx[-1][0] == "강남 근황은?"                                   # 첫 질문에 검색어가 없으면 앞에 붙인다 (LLM 없이)
+R.search_topic(3, "강남 근황", sel)
+assert seen_ctx[-1] == ("강남 근황", R.topic_context(sel))                # 검색어가 있으면 그대로, 이전 대화 없으면 맥락도 그대로
+alias = SelectedSense(query="삼전", sense=Sense(name="삼성전자", definition="d", aliases=["삼성전자"]))
+assert R.with_subject("삼성전자 실적은?", alias) == "삼성전자 실적은?" and R.with_subject("실적은?", alias) == "삼전 실적은?"
+print("5-3 ok: 이전 대화 · 질문에 검색어 붙이기")
 
 # 5-2) 기사 기간: 가장 오래된 기사 날짜 ~ 오늘 (한국 시간 기준), 기사가 없으면 "(알 수 없음)"
 kst_late = datetime(2026, 10, 13, 16, tzinfo=timezone.utc)                 # 한국 시간 10월 14일 새벽 1시

@@ -14,9 +14,11 @@ QuPicT 웹 서비스 — run.py의 질문 서비스를 브라우저 화면으로
                                        POST /api/ask           같은 답변을 다 만든 뒤 한 번에 (예전 방식)
 
 준비하는 동안에도 질문 칸이 열려 있다. 미리 적은 질문은 화면이 기억해 두었다가 준비가 끝나면 차례로 보낸다.
+예전에 준비한 검색어·의미(DB 버전)는 준비가 끝나기를 기다리지 않고, DB에 저장된 기사로 바로 답하기 시작한다.
 
 세션(준비한 뉴스)은 서버 메모리에만 있다 → 서버를 끄면 사라진다. DB 버전은 DB에 쌓인 것을 다시 쓰므로
-같은 검색어를 다시 준비하면 이미 한 일은 건너뛰어 빠르다.
+같은 검색어를 다시 준비하면 이미 한 일은 건너뛰어 빠르다. 세션은 앞서 한 질문·답변을 기억해서
+"그 사람 직업은?"처럼 앞 답변을 가리키는 질문도 알아듣는다 (qa.history_text).
 """
 from __future__ import annotations
 
@@ -25,6 +27,7 @@ import asyncio
 import json
 import queue
 import threading
+import time
 import traceback
 import uuid
 from dataclasses import dataclass, field
@@ -61,15 +64,29 @@ class Job:
     images: str = ""                   # 준비 완료 뒤 이미지 → 글(OCR·VLM): "" 안 함 / running / done
     hot: str = ""                      # 준비 완료 뒤 많이 보도된 기사 Top 5: "" 아직 / running / done / error
     hot_articles: list[dict] = field(default_factory=list)   # 중복이 많이 묶인 대표 기사 (한 줄 요약 · 링크)
+    early: int = 0                     # 준비가 끝나기 전에 DB에 저장된 기사로 먼저 답할 때, 그 기사 수 (0 = 아님)
+    elapsed: float = 0.0               # 준비에 걸린 시간(초). 준비 완료 때 채운다
 
 
 @dataclass
 class Session:
-    """준비가 끝난 뉴스. 질문이 오면 answer_fn(질문, on_token)으로 답한다.
-    on_token을 주면 답변 글 조각이 만들어질 때마다 불린다 (스트리밍). None이면 다 만든 뒤 한 번에."""
+    """질문에 답할 수 있는 뉴스. 질문이 오면 ask(질문, on_token)으로 답한다.
+    answer_fn(질문, on_token, 이전 대화 글): on_token을 주면 답변 글 조각이 만들어질 때마다 불린다 (스트리밍).
+    turns: 이 세션에서 한 질문·답변. 다음 질문의 [이전 대화]로 넘겨 "그 사람"처럼 앞 답변을 가리키는 질문도 알아듣게 한다."""
     label: str
     mode: str                          # "DB" / "메모리"
-    answer_fn: Callable[[str, Optional[Callable[[str], None]]], Answer]
+    answer_fn: Callable[[str, Optional[Callable[[str], None]], str], Answer]
+    turns: list[tuple[str, str]] = field(default_factory=list)
+
+    def ask(self, question: str, on_token: Optional[Callable[[str], None]] = None) -> Answer:
+        from qupict.qa import history_text
+
+        with _lock:
+            history = history_text(self.turns)
+        answer = self.answer_fn(question, on_token, history)
+        with _lock:
+            self.turns.append((question, answer.answer))
+        return answer
 
 
 _candidates: dict[str, SenseCandidates] = {}   # 검색어 → 의미 후보 (선택할 때 다시 쓴다)
@@ -161,7 +178,19 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
     from qupict import hot
 
     job = _jobs[job_id]
-    log = job.logs.append
+    start = time.perf_counter()
+
+    def log(line: str) -> None:        # 줄마다 시작부터 걸린 시간을 붙인다 → 화면에서 단계별 속도가 보인다
+        job.logs.append(f"[{time.perf_counter() - start:5.1f}초] {line}")
+
+    def open_session(answer_fn) -> None:
+        """질문을 받기 시작한다 (한 작업에 한 번만. 저장된 기사로 먼저 열었으면 그 세션을 계속 쓴다)."""
+        with _lock:
+            if job.session_id is None:
+                session_id = uuid.uuid4().hex
+                _sessions[session_id] = Session(job.label, "메모리" if memory else "DB", answer_fn)
+                job.session_id = session_id
+
     try:
         if memory:
             from qupict.qa import answer_period, answer_subject, generate_answer, oldest_date
@@ -174,35 +203,46 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
             oldest = oldest_date(news.articles)
             find_hot = lambda: hot.top_duplicated(news.articles, news.duplicates)
 
-            def answer_fn(question: str, on_token=None) -> Answer:
+            def answer_fn(question: str, on_token=None, history: str = "") -> Answer:
                 relevant = retrieve_relevant_articles(news.store, news.articles, question, topic=news.topic)
                 return generate_answer(question, relevant, on_token=on_token, subject=answer_subject(selected),
-                                       period=answer_period(oldest))
+                                       period=answer_period(oldest), history=history)
         else:
-            from qupict.qa import answer_period, answer_subject, generate_answer_from_chunks
+            from qupict.qa import NO_HISTORY, answer_period, answer_subject, generate_answer_from_chunks
             from qupict.retrieval import search_topic
             from run import oldest_searchable_or_none, prepare_topic, wait_after_prepare
 
-            topic_id = asyncio.run(prepare_topic(selected, req.period_days, req.max_articles, log=log))
-            wait_after_prepare(log=log)        # "준비 완료" 전에 잠깐 기다린다 (run.PREPARE_SETTLE_SECONDS)
-            oldest = oldest_searchable_or_none(topic_id, req.period_days)
+            # 답변이 쓰는 topic · 기사 기간. 저장된 기사로 먼저 답하는 동안에도 같은 함수를 쓰고, 준비가 끝나면 값만 바꾼다
+            # (검색은 질문할 때마다 DB에서 하므로, 준비 중에 새로 저장된 기사도 저장되는 대로 답변에 들어간다)
+            current = {"topic_id": None, "oldest": None}
+
+            def answer_fn(question: str, on_token=None, history: str = NO_HISTORY) -> Answer:
+                hits = search_topic(current["topic_id"], question, selected, period_days=req.period_days,
+                                    history="" if history == NO_HISTORY else history)
+                return generate_answer_from_chunks(question, hits, on_token=on_token, subject=answer_subject(selected),
+                                                   period=answer_period(current["oldest"]), history=history)
+
+            # 예전에 준비한 적 있는 검색어·의미면, 수집·판정을 기다리지 않고 DB에 저장된 기사로 바로 답하기 시작한다.
+            # (DB에 쌓아 두고 다시 쓰는 것이 이 서비스가 DB를 쓰는 이유: 같은 검색어는 기다리지 않는다)
+            early = threading.Thread(target=_open_from_db, daemon=True,
+                                     args=(job, selected, req.period_days, current, answer_fn, open_session, log))
+            early.start()
+            prepared = asyncio.run(prepare_topic(selected, req.period_days, req.max_articles, log=log))
+            early.join()
+            topic_id = prepared.topic_id
+            # "준비 완료" 전에 잠깐 기다린다 (run.PREPARE_SETTLE_SECONDS). 새로 저장한 것이 없으면 기다리지 않는다
+            wait_after_prepare(log=log, wrote=prepared.wrote)
+            current.update(topic_id=topic_id, oldest=oldest_searchable_or_none(topic_id, req.period_days))
             find_hot = lambda: hot.top_duplicated_db(topic_id, req.period_days)
 
-            def answer_fn(question: str, on_token=None) -> Answer:
-                hits = search_topic(topic_id, question, selected, period_days=req.period_days)
-                return generate_answer_from_chunks(question, hits, on_token=on_token,
-                                                   subject=answer_subject(selected), period=answer_period(oldest))
-
-        session_id = uuid.uuid4().hex
-        with _lock:
-            _sessions[session_id] = Session(job.label, "메모리" if memory else "DB", answer_fn)
-        job.session_id = session_id
+        open_session(answer_fn)
         if not memory:
             from run import image_text_mode
             job.images = "running" if image_text_mode() else ""    # done보다 먼저: 화면이 계속 확인하게
         job.hot = "running"                                        # 이것도 done보다 먼저 (같은 이유)
+        job.elapsed = time.perf_counter() - start
         job.status = "done"
-        log("준비 완료! 이제 질문할 수 있습니다.")
+        log(f"준비 완료! 이제 질문할 수 있습니다. (총 {job.elapsed:.1f}초)")
     except Exception as e:
         traceback.print_exc()
         job.error = str(e) or type(e).__name__
@@ -230,6 +270,31 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
             traceback.print_exc()
             log(f"[이미지] 실패해서 건너뜁니다 ({type(e).__name__}: {e})")
         job.images = "done"
+
+
+def _open_from_db(job: Job, selected: SelectedSense, period_days: int, current: dict,
+                  answer_fn, open_session, log) -> None:
+    """[DB 버전] 준비를 시작하는 동시에 돈다. 이 검색어·의미를 예전에 준비해서 질문에 쓸 수 있는 기사
+    (판정 통과 + 청크 있음 + 기간 안)가 DB에 있으면, 준비가 끝나기 전에 그 기사로 먼저 질문을 받는다.
+    처음 검색하는 대상이거나 조회가 실패하면 아무것도 하지 않는다 (준비가 끝나면 평소처럼 열린다)."""
+    from qupict import db
+    from qupict.retrieval import searchable_stats
+
+    try:
+        record = db.get_topic(selected.query, selected.sense.name)
+        if record is None:
+            return
+        count, oldest = searchable_stats(record.id, period_days)
+        if not count:
+            return
+        current.update(topic_id=record.id, oldest=oldest)
+        job.early = count
+        open_session(answer_fn)
+        log(f"DB에 저장된 기사 {count}건으로 지금 바로 질문할 수 있습니다 "
+            f"(수집·판정을 기다리지 않음. 새 기사는 저장되는 대로 답변에 들어갑니다)")
+    except Exception as e:
+        traceback.print_exc()
+        log(f"[DB 재사용] 저장된 기사 확인에 실패해서 준비가 끝난 뒤 답합니다 ({type(e).__name__})")
 
 
 def _hot_payload(h) -> dict:
@@ -265,7 +330,7 @@ def job_status(job_id: str) -> dict:
         raise HTTPException(404, "작업을 찾을 수 없습니다 (서버를 다시 켰다면 처음부터 다시 해 주세요).")
     return {"status": job.status, "logs": job.logs, "session_id": job.session_id,
             "error": job.error, "label": job.label, "images": job.images,
-            "hot": job.hot, "hot_articles": job.hot_articles}
+            "hot": job.hot, "hot_articles": job.hot_articles, "early": job.early, "elapsed": round(job.elapsed, 1)}
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +347,7 @@ def _get_session(session_id: str) -> Session:
 @app.post("/api/ask")
 def ask(req: AskRequest) -> dict:
     """답변을 다 만든 뒤 한 번에 돌려준다 (예전 방식. 화면은 /api/ask/stream을 쓴다)."""
-    answer = _get_session(req.session_id).answer_fn(req.question.strip(), None)
+    answer = _get_session(req.session_id).ask(req.question.strip(), None)
     return _answer_payload(answer)
 
 
@@ -302,7 +367,7 @@ def ask_stream(req: AskRequest) -> StreamingResponse:
 
     def work() -> None:          # 답변 만들기는 별도 스레드에서, 조각이 생길 때마다 events에 넣는다
         try:
-            answer = session.answer_fn(question, lambda text: events.put({"type": "token", "text": text}))
+            answer = session.ask(question, lambda text: events.put({"type": "token", "text": text}))
             events.put({"type": "done", **_answer_payload(answer)})
         except Exception as e:
             traceback.print_exc()
