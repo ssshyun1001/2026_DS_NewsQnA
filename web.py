@@ -9,6 +9,7 @@ QuPicT 웹 서비스 — run.py의 질문 서비스를 브라우저 화면으로
     1) 검색어 + 기간 입력          → POST /api/senses        [0단계] 의미 후보 (DB 캐시 또는 LLM)
     2) 의미 고르기 (또는 직접 입력) → POST /api/prepare       [1~4단계] 수집·필터·인덱싱 (백그라운드 작업)
     3) 진행 상황 보기               → GET  /api/jobs/{id}     단계별 로그를 몇 초마다 확인
+       많이 보도된 기사 Top 5       → (같은 응답의 hot_articles) 준비 완료 뒤, 중복이 많이 묶인 기사 한 줄 요약 · 링크
     4) 질문하기                     → POST /api/ask/stream    [5단계] 검색 · 답변 (만들어지는 대로 한 줄씩 보냄)
                                        POST /api/ask           같은 답변을 다 만든 뒤 한 번에 (예전 방식)
 
@@ -58,6 +59,8 @@ class Job:
     session_id: Optional[str] = None
     error: str = ""
     images: str = ""                   # 준비 완료 뒤 이미지 → 글(OCR·VLM): "" 안 함 / running / done
+    hot: str = ""                      # 준비 완료 뒤 많이 보도된 기사 Top 5: "" 아직 / running / done / error
+    hot_articles: list[dict] = field(default_factory=list)   # 중복이 많이 묶인 대표 기사 (한 줄 요약 · 링크)
 
 
 @dataclass
@@ -155,6 +158,8 @@ def _select(req: PrepareRequest) -> SelectedSense:
 # ---------------------------------------------------------------------------
 
 def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: bool) -> None:
+    from qupict import hot
+
     job = _jobs[job_id]
     log = job.logs.append
     try:
@@ -167,6 +172,7 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
             if news is None:
                 raise RuntimeError("질문에 쓸 기사가 없습니다. 다른 검색어·의미·기간으로 다시 시도해 주세요.")
             oldest = oldest_date(news.articles)
+            find_hot = lambda: hot.top_duplicated(news.articles, news.duplicates)
 
             def answer_fn(question: str, on_token=None) -> Answer:
                 relevant = retrieve_relevant_articles(news.store, news.articles, question, topic=news.topic)
@@ -180,6 +186,7 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
             topic_id = asyncio.run(prepare_topic(selected, req.period_days, req.max_articles, log=log))
             wait_after_prepare(log=log)        # "준비 완료" 전에 잠깐 기다린다 (run.PREPARE_SETTLE_SECONDS)
             oldest = oldest_searchable_or_none(topic_id, req.period_days)
+            find_hot = lambda: hot.top_duplicated_db(topic_id, req.period_days)
 
             def answer_fn(question: str, on_token=None) -> Answer:
                 hits = search_topic(topic_id, question, selected, period_days=req.period_days)
@@ -193,6 +200,7 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
         if not memory:
             from run import image_text_mode
             job.images = "running" if image_text_mode() else ""    # done보다 먼저: 화면이 계속 확인하게
+        job.hot = "running"                                        # 이것도 done보다 먼저 (같은 이유)
         job.status = "done"
         log("준비 완료! 이제 질문할 수 있습니다.")
     except Exception as e:
@@ -201,6 +209,16 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
         job.status = "error"
         log(f"[오류] {job.error}")
         return
+
+    # 준비 완료 뒤: 많이 보도된 기사 Top 5 (중복이 많이 묶인 대표 기사 + 한 줄 요약, LLM 한 번).
+    # 질문은 그동안에도 받는다. 실패해도 질문 답변에는 영향이 없다.
+    try:
+        job.hot_articles = [_hot_payload(h) for h in hot.summarize(find_hot())]
+        job.hot = "done"
+    except Exception as e:
+        traceback.print_exc()
+        log(f"[많이 보도된 기사] 실패해서 건너뜁니다 ({type(e).__name__}: {e})")
+        job.hot = "error"
 
     # 준비 완료 뒤: 이미지 → 글(OCR·VLM)을 이 스레드에서 이어서 한다. 질문은 그동안에도 받는다.
     # 끝나면 그 뒤 질문부터 이미지 속 내용도 검색된다. 실패해도 질문 답변에는 영향이 없다.
@@ -212,6 +230,13 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
             traceback.print_exc()
             log(f"[이미지] 실패해서 건너뜁니다 ({type(e).__name__}: {e})")
         job.images = "done"
+
+
+def _hot_payload(h) -> dict:
+    """많이 보도된 기사 하나 → 화면에 보낼 내용 (qupict.hot.HotArticle)"""
+    return {"title": h.title, "link": h.link, "press": h.press or "알 수 없음",
+            "pub_date": h.pub_date.strftime("%Y-%m-%d") if h.pub_date else "",
+            "duplicates": h.duplicates, "summary": h.summary}
 
 
 @app.post("/api/prepare")
@@ -239,7 +264,8 @@ def job_status(job_id: str) -> dict:
     if job is None:
         raise HTTPException(404, "작업을 찾을 수 없습니다 (서버를 다시 켰다면 처음부터 다시 해 주세요).")
     return {"status": job.status, "logs": job.logs, "session_id": job.session_id,
-            "error": job.error, "label": job.label, "images": job.images}
+            "error": job.error, "label": job.label, "images": job.images,
+            "hot": job.hot, "hot_articles": job.hot_articles}
 
 
 # ---------------------------------------------------------------------------

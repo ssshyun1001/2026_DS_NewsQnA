@@ -65,12 +65,28 @@ def main() -> None:
                       sources=[Article(title="기사", link="https://a", press="연합뉴스")], source_kinds=["본문"], cited=[1])
     qa.generate_answer_from_chunks = fake_answer
 
+    # 많이 보도된 기사: DB 조회 · LLM 요약을 가짜로 (web.py는 hot.top_duplicated_db → hot.summarize 순서로 부른다)
+    from qupict import hot
+
+    def fake_top(topic_id, period_days=None):
+        calls["hot"] = (topic_id, period_days)
+        return [hot.HotArticle(title="강남 새 예능 출연", link="https://hot/1", press="연합뉴스",
+                               pub_date=_dt(2026, 11, 1, tzinfo=_tz.utc), description="요약문", content="본문", duplicates=7),
+                hot.HotArticle(title="강남 귀화 소식", link="https://hot/2", press=None, pub_date=None,
+                               description="", content="강남이 귀화했다. 뒷이야기.", duplicates=2)]
+
+    def fake_summarize(items):
+        time.sleep(0.2)                               # LLM 요약은 준비 완료 뒤에 돈다
+        items[0].summary = "강남이 새 예능에 나온다."
+        return items
+    hot.top_duplicated_db, hot.summarize = fake_top, fake_summarize
+
     client = TestClient(web.app)
     assert client.get("/").status_code == 200
-    # 고정 첫 질문: 화면(JS)과 qa.py의 문장이 같아야 한다
+    # 웹 화면은 첫 질문을 고정하지 않는다 (터미널 run.py만 qa.first_question으로 요약부터 답한다)
     page = client.get("/").text
-    assert "`" + qa.FIRST_QUESTION_TEMPLATE.replace("{query}", "${state.query}") + "`" in page
-    assert "enqueueQuestion(`${state.query}" in page
+    assert "enqueueQuestion(`" not in page and "전체적인 요약을 제공해줘" not in page
+    assert 'id="c-hot"' in page and page.index('id="c-job"') < page.index('id="c-hot"') < page.index('id="c-qa"')
     assert qa.first_question(" 강남 ") == "강남에 대해 수집된 기사들의 전체적인 요약을 제공해줘."
     assert client.get("/api/info").json() == {"has_db": True, "chat_model": "가짜 모델"}
     r = client.post("/api/senses", json={"query": "강남"}).json()
@@ -90,6 +106,18 @@ def main() -> None:
     assert run.PREPARE_SETTLE_SECONDS == 3
     assert calls["index"][0] == (False, False)        # 준비 단계: 본문만 (이미지는 준비 완료 뒤)
     assert status["images"] == "running", status      # 준비 완료 직후: 이미지 글자 읽기가 뒤에서 도는 중
+    assert status["hot"] == "running" and status["hot_articles"] == [], status   # 많이 보도된 기사도 준비 완료 뒤에
+    for _ in range(100):
+        later = client.get(f"/api/jobs/{job['job_id']}").json()
+        if later["hot"] != "running":
+            break
+        time.sleep(0.05)
+    assert later["hot"] == "done" and calls["hot"] == (19, 30), (later, calls)
+    assert later["hot_articles"] == [
+        {"title": "강남 새 예능 출연", "link": "https://hot/1", "press": "연합뉴스", "pub_date": "2026-11-01",
+         "duplicates": 7, "summary": "강남이 새 예능에 나온다."},
+        {"title": "강남 귀화 소식", "link": "https://hot/2", "press": "알 수 없음", "pub_date": "",
+         "duplicates": 2, "summary": ""}], later["hot_articles"]
     for _ in range(100):
         later = client.get(f"/api/jobs/{job['job_id']}").json()
         if later["images"] != "running":

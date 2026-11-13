@@ -65,6 +65,14 @@
   .srcs { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; white-space: normal; }
   .srcs a { color: var(--accent); text-decoration: none; } .srcs a:hover { text-decoration: underline; }
   .srcs li { margin-bottom: 4px; } .srcs ol { margin: 4px 0 0; padding-left: 0; list-style: none; }
+  .hot { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+  .hot li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; }
+  .hot .rank { font-weight: 700; color: var(--accent); text-align: center; }
+  .hot a { color: var(--text); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
+  .hot a:hover { color: var(--accent); text-decoration: underline; }
+  .hot .sum { font-size: 14px; margin-top: 2px; }
+  .hot .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .hot .dup { color: var(--accent); font-weight: 600; }
   .muted { color: var(--muted); }
   .hidden { display: none; }
 </style>
@@ -107,6 +115,13 @@
     <h2><span class="step">3</span>뉴스 수집 · 필터링 · 인덱싱</h2>
     <div id="log" class="log"></div>
     <div id="s-job" class="status"></div>
+  </section>
+
+  <!-- 3과 4 사이. 많이 보도된 기사: 수집한 기사 중 비슷한 기사(중복)가 가장 많이 묶인 기사 Top 5 -->
+  <section id="c-hot" class="card hidden">
+    <h2><span class="step">★</span>많이 보도된 기사 Top 5</h2>
+    <p class="note">수집한 기사 중 같은 내용을 다룬 기사(중복)가 가장 많은 순서입니다. 제목을 누르면 원문이 열립니다.</p>
+    <div id="hot"></div>
   </section>
 
   <!-- 4. 질문 -->
@@ -162,7 +177,7 @@ $("f-query").addEventListener("submit", async (e) => {
   const query = $("query").value.trim();
   if (!query) return;
   state.query = query; state.sessionId = null; state.jobId = null;   // 진행 중이던 작업 확인은 멈춘다
-  ["c-sense", "c-job", "c-qa"].forEach(id => $(id).classList.add("hidden"));
+  ["c-sense", "c-job", "c-hot", "c-qa"].forEach(id => $(id).classList.add("hidden"));
   $("b-query").disabled = true;
   busy($("s-query"), "의미 후보를 찾는 중…");
   try {
@@ -212,10 +227,11 @@ $("f-sense").addEventListener("submit", async (e) => {
   newReady();
   $("chat").innerHTML = "";
   $("qa-label").textContent = "";
-  $("qa-note").textContent = "준비가 끝나면 수집된 기사 요약부터 보여 드립니다. 그동안 질문을 적어 두면 요약 다음에 차례로 답합니다.";
+  $("qa-note").textContent = "준비가 끝나면 답합니다. 그동안 질문을 적어 두면 준비가 끝나는 대로 차례로 답합니다.";
   $("c-qa").classList.remove("hidden");
-  // 첫 질문은 고정: 수집된 기사 전체 요약 (qupict/qa.py의 FIRST_QUESTION_TEMPLATE과 같은 문장)
-  enqueueQuestion(`${state.query}에 대해 수집된 기사들의 전체적인 요약을 제공해줘.`);
+  // 많이 보도된 기사 카드도 질문 칸처럼 미리 연다. 내용은 준비가 끝난 뒤 채운다 (renderHot)
+  $("hot").innerHTML = `<div class="muted">⏳ 뉴스 준비가 끝나면 같은 내용을 다룬 기사가 많은 순서로 보여 드립니다.</div>`;
+  $("c-hot").classList.remove("hidden");
   try {
     const { job_id, label } = await api("/api/prepare", body);
     state.jobId = job_id;
@@ -225,8 +241,14 @@ $("f-sense").addEventListener("submit", async (e) => {
     setStatus($("s-job"), err.message, "err");
     $("b-sense").disabled = false;
     state.ready.reject(err);
+    hotFailed();
   }
 });
+
+// 뉴스 준비가 실패하면 미리 열어 둔 많이 보도된 기사 카드에도 알린다
+const hotFailed = () => {
+  $("hot").innerHTML = `<div class="status err">뉴스 준비에 실패해 보여 드릴 기사가 없습니다.</div>`;
+};
 
 async function poll(jobId) {
   if (jobId !== state.jobId) return;          // 새 검색어·새 준비를 시작했으면 이전 작업은 더 보지 않는다
@@ -249,23 +271,46 @@ async function poll(jobId) {
         state.ready.resolve(j.session_id);     // 미리 적어 둔 질문이 이제 차례로 나간다
         $("question").focus();
       }
-      // 이미지 속 글자 읽기는 준비 완료 뒤 서버에서 이어서 한다 → 끝날 때까지 가끔 확인 (질문은 지금도 됨)
+      renderHot(j);                            // 많이 보도된 기사 Top 5 (준비 완료 뒤 서버가 이어서 만든다)
+      // 이미지 속 글자 읽기도 준비 완료 뒤 서버에서 이어서 한다 → 끝날 때까지 가끔 확인 (질문은 지금도 됨)
       if (j.images === "running") {
         busy($("s-job"), "준비 완료 · 이미지 속 글자를 읽는 중… 질문은 지금 해도 되고, 끝나면 이미지 내용도 답변에 쓰입니다.");
-        setTimeout(() => poll(jobId), 3000);
       } else {
         setStatus($("s-job"), j.images === "done" ? "준비 완료 · 이미지 속 글자까지 반영됨" : "준비 완료", "ok");
       }
+      if (j.hot === "running") setTimeout(() => poll(jobId), 1000);
+      else if (j.images === "running") setTimeout(() => poll(jobId), 3000);
     } else {
       const msg = j.error || "작업이 실패했습니다.";
       setStatus($("s-job"), msg, "err");
       $("qa-note").textContent = "뉴스 준비에 실패해 질문에 답할 수 없습니다. 의미·기간을 바꿔 다시 준비해 주세요.";
       state.ready.reject(new Error(msg));
+      hotFailed();
     }
   } catch (err) {
     setStatus($("s-job"), err.message, "err");
     $("b-sense").disabled = false;
     state.ready.reject(err);
+    hotFailed();
+  }
+}
+
+// 많이 보도된 기사 Top 5: 중복이 많이 묶인 기사 순으로 제목(원문 링크) · 한 줄 요약 · 비슷한 기사 수
+function renderHot(j) {
+  $("c-hot").classList.remove("hidden");
+  if (j.hot === "running") {
+    $("hot").innerHTML = `<div class="status"><span class="spinner"></span> 많이 보도된 기사를 정리하는 중…</div>`;
+  } else if (j.hot === "error") {
+    $("hot").innerHTML = `<div class="status err">많이 보도된 기사를 정리하지 못했습니다. 질문은 그대로 할 수 있습니다.</div>`;
+  } else if (!j.hot_articles.length) {
+    $("hot").innerHTML = `<div class="muted">같은 내용을 다룬 기사(중복)가 없어 보여 드릴 기사가 없습니다.</div>`;
+  } else {
+    $("hot").innerHTML = `<ol class="hot">` + j.hot_articles.map((h, i) => `
+      <li><span class="rank">${i + 1}</span>
+        <div><a href="${esc(h.link)}" target="_blank" rel="noopener">${esc(h.title)}</a>
+          <div class="sum">${esc(h.summary)}</div>
+          <div class="meta">${esc(h.press)}${h.pub_date ? " · " + esc(h.pub_date) : ""} ·
+            <span class="dup">비슷한 기사 ${h.duplicates}건</span></div></div></li>`).join("") + `</ol>`;
   }
 }
 
