@@ -102,7 +102,7 @@ async def collect_target(selected: SelectedSense, period_days: int = DEFAULT_PER
                          max_articles: int = COLLECT_MAX_PER_TARGET) -> CollectTargetResult:
     """수집 → 중복 제거 (임베딩만, LLM 판정 없음). 라벨 붙일 대표 기사가 몇 건인지 같이 돌려준다."""
     collected = await collect_to_db(selected, period_days, max_articles)
-    duplicates = await dedup_topic(collected.topic_id)
+    duplicates = await dedup_topic(collected.topic_id, selected.match_terms)
     return CollectTargetResult(collected, len(duplicates), count_representatives(collected.topic_id), max_articles)
 
 

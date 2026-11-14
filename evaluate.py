@@ -62,7 +62,7 @@ def cmd_label(query: str | None, limit: int | None = None) -> None:
     # [2단계 중복 제거] 비슷한 기사는 대표 기사 하나만 라벨을 붙이면 된다 (임베딩만, LLM 판정 없음)
     from qupict.filtering import dedup_topic
     print("\n중복 기사 찾는 중 (임베딩만 씀, LLM 판정 없음)…")
-    duplicates = asyncio.run(dedup_topic(topic.topic_id))
+    duplicates = asyncio.run(dedup_topic(topic.topic_id, record.selected.match_terms))
     print(f"  비슷한 기사 {len(duplicates)}건을 중복으로 표시했습니다 → 대표 기사만 보여 줍니다."
           if duplicates else "  새로 찾은 중복 기사는 없습니다.")
     remaining = limit - topic.labeled
