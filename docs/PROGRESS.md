@@ -206,7 +206,7 @@ pip install -r requirements.txt
 
 | 변수 | 어디서 받나 | 비고 |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | **팀 공용 키** (서연 계정의 학교 팩트챗에서 발급) | 서연에게 직접 받기. git·공개 채팅방에 올리지 않기 |
+| `OPENAI_API_KEY` | **팀 공용 키** | git·공개 채팅방에 올리지 않기 |
 | `OPENAI_BASE_URL` | 그대로 둠 | `https://factchat-cloud.mindlogic.ai/v1/gateway` |
 | `OPENAI_CHAT_MODEL` | 그대로 둠 | `claude-haiku-5-5` |
 | `OPENAI_EMBEDDING_MODEL` | 그대로 둠 | `text-embedding-3-small` (1536차원) |
