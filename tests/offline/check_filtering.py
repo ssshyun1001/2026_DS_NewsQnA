@@ -8,6 +8,7 @@ import numpy as np
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2]))
 from qupict import filtering as F, db
 from qupict.schemas import Article, SelectedSense, Sense
+F.settings = dataclasses.replace(F.settings, dedup_passage_window=1)     # 아래 문단 테스트는 ±1문장 기준 (config 기본값과 무관하게)
 
 gangnam = SelectedSense(
     query="강남",
@@ -52,6 +53,15 @@ assert F.find_duplicates(tarts, content_threshold=0.9, by="content") == {"c": "b
 both = lambda **kw: F.find_duplicates(tarts, by="both", title_threshold=0.9, content_threshold=0.9, **kw)
 assert both(rule="and") == {}                       # a-b는 제목만, c-b는 본문만 비슷 → and면 중복 없음
 assert both(rule="or") == {"a": "b", "c": "b"}
+assert both(rule="2") == both(rule=2) == {}         # 기준 둘 다 넘은 쌍이 없음 → and와 같음
+assert both(rule="1") == {"a": "b", "c": "b"}       # 1개 이상 = or
+assert both(rule="5") == {}                         # 기준 수(2)보다 크면 2로 → and
+assert F._dedup_rule("and", 4) == 4 and F._dedup_rule("or", 4) == 1 and F._dedup_rule("2", 4) == 2
+for bad in ("0", "-1", "two"):
+    try:
+        F._dedup_rule(bad, 4); raise AssertionError(f"잘못된 rule {bad!r}이 통과함")
+    except ValueError:
+        pass
 tb = [T("p", "x" * 50, e1, e1), T("q", "x" * 10, near, near)]
 assert F.find_duplicates(tb, by="both", rule="and", title_threshold=0.9, content_threshold=0.9) == {"q": "p"}
 assert F.find_duplicates(tb, by="both", rule="and", title_threshold=0.9, content_threshold=0.999) == {}  # 본문 임계값만 올림

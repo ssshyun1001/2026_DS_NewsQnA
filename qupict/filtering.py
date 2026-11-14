@@ -11,7 +11,7 @@
                                     검색어가 없으면 본문 앞 N문장 (N = DEDUP_LEAD_SENTENCES)
                            noun     제목의 드문 고유명사 겹침 (TF-IDF)   (DEDUP_NOUN_THRESHOLD)
                            jaccard  제목+검색어 문단 글자 3-gram 자카드  (DEDUP_JACCARD_THRESHOLD, 문단은 content와 같음)
-                         여러 기준을 묶는 방법 DEDUP_RULE: "and"(모두 넘어야 중복) | "or"(하나만 넘어도)
+                         여러 기준을 묶는 방법 DEDUP_RULE: "and"(모두 넘어야 중복) | "or"(하나만 넘어도) | 숫자 k(k개 이상 넘으면)
   [2단계] 1차 규칙 필터  분명히 무관한 기사만 규칙으로 걸러 LLM 호출을 줄인다      → stage = "rule"
   [3단계] 2차 LLM 검증   나머지를 LLM이 관련 / 무관으로 판정하고 근거 한 줄을 남긴다 → stage = "llm"
 
@@ -177,11 +177,17 @@ def _dedup_criteria(by: str | None = None) -> list[str]:
     return list(dict.fromkeys(criteria))
 
 
-def _dedup_rule(rule: str | None = None) -> str:
-    rule = (rule or settings.dedup_rule).strip().lower()
-    if rule not in DEDUP_RULES:
-        raise ValueError(f"DEDUP_RULE은 {DEDUP_RULES} 중 하나여야 합니다: {rule!r}")
-    return rule
+def _dedup_rule(rule: str | int | None, n_criteria: int) -> int:
+    """→ 중복이 되려면 임계값을 넘어야 하는 기준 수. "and" = 전부, "or" = 1, 숫자 k = k개
+    (k가 기준 수보다 크면 기준 수로 줄인다. 예: DEDUP_BY=title에 k=2면 title 하나만 넘으면 됨)"""
+    raw = str(settings.dedup_rule if rule is None else rule).strip().lower()
+    if raw == "and":
+        return n_criteria
+    if raw == "or":
+        return 1
+    if raw.isdigit() and int(raw) >= 1:
+        return min(int(raw), n_criteria)
+    raise ValueError(f"DEDUP_RULE은 {DEDUP_RULES} 또는 1 이상의 정수여야 합니다: {rule!r}")
 
 
 _EMBEDDING_OF = {
@@ -295,7 +301,7 @@ def find_duplicates(
     content_threshold: float | None = None,
     noun_threshold: float | None = None,
     jaccard_threshold: float | None = None,
-    rule: str | None = None,
+    rule: str | int | None = None,
 ) -> dict[str, str]:
     """유사도가 임계값 이상인 기사를 중복으로 묶는다. {중복 기사 link: 대표 기사 link}
 
@@ -309,7 +315,8 @@ def find_duplicates(
     - terms: 검색어·별칭 (SelectedSense.match_terms). jaccard 기준이 검색어 문단을 비교할 때 쓴다
       (content 기준은 embed_for_dedup에 넘긴 terms로 이미 임베딩돼 있음). 비우면 본문 앞 n문장.
     - *_threshold: 기준별 임계값. 비우면 settings 값.
-    - rule: 기준이 여러 개일 때 "and"(모두 임계값 이상이어야 중복) | "or"(하나라도 이상이면 중복).
+    - rule: 기준이 여러 개일 때 "and"(모두 임계값 이상이어야 중복) | "or"(하나라도 이상이면 중복)
+      | 숫자 k(k개 이상이 임계값 이상이면 중복, 예: 2). 비우면 settings.dedup_rule.
       비슷한 대표 기사가 여럿이면 (기준별 유사도 평균이) 가장 높은 대표 기사에 묶는다.
 
     - 대표 기사는 본문이 가장 긴 기사 (정보가 가장 많다고 본다)
@@ -319,7 +326,8 @@ def find_duplicates(
     - keep: articles 중 절대 중복으로 바꾸면 안 되는 기사 link (사람이 이미 정답 라벨을 붙인 기사).
       중복이 되면 실험 A에서 빠져서 라벨이 버려지므로, 이 기사들은 항상 대표로 남긴다.
     """
-    criteria, rule = _dedup_criteria(by), _dedup_rule(rule)
+    criteria = _dedup_criteria(by)
+    need = _dedup_rule(rule, len(criteria))     # 임계값을 넘어야 하는 기준 수
     thresholds = np.array([[{
         "title": settings.dedup_title_threshold if title_threshold is None else title_threshold,
         "content": settings.dedup_content_threshold if content_threshold is None else content_threshold,
@@ -356,7 +364,7 @@ def find_duplicates(
                 for c in criteria
             ])
             passed = sims >= thresholds
-            matched = passed.all(axis=0) if rule == "and" else passed.any(axis=0)
+            matched = passed.sum(axis=0) >= need
             if matched.any():
                 score = np.where(matched, sims.mean(axis=0), -np.inf)
                 duplicates[article.link] = reps[int(np.argmax(score))].link

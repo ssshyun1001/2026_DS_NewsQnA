@@ -50,11 +50,11 @@ class Settings:
     # 제목+검색어 문단 글자 3-gram 자카드 유사도 임계값 (DEDUP_BY에 jaccard를 넣었을 때)
     dedup_jaccard_threshold: float = _get_float("DEDUP_JACCARD_THRESHOLD", 0.5)
     # content 기준: 검색어·별칭이 든 문장의 앞뒤 몇 문장까지 문단으로 볼지
-    dedup_passage_window: int = _get_int("DEDUP_PASSAGE_WINDOW", 1)
+    dedup_passage_window: int = _get_int("DEDUP_PASSAGE_WINDOW", 2)
     # content 기준에서 본문에 검색어가 없을 때 대신 비교할 본문 앞 문장 수 (jaccard 기준도 같음)
     dedup_lead_sentences: int = _get_int("DEDUP_LEAD_SENTENCES", 5)
-    # 기준이 여러 개일 때 묶는 방법: "and"(모두 임계값 이상) | "or"(하나라도 이상)
-    dedup_rule: str = os.getenv("DEDUP_RULE", "or")
+    # 기준이 여러 개일 때 묶는 방법: "and"(모두 임계값 이상) | "or"(하나라도 이상) | 숫자 k(k개 이상)
+    dedup_rule: str = os.getenv("DEDUP_RULE", "2")
 
     top_k_articles: int = _get_int("TOP_K_ARTICLES", 10)
     max_crawl_articles: int = _get_int("MAX_CRAWL_ARTICLES", 150)
