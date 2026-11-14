@@ -90,6 +90,11 @@ def build_search_terms(selected: SelectedSense) -> list[str]:
     """고른 의미로 네이버 검색어 목록을 만든다: 검색어 + 연관어, 별칭. (검색어 단독은 좁힐 단어가 없을 때만)"""
     query = selected.query
     combos = [f"{query} {t}" for t in selected.sense.related_terms[:MAX_RELATED_IN_QUERY]]
+    if selected.sense.is_custom and selected.sense.aliases:
+        # 직접 입력은 사용자의 설명이 기준이다. 대상이 여러 개를 묶은 것이면(예: "서울 소재 여자대학교" →
+        # 이화여대, 숙명여대 …) 각각의 이름(별칭)으로 검색하고, "검색어 + 연관어"는 한 번만 섞는다.
+        # 연관어 조합을 다 넣으면 검색어 하나(서울여대)가 결과의 절반 가까이를 채웠다 (확인 2026-11-15).
+        return unique_terms([*selected.sense.aliases, *combos[:1]]) or [query]
     return unique_terms([*combos, *selected.sense.aliases]) or [query]
 
 

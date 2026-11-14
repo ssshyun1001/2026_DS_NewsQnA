@@ -17,6 +17,17 @@ assert collect.build_search_terms(g) == ["강남 이상화"]                    
 empty = SelectedSense(query="베라", sense=Sense(name="x", definition="d"))
 assert collect.build_search_terms(empty) == ["베라"]                          # 좁힐 단어가 없을 때만 단독
 print("1 ok: 검색어", collect.build_search_terms(sel))
+# 직접 입력한 의미에 별칭이 있으면(예: "서울 소재 여자대학교" → 학교 이름들) 별칭 위주로, "검색어 + 연관어"는 하나만
+swu = SelectedSense(query="서울여대", sense=Sense(name="서울 소재 여자대학교", definition="d", is_custom=True,
+                                                aliases=["이화여대", "숙명여대"], related_terms=["입시", "총장"]))
+assert collect.build_search_terms(swu) == ["이화여대", "숙명여대", "서울여대 입시"], collect.build_search_terms(swu)
+plain = SelectedSense(query="서울여대", sense=Sense(name="서울여자대학교", definition="d", aliases=["SWU"],
+                                                  related_terms=["입시", "총장"]))
+assert collect.build_search_terms(plain) == ["서울여대 입시", "서울여대 총장", "SWU"]   # LLM 후보는 예전과 같음
+no_alias = SelectedSense(query="후드", sense=Sense(name="힙합 래퍼 후드", definition="d", is_custom=True,
+                                                 related_terms=["앨범", "공연"]))
+assert collect.build_search_terms(no_alias) == ["후드 앨범", "후드 공연"]                # 별칭 없는 직접 입력도 예전과 같음
+print("1-1 ok: 직접 입력 의미의 검색어")
 
 # 2) 섞기: 돌아가며, 중복 링크 제거, 상한
 m = lambda link: NewsMeta(title=link, link=link)

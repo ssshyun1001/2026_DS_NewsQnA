@@ -71,7 +71,9 @@ _SYSTEM_PROMPT = """\
     [이전 대화]는 무엇을 가리키는지 알아내는 데만 쓰세요. 사실의 근거는 [참고 기사]이고,
     [이전 대화]의 내용에는 (기사 N) 표시를 붙이지 마세요.
 11. 답변 첫 문장은 질문에 대한 직접적인 답으로 시작하고, 질문이 가리키는 대상의 이름을 주어로 넣으세요.
-    대상을 부를 때는 괄호 앞의 검색어를 쓰세요. 배경 설명은 그 뒤에 이어 쓰세요.
+    대상을 부를 때는 [검색 대상]에서 괄호 앞의 이름을 쓰세요. 배경 설명은 그 뒤에 이어 쓰세요.
+    [검색 대상]이 여러 개를 묶은 것이면(괄호 안 "포함:") 질문에 맞게 그중 해당하는 대상들을 두루 다루고,
+    한 곳의 소식만으로 전체를 대표하지 마세요.
     예: 검색 대상이 "강남 (방송인 강남)"이고 질문이 "아내가 누구야?"이면
         "강남의 아내는 ○○입니다(기사 N). …" 처럼 답하세요.
     단, 6번 규칙은 그대로 지키세요: [참고 기사]에 없는 이름·수치는 지어내지 말고
@@ -139,10 +141,17 @@ def oldest_date(articles: list[Article]) -> datetime | None:
 
 def answer_subject(selected) -> str:
     """답변 프롬프트의 [검색 대상] 글. 예: "강남 (방송인 강남: 가수 겸 방송인, M.I.B 출신)"
+    직접 입력한 의미는 사용자가 설명한 대상이 이름이 된다 (SelectedSense.subject_name).
+      예: "서울 소재 여자대학교 (검색어 '서울여대'로 찾는 대상: 서울에 있는 여자대학교들; 포함: 이화여대, 숙명여대 …)"
     selected: 사용자가 고른 의미(SelectedSense). 없으면 NO_SUBJECT."""
     if selected is None:
         return NO_SUBJECT
     s = selected.sense
+    if s.is_custom:
+        detail = f"검색어 '{selected.query}'로 찾는 대상: {s.definition or s.name}"
+        if s.aliases:
+            detail += f"; 포함: {', '.join(s.aliases)}"
+        return f"{selected.subject_name} ({detail})"
     return f"{selected.query} ({s.name}: {s.definition})" if s.definition else f"{selected.query} ({s.name})"
 
 

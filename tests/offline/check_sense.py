@@ -71,9 +71,10 @@ print("4 ok: LLM 실패 처리")
 
 # 5) 직접 입력: LLM 성공 / 실패, 모든 후보가 배제어로
 sense._custom_llm = fake_llm()
-sense._custom_llm.invoke.return_value = Sense(name="래퍼 후드", definition="", aliases=["후드"], related_terms=["앨범", "공연"])
+sense._custom_llm.invoke.return_value = sense._CustomSense(definition="", aliases=["후드"], related_terms=["앨범", "공연"])
 cs = sense.build_custom_sense("후드", "힙합 래퍼 후드")
-assert cs.is_custom and cs.definition == "힙합 래퍼 후드" and cs.aliases == []
+assert cs.is_custom and cs.definition == "힙합 래퍼 후드" and cs.aliases == []          # 검색어 원문은 별칭에서 뺌
+assert cs.name == "힙합 래퍼 후드" and cs.related_terms == ["앨범", "공연"]           # 이름 = 사용자 설명 그대로
 sense._custom_llm = fake_llm(exc=RuntimeError("x"))
 cs2 = sense.build_custom_sense("후드", "힙합 래퍼 후드")
 assert cs2.is_custom and cs2.name == "힙합 래퍼 후드" and cs2.related_terms == []
@@ -112,4 +113,36 @@ assert m.excluded_terms == ["가면무도회", "할로윈"], m.excluded_terms   
 custom2 = Sense(name="x", definition="d", related_terms=["KF94", "기타"], is_custom=True)
 assert len(sense.select_custom_sense(cands, custom2).other_senses) == 2
 print("9 ok: 같은 의미 후보는 배제어에서 제외")
+
+# 10) 직접 입력이 검색어보다 넓은 대상일 때: 기준은 검색어가 아니라 사용자의 설명
+#     (검색어 "서울여대" + "서울 소재 여자대학교" → 예전에는 이름이 "서울여자대학교"로 바뀌어 예전 topic에 합쳐지고,
+#      검색 · 규칙 필터 · 답변이 전부 "서울여대"에 묶였다)
+swu = sense.SenseCandidates(query="서울여대", senses=[
+    Sense(name="서울여자대학교", definition="노원구의 사립 여자대학교", aliases=["SWU"], related_terms=["캠퍼스", "총장", "입시"])])
+sense._custom_llm = fake_llm()
+sense._custom_llm.invoke.return_value = sense._CustomSense(
+    definition="서울에 있는 여자대학교 전체", aliases=["이화여대", "숙명여대", "서울여대"],
+    related_terms=["입시", "총장"], includes=["서울여자대학교", "없는 후보"])
+sel = sense.select_described_sense(swu, "서울 소재 여자대학교")
+prompt = sense._custom_llm.invoke.call_args[0][0][1][1]
+assert "서울여자대학교: 노원구의 사립 여자대학교" in prompt                 # LLM이 후보 목록을 보고 판단한다
+assert sel.sense.name == "서울 소재 여자대학교" and sel.sense.is_custom   # 이름 = 사용자 설명 (후보 이름과 겹치지 않음)
+assert sel.other_senses == [] and sel.excluded_terms == []                # 포함되는 후보는 '다른 의미(무관)'가 아님
+assert sel.sense.aliases == ["이화여대", "숙명여대", "서울여자대학교", "SWU"]  # 포함 후보의 이름·별칭도 표기로, 검색어 원문은 뺌
+assert sel.match_terms == ["서울여대", "이화여대", "숙명여대", "서울여자대학교", "SWU"]
+assert sel.subject_name == "서울 소재 여자대학교"
+assert sense.select_sense(swu, 0).subject_name == "서울여대"              # LLM 후보를 고르면 이름은 검색어 (예전과 같음)
+# 검색어 · 답변 대상은 check_collect.py · check_index_retrieval.py에서 확인
+# 포함 관계가 아니면(진짜 다른 의미) 예전처럼 다른 의미로 남는다
+sense._custom_llm.invoke.return_value = sense._CustomSense(definition="d", aliases=[], related_terms=["앨범"], includes=[])
+assert [o.name for o in sense.select_described_sense(swu, "서울여대라는 이름의 밴드").other_senses] == ["서울여자대학교"]
+# 후보 이름을 그대로 직접 입력하면 그 후보를 고른 것 (직접 입력 값으로 후보 topic을 덮어쓰지 않게, LLM도 안 부름)
+sense._custom_llm = fake_llm(exc=AssertionError("후보 이름이면 LLM을 부르지 않아야 함"))
+same = sense.select_described_sense(swu, " 서울여자 대학교 ")
+assert not same.sense.is_custom and same.sense.definition == "노원구의 사립 여자대학교"
+sense._custom_llm = fake_llm()
+sense._custom_llm.invoke.return_value = sense._CustomSense(definition="d", aliases=[], related_terms=[], includes=[])
+long_desc = "가" * 40
+assert len(sense.select_described_sense(swu, long_desc).sense.name) == sense.CUSTOM_NAME_MAX_CHARS
+print("10 ok: 직접 입력은 설명 기준 (이름 · 포함 후보 · 검색어 · 답변 대상)")
 print("ALL PASS")

@@ -141,7 +141,11 @@ def _generate_query_variants(question: str, topic: str = "") -> list[str]:
 
 def topic_context(selected: SelectedSense) -> str:
     """HyDE·Multi-Query에 줄 주제 맥락. 고른 의미의 정의까지 넣어 다른 의미로 빗나가지 않게 한다.
-    예: "강남 (방송인 강남: 가수 겸 방송인 강남, 그룹 M.I.B 출신 …)" """
+    예: "강남 (방송인 강남: 가수 겸 방송인 강남, 그룹 M.I.B 출신 …)"
+    직접 입력한 의미는 사용자가 설명한 대상 기준 (qa.answer_subject와 같은 글). """
+    if selected.sense.is_custom:
+        from qupict.qa import answer_subject
+        return answer_subject(selected)
     return f"{selected.query} ({selected.sense.name}: {selected.sense.definition})"
 
 
@@ -154,9 +158,9 @@ def with_subject(question: str, selected: SelectedSense) -> str:
       "최근 근황은?" 0.24 → "강남 최근 근황은?" 0.52 (기준 0.5를 넘어 근거가 생김)
       "와이프가 누군데?" 0.26 → "강남 와이프가 누군데?" 0.37
     HyDE · Multi-Query(LLM)가 주제 맥락으로 이 일을 대신 해 주지만, LLM이 실패하거나 끈 경우에도 빗나가지 않게 한다."""
-    if any(term in question for term in selected.match_terms):
+    if any(term in question for term in [*selected.match_terms, selected.subject_name]):
         return question
-    return f"{selected.query} {question}"
+    return f"{selected.subject_name} {question}"     # 직접 입력이면 사용자가 설명한 대상 이름
 
 
 def build_search_texts(question: str, context: str, use_hyde: bool = True,

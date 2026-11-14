@@ -160,6 +160,18 @@ alias = SelectedSense(query="삼전", sense=Sense(name="삼성전자", definitio
 assert R.with_subject("삼성전자 실적은?", alias) == "삼성전자 실적은?" and R.with_subject("실적은?", alias) == "삼전 실적은?"
 print("5-3 ok: 이전 대화 · 질문에 검색어 붙이기")
 
+# 5-4) 직접 입력한 의미: 답변 · 검색에서 대상을 검색어가 아니라 사용자가 설명한 대상으로 부른다
+custom = SelectedSense(query="서울여대", sense=Sense(name="서울 소재 여자대학교", definition="서울에 있는 여자대학교 전체",
+                                                   aliases=["이화여대", "숙명여대"], is_custom=True))
+assert Q.answer_subject(custom) == ("서울 소재 여자대학교 (검색어 '서울여대'로 찾는 대상: 서울에 있는 여자대학교 전체; "
+                                    "포함: 이화여대, 숙명여대)")
+assert R.topic_context(custom) == Q.answer_subject(custom)                 # HyDE · 변형 질문의 맥락도 같은 대상
+assert R.with_subject("최근 소식은?", custom) == "서울 소재 여자대학교 최근 소식은?"
+assert R.with_subject("숙명여대 소식은?", custom) == "숙명여대 소식은?"        # 포함된 이름이 있으면 그대로
+assert Q.answer_subject(sel).startswith("강남 (방송인 강남:")                # LLM 후보를 고르면 예전과 같음
+assert "괄호 앞의 이름" in Q._SYSTEM_PROMPT and "한 곳의 소식만으로 전체를 대표하지 마세요" in Q._SYSTEM_PROMPT
+print("5-4 ok: 직접 입력한 의미는 설명한 대상 기준으로 답변 · 검색")
+
 # 5-2) 기사 기간: 가장 오래된 기사 날짜 ~ 오늘 (한국 시간 기준), 기사가 없으면 "(알 수 없음)"
 kst_late = datetime(2026, 10, 13, 16, tzinfo=timezone.utc)                 # 한국 시간 10월 14일 새벽 1시
 assert Q.answer_period(kst_late, today=datetime(2026, 11, 13, 1, tzinfo=timezone.utc)) == "2026-10-14 ~ 2026-11-13"

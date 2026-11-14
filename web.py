@@ -153,7 +153,7 @@ def senses(req: SensesRequest) -> dict:
 
 
 def _select(req: PrepareRequest) -> SelectedSense:
-    from qupict.sense import build_custom_sense, load_sense_candidates, select_custom_sense, select_sense
+    from qupict.sense import load_sense_candidates, select_described_sense, select_sense
 
     query = req.query.strip()
     with _lock:
@@ -167,7 +167,7 @@ def _select(req: PrepareRequest) -> SelectedSense:
     desc = req.custom_description.strip()
     if not desc:
         raise HTTPException(400, "의미를 고르거나, 찾고 싶은 대상을 직접 설명해 주세요.")
-    return select_custom_sense(candidates, build_custom_sense(query, desc))
+    return select_described_sense(candidates, desc)
 
 
 # ---------------------------------------------------------------------------

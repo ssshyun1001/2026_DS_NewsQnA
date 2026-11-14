@@ -50,6 +50,14 @@ class SelectedSense(BaseModel):
         """기사에서 이 대상을 찾을 때 쓸 표기 목록 (검색어 원문 + 별칭)."""
         return unique_terms([self.query, *self.sense.aliases])
 
+    @property
+    def subject_name(self) -> str:
+        """답변 · 검색 문장에서 이 대상을 부르는 이름.
+        LLM 후보를 고르면 검색어 (예: "강남" — 방송인 강남), 직접 입력이면 사용자가 설명한 대상
+        (예: 검색어 "서울여대" + 직접 입력 "서울 소재 여자대학교" → "서울 소재 여자대학교").
+        직접 입력은 검색어와 다른 대상(더 넓은 묶음 등)일 수 있어서, 검색어로 부르면 답이 검색어 하나로 좁혀진다."""
+        return self.sense.name if self.sense.is_custom else self.query
+
 
 def unique_terms(items: list[str]) -> list[str]:
     seen: set[str] = set()
