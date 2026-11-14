@@ -36,8 +36,9 @@ class Settings:
     database_url: str = os.getenv("DATABASE_URL", "")
 
     # Pipeline tuning
-    # 중복 제거 기준 (쉼표로 여러 개): "title"(제목 임베딩) | "content"(본문 앞 N문장 임베딩)
-    #   | "noun"(제목의 드문 고유명사 겹침, TF-IDF). "both" = title,content / "all" = 셋 다
+    # 중복 제거 기준 (쉼표로 여러 개): "title"(제목 임베딩) | "content"(검색어가 들어간 문단 임베딩)
+    #   | "noun"(제목의 드문 고유명사 겹침, TF-IDF) | "jaccard"(제목+검색어 문단 글자 3-gram 자카드)
+    #   "both" = title,content / "all" = 넷 다 (기본값)
     dedup_by: str = os.getenv("DEDUP_BY", "all")
     # 기준별 코사인 유사도 임계값 (이 값 이상이면 그 기준에서 '비슷함')
     dedup_title_threshold: float = _get_float("DEDUP_TITLE_THRESHOLD", 0.7)
@@ -46,7 +47,13 @@ class Settings:
                                                 _get_float("DEDUP_SIMILARITY_THRESHOLD", 0.7))
     # 제목 고유명사 TF-IDF 코사인 유사도 임계값
     dedup_noun_threshold: float = _get_float("DEDUP_NOUN_THRESHOLD", 0.3)
-    # content 기준에서 비교할 본문 앞 문장 수
+    # 제목+검색어 문단 글자 3-gram 자카드 유사도 임계값 (DEDUP_BY에 jaccard를 넣었을 때)
+    dedup_jaccard_threshold: float = _get_float("DEDUP_JACCARD_THRESHOLD", 0.5)
+    # 발행일 차이가 이 일수보다 크면 어떤 기준에서도 중복이 아님 (같은 사안은 며칠 안에 몰려 나온다). 음수 = 끔
+    dedup_date_window_days: float = _get_float("DEDUP_DATE_WINDOW_DAYS", 3)
+    # content 기준: 검색어·별칭이 든 문장의 앞뒤 몇 문장까지 문단으로 볼지
+    dedup_passage_window: int = _get_int("DEDUP_PASSAGE_WINDOW", 1)
+    # content 기준에서 본문에 검색어가 없을 때 대신 비교할 본문 앞 문장 수 (jaccard 기준도 같음)
     dedup_lead_sentences: int = _get_int("DEDUP_LEAD_SENTENCES", 5)
     # 기준이 여러 개일 때 묶는 방법: "and"(모두 임계값 이상) | "or"(하나라도 이상)
     dedup_rule: str = os.getenv("DEDUP_RULE", "or")

@@ -142,8 +142,8 @@ async def label_query(query: str, store: LabeledStore) -> int:
         return 0
 
     # [2단계 중복 제거] 비슷한 기사는 대표 기사 하나만 라벨링한다 (임베딩만, LLM 판정 없음)
-    await embed_for_dedup(articles)
-    duplicates = find_duplicates(articles)
+    await embed_for_dedup(articles, selected.match_terms)
+    duplicates = find_duplicates(articles, terms=selected.match_terms)
     reps = [a for a in articles if a.link not in duplicates]
     reps.sort(key=lambda a: a.pub_date.timestamp() if a.pub_date else 0, reverse=True)   # 최신순
     print(f"중복 제거 → 중복 {len(duplicates)}건, 대표 기사 {len(reps)}건")

@@ -96,7 +96,7 @@ class Article(BaseModel):
     collected_at: Optional[datetime] = None  # 수집 시각 (검색 결과는 날짜마다 달라지므로 기록)
     embedding: Optional[list[float]] = None        # 제목+본문 임베딩 (DB 저장, 검색에도 재사용)
     title_embedding: Optional[list[float]] = None  # 제목만 임베딩 (중복 제거용, DB에 저장하지 않음)
-    lead_embedding: Optional[list[float]] = None   # 본문 앞 N문장 임베딩 (중복 제거용, DB에 저장하지 않음)
+    passage_embedding: Optional[list[float]] = None  # 검색어가 들어간 문단 임베딩 (중복 제거용, DB에 저장하지 않음)
 
     def to_context_block(self, idx: int) -> str:
         return (

@@ -6,8 +6,12 @@
   [2단계] 중복 제거      같은 사안을 다룬 비슷한 기사는 대표 기사 1건만 남긴다
                          기준 DEDUP_BY (쉼표로 여러 개):
                            title    제목 임베딩 유사도                  (DEDUP_TITLE_THRESHOLD)
-                           content  본문 앞 N문장 임베딩 유사도          (DEDUP_CONTENT_THRESHOLD, N = DEDUP_LEAD_SENTENCES)
+                           content  검색어가 들어간 문단 임베딩 유사도    (DEDUP_CONTENT_THRESHOLD)
+                                    문단 = 검색어·별칭이 든 문장 ± k문장 (k = DEDUP_PASSAGE_WINDOW),
+                                    검색어가 없으면 본문 앞 N문장 (N = DEDUP_LEAD_SENTENCES)
                            noun     제목의 드문 고유명사 겹침 (TF-IDF)   (DEDUP_NOUN_THRESHOLD)
+                           jaccard  제목+검색어 문단 글자 3-gram 자카드  (DEDUP_JACCARD_THRESHOLD, 문단은 content와 같음)
+                         발행일 창 DEDUP_DATE_WINDOW_DAYS: 발행일이 이보다 멀면 기준과 상관없이 중복 아님
                          여러 기준을 묶는 방법 DEDUP_RULE: "and"(모두 넘어야 중복) | "or"(하나만 넘어도)
   [2단계] 1차 규칙 필터  분명히 무관한 기사만 규칙으로 걸러 LLM 호출을 줄인다      → stage = "rule"
   [3단계] 2차 LLM 검증   나머지를 LLM이 관련 / 무관으로 판정하고 근거 한 줄을 남긴다 → stage = "llm"
@@ -60,7 +64,8 @@ LLM_BATCH_SIZE = 8              # LLM 한 번에 판정할 기사 수
 LLM_CONCURRENCY = 8
 LLM_BODY_CHARS = 800            # LLM에 보여 줄 본문 앞부분 길이
 EMBED_CHARS = 2000              # 기사 임베딩에 쓰는 본문 길이 (임베딩 입력 한도 안쪽, 비교에는 충분)
-DEDUP_CRITERIA = ("title", "content", "noun")
+DEDUP_CRITERIA = ("title", "content", "noun", "jaccard")
+JACCARD_NGRAM = 3               # 자카드 유사도에 쓰는 글자 n-gram 길이
 DEDUP_RULES = ("and", "or")
 
 STATUSES = ("관련", "무관", "보류")
@@ -112,21 +117,43 @@ _SENTENCE_END = re.compile(r"(?<=[.!?。])\s+|(?<=[.!?。][\"'”’)\]])\s+|\n+
 # 문장 끝: . ! ? 뒤(닫는 따옴표·괄호 하나까지 포함)의 공백, 또는 줄바꿈. "3.5%"처럼 공백 없는 점은 안 나눈다
 
 
+def _sentences(text: str | None) -> list[str]:
+    return [x.strip() for x in _SENTENCE_END.split(text or "") if x and x.strip()]
+
+
 def lead_text(article: Article, n: int | None = None) -> str:
-    """본문 앞 n문장 (중복 제거 content 기준). 문장 끝(. ! ?) 뒤 공백이나 줄바꿈으로 나눈다.
+    """본문 앞 n문장. 문장 끝(. ! ?) 뒤 공백이나 줄바꿈으로 나눈다.
     본문이 비어 있으면 제목을 쓴다 (빈 문자열은 임베딩할 수 없으므로)."""
     n = settings.dedup_lead_sentences if n is None else n
-    sentences = [x.strip() for x in _SENTENCE_END.split(article.content or "") if x and x.strip()]
-    return " ".join(sentences[:n]) or article.title
+    return " ".join(_sentences(article.content)[:n]) or article.title
 
 
-async def embed_leads(articles: list[Article]) -> list[Article]:
-    """본문 앞 n문장으로 임베딩을 채운다 (중복 제거용). DB에 저장하지 않으므로 실행할 때마다 계산한다."""
-    to_embed = [a for a in articles if a.lead_embedding is None]
+def passage_text(article: Article, terms: list[str] | None, window: int | None = None) -> str:
+    """검색어가 들어간 문단 (중복 제거 content 기준).
+
+    수집한 본문에는 문단 구분(줄바꿈)이 남아 있지 않아서, 검색어·별칭(terms)이 들어간 문장마다
+    앞뒤 window문장씩을 붙여 문단으로 본다. 여러 문장에 나오면 겹치는 구간을 합쳐 본문 순서대로 잇는다.
+      예) window=1, 검색어가 3·8번째 문장에 있음 → 2~4번째 + 7~9번째 문장
+    검색어는 대소문자·띄어쓰기·특수문자를 무시하고 찾는다 ("M.I.B" = "MIB").
+    본문에 검색어가 없거나 terms가 비어 있으면 본문 앞 n문장(lead_text)을 쓴다.
+    길이는 EMBED_CHARS까지 (검색어가 아주 많이 나오는 긴 기사)."""
+    window = settings.dedup_passage_window if window is None else window
+    keys = [k for k in (_normalize(t) for t in terms or ()) if k]
+    sentences = _sentences(article.content)
+    hits = [i for i, x in enumerate(sentences) if any(k in _normalize(x) for k in keys)]
+    if not hits:
+        return lead_text(article)
+    picked = sorted({j for i in hits for j in range(max(0, i - window), min(len(sentences), i + window + 1))})
+    return " ".join(sentences[j] for j in picked)[:EMBED_CHARS]
+
+
+async def embed_passages(articles: list[Article], terms: list[str] | None) -> list[Article]:
+    """검색어가 들어간 문단으로 임베딩을 채운다 (중복 제거용). DB에 저장하지 않으므로 실행할 때마다 계산한다."""
+    to_embed = [a for a in articles if a.passage_embedding is None]
     if to_embed:
-        vectors = await aembed_in_batches(get_embeddings(), [lead_text(a) for a in to_embed])
+        vectors = await aembed_in_batches(get_embeddings(), [passage_text(a, terms) for a in to_embed])
         for article, vec in zip(to_embed, vectors):
-            article.lead_embedding = vec
+            article.passage_embedding = vec
     return articles
 
 
@@ -141,7 +168,8 @@ async def embed_titles(articles: list[Article]) -> list[Article]:
 
 
 def _dedup_criteria(by: str | None = None) -> list[str]:
-    """DEDUP_BY → 비교할 기준 목록. "title,content,noun"처럼 쉼표로 여러 개, "both" = title,content, "all" = 셋 다."""
+    """DEDUP_BY → 비교할 기준 목록. "title,content,noun"처럼 쉼표로 여러 개, "both" = title,content,
+    "all" = title,content,noun,jaccard (넷 다, 기본값)."""
     raw = (by or settings.dedup_by).strip().lower()
     alias = {"both": "title,content", "all": ",".join(DEDUP_CRITERIA)}
     criteria = [c.strip() for c in alias.get(raw, raw).split(",") if c.strip()]
@@ -159,19 +187,22 @@ def _dedup_rule(rule: str | None = None) -> str:
 
 _EMBEDDING_OF = {
     "title": lambda a: a.title_embedding,    # 제목만
-    "content": lambda a: a.lead_embedding,   # 본문 앞 n문장
+    "content": lambda a: a.passage_embedding,   # 검색어가 들어간 문단
 }
 
 
-async def embed_for_dedup(articles: list[Article], by: str | None = None) -> list[Article]:
-    """find_duplicates에 필요한 임베딩을 채운다 (title: 제목 / content: 본문 앞 n문장, noun은 임베딩 불필요)."""
+async def embed_for_dedup(articles: list[Article], terms: list[str] | None = None,
+                          by: str | None = None) -> list[Article]:
+    """find_duplicates에 필요한 임베딩을 채운다 (title: 제목 / content: 검색어가 들어간 문단,
+    noun·jaccard는 임베딩 불필요). terms = 검색어·별칭 (SelectedSense.match_terms).
+    terms를 안 주면 content는 모든 기사가 본문 앞 n문장으로 비교된다."""
     criteria = _dedup_criteria(by)
     jobs = []
     if "title" in criteria:
         jobs.append(embed_titles(articles))
     if "content" in criteria:
-        jobs.append(embed_leads(articles))
-    await asyncio.gather(*jobs)   # 제목 · 본문 앞 문장 임베딩 요청을 동시에
+        jobs.append(embed_passages(articles, terms))
+    await asyncio.gather(*jobs)   # 제목 · 검색어 문단 임베딩 요청을 동시에
     return articles
 
 
@@ -226,6 +257,46 @@ def noun_tfidf(articles: list[Article]) -> dict[str, np.ndarray]:
     return vectors
 
 
+
+
+def shingles(text: str, n: int = JACCARD_NGRAM) -> frozenset[str]:
+    norm = re.sub(r"[^0-9a-z가-힣]", "", (text or "").lower())
+    if len(norm) < n:
+        return frozenset([norm]) if norm else frozenset()
+    return frozenset(norm[i:i + n] for i in range(len(norm) - n + 1))
+
+
+def jaccard_text(article: Article, terms: list[str] | None = None) -> str:
+    """자카드 비교에 쓸 텍스트: 제목 + 검색어가 들어간 문단 (content 기준과 같은 passage_text).
+    terms가 없거나 본문에 검색어가 없으면 제목 + 본문 앞 n문장."""
+    passage = passage_text(article, terms)
+    return article.title if passage == article.title else f"{article.title} {passage}"
+
+
+def jaccard(a: frozenset[str], b: frozenset[str]) -> float:
+    if not a or not b:
+        return 0.0
+    inter = len(a & b)
+    return inter / (len(a) + len(b) - inter)
+
+
+# --- 발행일 창 -----------------------------------------------------------------
+#  같은 사안의 기사는 대개 며칠 안에 몰려서 나온다. 발행일 차이가 window_days보다 크면
+#  내용이 비슷해도(정기 행사·연재·같은 인물의 다른 근황) 다른 기사로 본다.
+#  발행일을 모르는 기사는 날짜로 거르지 않는다 (비교는 한다). window_days < 0 이면 끈다.
+
+def _timestamp(article: Article) -> float:
+    return article.pub_date.timestamp() if article.pub_date else np.nan
+
+
+def _date_ok(reps_ts: np.ndarray, ts: float, window_days: float) -> np.ndarray:
+    """대표 기사들과 발행일 차이가 창 안인지 [대표 수] (어느 한쪽 발행일이 없으면 True)."""
+    if window_days < 0 or np.isnan(ts):
+        return np.ones(len(reps_ts), dtype=bool)
+    gap = np.abs(reps_ts - ts)
+    return np.isnan(gap) | (gap <= window_days * 86400)
+
+
 def _unit(vectors: np.ndarray) -> np.ndarray:
     norm = np.linalg.norm(vectors, axis=1, keepdims=True)
     norm[norm == 0] = 1e-10
@@ -236,23 +307,31 @@ def find_duplicates(
     articles: list[Article],
     existing: list[Article] = (),
     keep: set[str] | frozenset[str] = frozenset(),
+    terms: list[str] | None = None,
     by: str | None = None,
     title_threshold: float | None = None,
     content_threshold: float | None = None,
     noun_threshold: float | None = None,
+    jaccard_threshold: float | None = None,
     rule: str | None = None,
+    date_window_days: float | None = None,
 ) -> dict[str, str]:
     """유사도가 임계값 이상인 기사를 중복으로 묶는다. {중복 기사 link: 대표 기사 link}
 
     - by: 비교 기준 (쉼표로 여러 개). 비우면 settings.dedup_by.
         title    제목 임베딩
-        content  본문 앞 n문장 임베딩
+        content  검색어가 들어간 문단 임베딩 (passage_text)
         noun     제목 고유명사 TF-IDF (드문 고유명사를 같이 쓰는 기사일수록 비슷함, 임베딩 불필요)
-        both = title,content / all = title,content,noun
+        jaccard  제목+검색어 문단의 글자 3-gram 자카드 유사도 (문장이 실제로 겹쳐야 높음, 임베딩 불필요)
+        both = title,content / all = title,content,noun,jaccard (넷 다)
       임베딩은 미리 채워 둬야 한다 (embed_for_dedup). 필요한 임베딩이 없는 기사는 비교에서 빠진다.
+    - terms: 검색어·별칭 (SelectedSense.match_terms). jaccard 기준이 검색어 문단을 비교할 때 쓴다
+      (content 기준은 embed_for_dedup에 넘긴 terms로 이미 임베딩돼 있음). 비우면 본문 앞 n문장.
     - *_threshold: 기준별 임계값. 비우면 settings 값.
     - rule: 기준이 여러 개일 때 "and"(모두 임계값 이상이어야 중복) | "or"(하나라도 이상이면 중복).
       비슷한 대표 기사가 여럿이면 (기준별 유사도 평균이) 가장 높은 대표 기사에 묶는다.
+    - date_window_days: 발행일 차이가 이 일수보다 크면 기준과 상관없이 중복이 아니다.
+      비우면 settings 값, 음수면 끈다. 발행일이 없는 기사는 날짜로 거르지 않는다.
 
     - 대표 기사는 본문이 가장 긴 기사 (정보가 가장 많다고 본다)
     - existing: 이미 판정을 마친 대표 기사들 (DB 버전에서 새 기사만 처리할 때).
@@ -266,7 +345,9 @@ def find_duplicates(
         "title": settings.dedup_title_threshold if title_threshold is None else title_threshold,
         "content": settings.dedup_content_threshold if content_threshold is None else content_threshold,
         "noun": settings.dedup_noun_threshold if noun_threshold is None else noun_threshold,
+        "jaccard": settings.dedup_jaccard_threshold if jaccard_threshold is None else jaccard_threshold,
     }[c]] for c in criteria])
+    window = settings.dedup_date_window_days if date_window_days is None else date_window_days
     has_vectors = lambda a: all(_EMBEDDING_OF[c](a) is not None for c in criteria if c in _EMBEDDING_OF)
     existing = [a for a in existing if has_vectors(a)]
     articles = [a for a in articles if has_vectors(a)]
@@ -274,29 +355,39 @@ def find_duplicates(
     # 기준별 단위 벡터 {link: 벡터}를 미리 만든다 (코사인 유사도 = 단위 벡터 내적)
     pool = existing + articles
     unit: dict[str, dict[str, np.ndarray]] = {}
+    grams = {a.link: shingles(jaccard_text(a, terms)) for a in pool} if "jaccard" in criteria else {}
     for c in criteria:
+        if c == "jaccard":
+            continue
         raw = noun_tfidf(pool) if c == "noun" else {a.link: np.asarray(_EMBEDDING_OF[c](a), dtype=float) for a in pool}
         links = list(raw)
         mat = _unit(np.array([raw[l] for l in links])) if links else np.zeros((0, 0))
         unit[c] = dict(zip(links, mat))
 
     reps: list[Article] = list(existing)
+    reps_ts: list[float] = [_timestamp(r) for r in reps]
     duplicates: dict[str, str] = {}
     # 라벨 붙은 기사를 먼저 대표로 세우고, 나머지는 긴 기사부터 대표 후보로 본다
     # → 비슷한 기사 무리에서 (라벨 붙은 기사가 없으면) 가장 긴 기사가 대표가 된다
     ordered = sorted(articles, key=lambda a: (a.link not in keep, -len(a.content)))
     for article in ordered:
         if reps and article.link not in keep:
+            date_ok = _date_ok(np.array(reps_ts), _timestamp(article), window)
             sims = np.array([   # [기준 수, 대표 수]
-                np.array([unit[c][r.link] for r in reps]) @ unit[c][article.link] for c in criteria
+                np.array([jaccard(grams[r.link], grams[article.link]) if ok else 0.0
+                          for r, ok in zip(reps, date_ok)])
+                if c == "jaccard" else
+                np.array([unit[c][r.link] for r in reps]) @ unit[c][article.link]
+                for c in criteria
             ])
             passed = sims >= thresholds
-            matched = passed.all(axis=0) if rule == "and" else passed.any(axis=0)
+            matched = (passed.all(axis=0) if rule == "and" else passed.any(axis=0)) & date_ok
             if matched.any():
                 score = np.where(matched, sims.mean(axis=0), -np.inf)
                 duplicates[article.link] = reps[int(np.argmax(score))].link
                 continue
         reps.append(article)
+        reps_ts.append(_timestamp(article))
     return duplicates
 
 
@@ -484,11 +575,11 @@ async def filter_articles(
     with timing.timed("새 기사 임베딩") as t:
         t.note = f"{sum(a.embedding is None for a in articles)}건 계산"
         await embed_articles(articles)
-    with timing.timed("중복 제거용 임베딩(제목 · 본문 앞 문장)") as t:
+    with timing.timed("중복 제거용 임베딩(제목 · 검색어 문단)") as t:
         t.note = f"기준 {','.join(_dedup_criteria())}"
-        await embed_for_dedup(list(articles) + list(existing))
+        await embed_for_dedup(list(articles) + list(existing), selected.match_terms)
     with timing.timed("중복 비교") as t:
-        duplicates = find_duplicates(articles, existing, keep=keep)
+        duplicates = find_duplicates(articles, existing, keep=keep, terms=selected.match_terms)
         t.note = f"기사 {len(articles)}건 vs 대표 {len(existing)}건 → 중복 {len(duplicates)}건"
     candidates = [a for a in articles if a.link not in duplicates]
 
@@ -522,13 +613,14 @@ def _labeled_links(topic_id: int) -> set[str]:
     return {r["link"] for r in rows}
 
 
-async def dedup_topic(topic_id: int) -> dict[str, str]:
+async def dedup_topic(topic_id: int, terms: list[str] | None = None) -> dict[str, str]:
     """[DB 버전, 2단계만] 판정 없이 중복 표시만 한다. 라벨 붙이기 전에 쓴다 (python evaluate.py label).
 
     - LLM을 부르지 않는다. 기사 임베딩만 계산한다 (이미 DB에 있으면 다시 계산 안 함, 크레딧 거의 0).
     - 아직 판정하지 않은 기사끼리, 그리고 이미 판정한 대표 기사와 비교한다 (filter_topic과 같은 기준).
     - 대표 기사는 판정하지 않은 채로 남는다 → 나중에 filter-all이 대표 기사만 규칙·LLM으로 판정한다.
     - 여러 번 실행해도 결과가 같다. 라벨 붙은 기사는 중복으로 바뀌지 않는다.
+    - terms: 검색어·별칭 (SelectedSense.match_terms). content·jaccard 기준에서 검색어가 들어간 문단을 비교한다.
     돌려주는 값: 이번에 새로 중복으로 표시한 {중복 기사 link: 대표 기사 link}
     """
     from qupict import db
@@ -539,8 +631,8 @@ async def dedup_topic(topic_id: int) -> dict[str, str]:
     existing = db.get_topic_articles(topic_id, statuses=STATUSES, include_duplicates=False)
     missing = [a for a in new + existing if a.embedding is None]
     await embed_articles(new + existing)
-    await embed_for_dedup(new + existing)
-    duplicates = find_duplicates(new, existing, keep=_labeled_links(topic_id))
+    await embed_for_dedup(new + existing, terms)
+    duplicates = find_duplicates(new, existing, keep=_labeled_links(topic_id), terms=terms)
     db.save_article_embeddings(missing)
     db.save_duplicates(topic_id, duplicates)
     db.copy_duplicate_judgments(topic_id)     # 이미 판정된 대표 기사의 중복이면 그 판정을 바로 받는다
