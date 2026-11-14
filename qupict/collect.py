@@ -61,7 +61,13 @@ DEFAULT_MAX_ARTICLES = 100      # 대상 하나당 수집할 기사 수 상한 (
 SEARCH_PAGES = 3                # 검색어 하나당 최대 몇 쪽(1쪽 = 100건)까지 받을지. 기간 밖으로 나가면 일찍 멈춘다
 RELEVANCE_PAGES = 1             # 관련도순으로 받을 쪽수 (검색어당 상위 100건). 뒤쪽으로 갈수록 관련성이 떨어지고,
                                 #   관련도순은 일찍 멈출 수 없어 쪽수만큼 호출이 늘어난다
-MAX_RELATED_IN_QUERY = 8        # "검색어 + 연관어" 조합에 쓸 연관어 개수 (= 연관어 최대 개수, API 호출 수 = 이 값 + 별칭 수)
+# 네이버 검색 요청 하나를 기다리는 최대 시간(초). 예전에는 지정하지 않아 aiohttp 기본값 300초(5분)를 썼다.
+#   검색 요청(검색어 × 관련도순·최신순, 약 18개)은 모두 끝나야 1단계가 넘어가므로, 네이버가 한 요청에 답하지 않으면
+#   화면이 "[1단계] 검색어 → …"에서 5분 넘게 멈췄다 (실패 시 @retry로 3번까지 다시 보내서 최대 약 15분).
+#   정상일 때는 18개 전부 합쳐 약 0.8초. 10초면 멈춘 요청 하나가 최대 약 33초(10초 × 3번 + 쉬는 시간)만 붙잡고,
+#   그래도 실패하면 그 검색어만 빼고 나머지 결과로 계속한다 (search_news의 return_exceptions).
+SEARCH_TIMEOUT_SECONDS = 10
+MAX_RELATED_IN_QUERY = 8       # "검색어 + 연관어" 조합에 쓸 연관어 개수 (= 연관어 최대 개수, API 호출 수 = 이 값 + 별칭 수)
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +185,7 @@ async def search_news(
     terms = build_search_terms(selected)
     cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=SEARCH_TIMEOUT_SECONDS)) as session:
         # 검색어마다 관련도순 · 최신순 두 가지를 모두, 전부 동시에 받는다 (API 호출은 무료)
         responses = await asyncio.gather(
             *(_fetch_one_keyword(session, t, cutoff, pages=RELEVANCE_PAGES, sort="sim") for t in terms),

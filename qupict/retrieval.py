@@ -145,6 +145,20 @@ def topic_context(selected: SelectedSense) -> str:
     return f"{selected.query} ({selected.sense.name}: {selected.sense.definition})"
 
 
+def with_subject(question: str, selected: SelectedSense) -> str:
+    """검색에 쓸 질문 문장. 질문에 검색어(또는 별칭)가 없으면 앞에 검색어를 붙인다 (LLM 없이).
+    예: 검색어 "강남" + "최근 근황은?" → "강남 최근 근황은?"
+
+    "와이프가 누군데?"처럼 주어가 빠진 질문은 그대로 임베딩하면 기사 문장과 멀다.
+    측정(2026-11-14, 방송인 강남 · HyDE 없이 질문만 검색): 가장 가까운 청크 유사도
+      "최근 근황은?" 0.24 → "강남 최근 근황은?" 0.52 (기준 0.5를 넘어 근거가 생김)
+      "와이프가 누군데?" 0.26 → "강남 와이프가 누군데?" 0.37
+    HyDE · Multi-Query(LLM)가 주제 맥락으로 이 일을 대신 해 주지만, LLM이 실패하거나 끈 경우에도 빗나가지 않게 한다."""
+    if any(term in question for term in selected.match_terms):
+        return question
+    return f"{selected.query} {question}"
+
+
 def build_search_texts(question: str, context: str, use_hyde: bool = True,
                        use_multi_query: bool = True) -> list[str]:
     """검색에 쓸 문장 목록: [원 질문(+HyDE 가상 문장), 변형 질문 …]
@@ -179,13 +193,24 @@ def search_topic(
     use_multi_query: bool = True,
     similarity_threshold: float | None = None,
     statuses: tuple[str, ...] = SEARCH_STATUSES,
+    history: str = "",
 ) -> list:
     """topic 안에서 질문과 가까운 청크를 최대 k개 찾는다. (db.ChunkHit 목록, 유사도 높은 순)
 
     period_days: 질문하는 시점 기준 최근 며칠 안에 발행된 기사만 (기획안: "SQL로 최근 30일 기사만 가져온 뒤 벡터 검색")
+    history: 앞서 한 질문·답변 (qa.history_text). HyDE · Multi-Query의 주제 맥락에 붙여서
+             "그 사람 직업은?"처럼 앞 답변을 가리키는 질문도 그 대상으로 검색 문장을 만들게 한다 (LLM 호출 수는 같음)
     """
     threshold = settings.relevance_similarity_threshold if similarity_threshold is None else similarity_threshold
-    texts = build_search_texts(question, topic_context(selected), use_hyde, use_multi_query)
+    context = topic_context(selected)
+    if history:
+        context += f"\n이전 대화 (질문의 '그', '그 사람' 등이 가리키는 대상을 찾는 데 쓸 것):\n{history}"
+        # 이전 대화가 있으면 검색어를 붙이지 않는다: "그 사람 직업은?"(앞 답변의 이상화)에 "강남"을 붙이면
+        # HyDE · 변형 질문이 "강남의 직업"으로 바꿔 써서 빗나갔다 (측정 2026-11-14). 가리키는 대상은 이전 대화로 찾게 둔다
+        search_question = question
+    else:
+        search_question = with_subject(question, selected)
+    texts = build_search_texts(search_question, context, use_hyde, use_multi_query)
     with timing.timed("검색 문장 임베딩") as t:
         vectors = get_embeddings().embed_documents(texts)
         t.note = f"문장 {len(texts)}개"
@@ -198,7 +223,15 @@ def search_topic(
 def oldest_searchable_date(topic_id: int, period_days: int | None = None,
                            statuses: tuple[str, ...] = SEARCH_STATUSES):
     """질문할 때 검색되는 기사(search_topic과 같은 조건: topic · 판정 · 발행일 기간 · 청크 있음) 중
-    가장 오래된 발행일. 없으면 None. 답변에서 "○○부터 오늘까지의 기사 중에서 못 찾았다"고 밝힐 때 쓴다.
+    가장 오래된 발행일. 없으면 None. 답변에서 "○○부터 오늘까지의 기사 중에서 못 찾았다"고 밝힐 때 쓴다."""
+    return searchable_stats(topic_id, period_days, statuses)[1]
+
+
+def searchable_stats(topic_id: int, period_days: int | None = None,
+                     statuses: tuple[str, ...] = SEARCH_STATUSES):
+    """질문할 때 검색되는 기사(search_topic과 같은 조건: topic · 판정 · 발행일 기간 · 청크 있음)의
+    (기사 수, 가장 오래된 발행일). 없으면 (0, None).
+    web.py는 준비를 시작할 때 이 값으로 "DB에 저장된 기사로 바로 답할 수 있는지" 본다.
 
     db.py에 이 조회가 없어서 여기에 두었다 (읽기 전용 SELECT 하나. DB 담당이 db.py로 옮겨도 된다).
     기간 계산은 db.search_chunks와 같은 db._window를 쓴다."""
@@ -207,7 +240,7 @@ def oldest_searchable_date(topic_id: int, period_days: int | None = None,
     since, until = db._window(period_days, None)
     with db.connect() as conn:
         row = conn.execute(
-            """SELECT min(a.pub_date) AS oldest
+            """SELECT count(*) AS n, min(a.pub_date) AS oldest
                FROM articles a
                JOIN article_topics at ON at.article_id = a.id
                WHERE at.topic_id = %(topic_id)s AND at.status = ANY(%(statuses)s) AND at.duplicate_of IS NULL
@@ -216,7 +249,7 @@ def oldest_searchable_date(topic_id: int, period_days: int | None = None,
                       OR a.pub_date BETWEEN %(since)s::timestamptz AND %(until)s::timestamptz)""",
             {"topic_id": topic_id, "statuses": list(statuses), "since": since, "until": until},
         ).fetchone()
-    return row["oldest"] if row else None
+    return (row["n"], row["oldest"]) if row else (0, None)
 
 
 def search_vectors(topic_id: int, vectors: list[list[float]], per_vector: int,

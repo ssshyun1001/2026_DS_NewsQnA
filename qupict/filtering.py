@@ -218,8 +218,8 @@ _NOUN_TAGS = ("NNP", "SL")
 _kiwi = None
 
 
-def extract_nouns(text: str) -> list[str]:
-    """고유명사(NNP)와 영문 단어(SL, 소문자로)를 등장 순서대로 (중복 포함). 한 글자는 뺀다."""
+def get_kiwi():
+    """형태소 분석기 Kiwi (처음 한 번만 만든다. qupict/hot.py도 같은 것을 쓴다)."""
     global _kiwi
     if _kiwi is None:
         try:
@@ -227,8 +227,13 @@ def extract_nouns(text: str) -> list[str]:
         except ImportError as e:
             raise ImportError("고유명사 기준(noun) 중복 제거에는 kiwipiepy가 필요합니다: pip install kiwipiepy") from e
         _kiwi = Kiwi()
+    return _kiwi
+
+
+def extract_nouns(text: str) -> list[str]:
+    """고유명사(NNP)와 영문 단어(SL, 소문자로)를 등장 순서대로 (중복 포함). 한 글자는 뺀다."""
     return [t.form.lower() if t.tag == "SL" else t.form
-            for t in _kiwi.tokenize(text or "") if t.tag in _NOUN_TAGS and len(t.form) >= 2]
+            for t in get_kiwi().tokenize(text or "") if t.tag in _NOUN_TAGS and len(t.form) >= 2]
 
 
 def noun_text(article: Article) -> str:

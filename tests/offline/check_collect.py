@@ -75,8 +75,16 @@ async def _sim_fails(session, keyword, cutoff=None, pages=None, sort="date"):
     return _results[(keyword, sort)]
 collect._fetch_one_keyword = _sim_fails
 assert links(10) == ["d1", "s1", "d2", "d3"]                  # 관련도순 검색이 실패하면 최신순만으로
+_timeouts = []
+async def _record_timeout(session, keyword, cutoff=None, pages=None, sort="date"):
+    _timeouts.append(session.timeout.total)
+    return _results[(keyword, sort)]
+collect._fetch_one_keyword = _record_timeout
+links(10)
+# 네이버가 답하지 않을 때 aiohttp 기본값(300초)만큼 1단계가 멈추지 않게, 검색 요청마다 제한 시간이 있어야 한다
+assert _timeouts and set(_timeouts) == {collect.SEARCH_TIMEOUT_SECONDS} and collect.SEARCH_TIMEOUT_SECONDS <= 30, _timeouts
 collect._fetch_one_keyword = _real_keyword
-print("2-2 ok: 관련도순 우선, 최신순으로 채움")
+print("2-2 ok: 관련도순 우선, 최신순으로 채움, 검색 제한 시간", collect.SEARCH_TIMEOUT_SECONDS, "초")
 
 # 3) API 결과 → NewsMeta: 기간 밖 제외, 네이버 링크 구분, HTML 태그 제거
 now = datetime.now(timezone(timedelta(hours=9)))
