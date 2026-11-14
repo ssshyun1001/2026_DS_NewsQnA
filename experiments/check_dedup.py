@@ -127,7 +127,7 @@ async def run(args) -> None:
     settings_line = (f"DEDUP_BY={settings.dedup_by}, DEDUP_RULE={settings.dedup_rule}, "
                      f"임계값 title={settings.dedup_title_threshold} content={settings.dedup_content_threshold} "
                      f"noun={settings.dedup_noun_threshold} jaccard={settings.dedup_jaccard_threshold}, "
-                     f"검색어 문단 ±{settings.dedup_passage_window}문장, 발행일 창 {settings.dedup_date_window_days}일")
+                     f"검색어 문단 ±{settings.dedup_passage_window}문장")
     print(f"중복 제거 중… ({settings_line})")
     await embed_for_dedup(articles, selected.match_terms)
     duplicates = find_duplicates(articles, terms=selected.match_terms)

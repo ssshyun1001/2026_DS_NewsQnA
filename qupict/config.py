@@ -49,8 +49,6 @@ class Settings:
     dedup_noun_threshold: float = _get_float("DEDUP_NOUN_THRESHOLD", 0.3)
     # 제목+검색어 문단 글자 3-gram 자카드 유사도 임계값 (DEDUP_BY에 jaccard를 넣었을 때)
     dedup_jaccard_threshold: float = _get_float("DEDUP_JACCARD_THRESHOLD", 0.5)
-    # 발행일 차이가 이 일수보다 크면 어떤 기준에서도 중복이 아님 (같은 사안은 며칠 안에 몰려 나온다). 음수 = 끔
-    dedup_date_window_days: float = _get_float("DEDUP_DATE_WINDOW_DAYS", 3)
     # content 기준: 검색어·별칭이 든 문장의 앞뒤 몇 문장까지 문단으로 볼지
     dedup_passage_window: int = _get_int("DEDUP_PASSAGE_WINDOW", 1)
     # content 기준에서 본문에 검색어가 없을 때 대신 비교할 본문 앞 문장 수 (jaccard 기준도 같음)

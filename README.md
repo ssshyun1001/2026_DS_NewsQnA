@@ -542,7 +542,6 @@ python evaluate.py exp-a              # evalset/labeled_set_*.json으로 필터�
 | `DEDUP_CONTENT_THRESHOLD`        |                  `0.5` | 검색어가 들어간 문단 임베딩 코사인 유사도 임계값 (예전 이름 `DEDUP_SIMILARITY_THRESHOLD`도 읽음) |
 | `DEDUP_NOUN_THRESHOLD`           |                  `0.2` | 제목 고유명사 TF-IDF 코사인 유사도 임계값 (kiwipiepy로 제목에서 고유명사·영문 단어 추출) |
 | `DEDUP_JACCARD_THRESHOLD`        |                  `0.5` | 제목+검색어 문단 글자 3-gram 자카드 유사도 임계값 (기본 `DEDUP_BY=all`에 포함). 문장이 실제로 겹치는 복붙·통신사 기사용 |
-| `DEDUP_DATE_WINDOW_DAYS`         |                    `3` | 발행일 차이가 이 일수보다 크면 어떤 기준이든 중복 아님. 발행일 없는 기사는 거르지 않음, 음수 = 끔 |
 | `DEDUP_PASSAGE_WINDOW`           |                    `1` | `content` 기준: 검색어·별칭이 든 문장 앞뒤로 몇 문장까지 문단으로 볼지 (본문에 문단 구분이 없어 문장 단위로 자름) |
 | `DEDUP_LEAD_SENTENCES`           |                    `5` | 본문에 검색어가 없을 때 `content` 기준이 대신 쓰는 본문 앞 문장 수 (`jaccard` 기준도 같음) |
 | `DEDUP_RULE`                     |                   `or` | 기준이 여러 개일 때: `and`(모두 넘어야 중복) / `or`(하나만 넘어도 중복) |

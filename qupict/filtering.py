@@ -11,7 +11,6 @@
                                     검색어가 없으면 본문 앞 N문장 (N = DEDUP_LEAD_SENTENCES)
                            noun     제목의 드문 고유명사 겹침 (TF-IDF)   (DEDUP_NOUN_THRESHOLD)
                            jaccard  제목+검색어 문단 글자 3-gram 자카드  (DEDUP_JACCARD_THRESHOLD, 문단은 content와 같음)
-                         발행일 창 DEDUP_DATE_WINDOW_DAYS: 발행일이 이보다 멀면 기준과 상관없이 중복 아님
                          여러 기준을 묶는 방법 DEDUP_RULE: "and"(모두 넘어야 중복) | "or"(하나만 넘어도)
   [2단계] 1차 규칙 필터  분명히 무관한 기사만 규칙으로 걸러 LLM 호출을 줄인다      → stage = "rule"
   [3단계] 2차 LLM 검증   나머지를 LLM이 관련 / 무관으로 판정하고 근거 한 줄을 남긴다 → stage = "llm"
@@ -280,23 +279,6 @@ def jaccard(a: frozenset[str], b: frozenset[str]) -> float:
     return inter / (len(a) + len(b) - inter)
 
 
-# --- 발행일 창 -----------------------------------------------------------------
-#  같은 사안의 기사는 대개 며칠 안에 몰려서 나온다. 발행일 차이가 window_days보다 크면
-#  내용이 비슷해도(정기 행사·연재·같은 인물의 다른 근황) 다른 기사로 본다.
-#  발행일을 모르는 기사는 날짜로 거르지 않는다 (비교는 한다). window_days < 0 이면 끈다.
-
-def _timestamp(article: Article) -> float:
-    return article.pub_date.timestamp() if article.pub_date else np.nan
-
-
-def _date_ok(reps_ts: np.ndarray, ts: float, window_days: float) -> np.ndarray:
-    """대표 기사들과 발행일 차이가 창 안인지 [대표 수] (어느 한쪽 발행일이 없으면 True)."""
-    if window_days < 0 or np.isnan(ts):
-        return np.ones(len(reps_ts), dtype=bool)
-    gap = np.abs(reps_ts - ts)
-    return np.isnan(gap) | (gap <= window_days * 86400)
-
-
 def _unit(vectors: np.ndarray) -> np.ndarray:
     norm = np.linalg.norm(vectors, axis=1, keepdims=True)
     norm[norm == 0] = 1e-10
@@ -314,7 +296,6 @@ def find_duplicates(
     noun_threshold: float | None = None,
     jaccard_threshold: float | None = None,
     rule: str | None = None,
-    date_window_days: float | None = None,
 ) -> dict[str, str]:
     """유사도가 임계값 이상인 기사를 중복으로 묶는다. {중복 기사 link: 대표 기사 link}
 
@@ -330,8 +311,6 @@ def find_duplicates(
     - *_threshold: 기준별 임계값. 비우면 settings 값.
     - rule: 기준이 여러 개일 때 "and"(모두 임계값 이상이어야 중복) | "or"(하나라도 이상이면 중복).
       비슷한 대표 기사가 여럿이면 (기준별 유사도 평균이) 가장 높은 대표 기사에 묶는다.
-    - date_window_days: 발행일 차이가 이 일수보다 크면 기준과 상관없이 중복이 아니다.
-      비우면 settings 값, 음수면 끈다. 발행일이 없는 기사는 날짜로 거르지 않는다.
 
     - 대표 기사는 본문이 가장 긴 기사 (정보가 가장 많다고 본다)
     - existing: 이미 판정을 마친 대표 기사들 (DB 버전에서 새 기사만 처리할 때).
@@ -347,7 +326,6 @@ def find_duplicates(
         "noun": settings.dedup_noun_threshold if noun_threshold is None else noun_threshold,
         "jaccard": settings.dedup_jaccard_threshold if jaccard_threshold is None else jaccard_threshold,
     }[c]] for c in criteria])
-    window = settings.dedup_date_window_days if date_window_days is None else date_window_days
     has_vectors = lambda a: all(_EMBEDDING_OF[c](a) is not None for c in criteria if c in _EMBEDDING_OF)
     existing = [a for a in existing if has_vectors(a)]
     articles = [a for a in articles if has_vectors(a)]
@@ -365,29 +343,25 @@ def find_duplicates(
         unit[c] = dict(zip(links, mat))
 
     reps: list[Article] = list(existing)
-    reps_ts: list[float] = [_timestamp(r) for r in reps]
     duplicates: dict[str, str] = {}
     # 라벨 붙은 기사를 먼저 대표로 세우고, 나머지는 긴 기사부터 대표 후보로 본다
     # → 비슷한 기사 무리에서 (라벨 붙은 기사가 없으면) 가장 긴 기사가 대표가 된다
     ordered = sorted(articles, key=lambda a: (a.link not in keep, -len(a.content)))
     for article in ordered:
         if reps and article.link not in keep:
-            date_ok = _date_ok(np.array(reps_ts), _timestamp(article), window)
             sims = np.array([   # [기준 수, 대표 수]
-                np.array([jaccard(grams[r.link], grams[article.link]) if ok else 0.0
-                          for r, ok in zip(reps, date_ok)])
+                np.array([jaccard(grams[r.link], grams[article.link]) for r in reps])
                 if c == "jaccard" else
                 np.array([unit[c][r.link] for r in reps]) @ unit[c][article.link]
                 for c in criteria
             ])
             passed = sims >= thresholds
-            matched = (passed.all(axis=0) if rule == "and" else passed.any(axis=0)) & date_ok
+            matched = passed.all(axis=0) if rule == "and" else passed.any(axis=0)
             if matched.any():
                 score = np.where(matched, sims.mean(axis=0), -np.inf)
                 duplicates[article.link] = reps[int(np.argmax(score))].link
                 continue
         reps.append(article)
-        reps_ts.append(_timestamp(article))
     return duplicates
 
 

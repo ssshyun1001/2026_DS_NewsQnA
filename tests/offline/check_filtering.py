@@ -134,28 +134,18 @@ jarts = [J("j1", "강남, 괌에서 관광객 구조", wire + " 강남은 당시
          J("j3", "강남, 이상화와 예능 출연", "방송인 강남이 아내 이상화와 함께 예능에 출연한다.", 0)]
 assert F.jaccard(F.shingles("이상화와 예능"), F.shingles("이상화 와, 예능")) == 1.0
 assert F.jaccard(F.shingles(""), F.shingles("abc")) == 0.0
-assert F.find_duplicates(jarts, by="jaccard", jaccard_threshold=0.5, date_window_days=-1) == {"j2": "j1"}
-# 발행일 창: 같은 내용이어도 창보다 멀면 중복 아님 (창 3일 → 1일 차이는 중복, 10일 차이는 아님)
-assert F.find_duplicates(jarts, by="jaccard", jaccard_threshold=0.5, date_window_days=3) == {"j2": "j1"}
-jarts[1].pub_date = d0 + timedelta(days=10)
-assert F.find_duplicates(jarts, by="jaccard", jaccard_threshold=0.5, date_window_days=3) == {}
-assert F.find_duplicates(jarts, by="jaccard", jaccard_threshold=0.5, date_window_days=-1) == {"j2": "j1"}  # 창 끔
-jarts[1].pub_date = None                                                           # 발행일 모르면 거르지 않음
-assert F.find_duplicates(jarts, by="jaccard", jaccard_threshold=0.5, date_window_days=3) == {"j2": "j1"}
-# 발행일 창은 임베딩 기준에도 똑같이 적용된다
-tw = [T("p", "x" * 50, e1, e1), T("q", "x" * 10, near, near)]
-tw[0].pub_date, tw[1].pub_date = d0, d0 + timedelta(days=5)
-assert F.find_duplicates(tw, by="title", title_threshold=0.9, date_window_days=7) == {"q": "p"}
-assert F.find_duplicates(tw, by="title", title_threshold=0.9, date_window_days=3) == {}
+assert F.find_duplicates(jarts, by="jaccard", jaccard_threshold=0.5) == {"j2": "j1"}
+jarts[1].pub_date = d0 + timedelta(days=10)                                     # 발행일은 보지 않는다
+assert F.find_duplicates(jarts, by="jaccard", jaccard_threshold=0.5) == {"j2": "j1"}
 # jaccard는 검색어 문단을 비교한다: 앞부분이 달라도 검색어 문단이 같으면 중복, 앞부분만 같으면 중복 아님
 intro = "오늘 날씨가 맑다. 미세먼지는 보통이다. 주말에는 비가 온다. 기온이 떨어진다. 바람이 분다. "
 quote = "가수 강남이 괌 해변에서 물에 빠진 관광객을 구했다."
 pj = [J("p1", "속보", intro + quote), J("p2", "속보", "전혀 다른 소식이다. " * 5 + quote),
       J("p3", "속보", intro + "배우 이서진이 새 예능에 출연한다.")]
 assert F.jaccard_text(pj[0], ["강남"]) == "속보 바람이 분다. " + quote
-assert F.find_duplicates(pj, by="jaccard", jaccard_threshold=0.5, date_window_days=-1, terms=["강남"]) == {"p1": "p2"}  # p2가 본문이 더 길어 대표
-assert F.find_duplicates(pj, by="jaccard", jaccard_threshold=0.5, date_window_days=-1) == {"p3": "p1"}  # terms 없으면 앞 문장
-print("3 ok: 중복 제거 (라벨 붙은 기사 지키기, 제목/검색어 문단/고유명사/자카드 기준, 발행일 창 포함)")
+assert F.find_duplicates(pj, by="jaccard", jaccard_threshold=0.5, terms=["강남"]) == {"p1": "p2"}  # p2가 본문이 더 길어 대표
+assert F.find_duplicates(pj, by="jaccard", jaccard_threshold=0.5) == {"p3": "p1"}  # terms 없으면 앞 문장
+print("3 ok: 중복 제거 (라벨 붙은 기사 지키기, 제목/검색어 문단/고유명사/자카드 기준)")
 
 # 아래 흐름 테스트(5~7)는 가짜 임베딩이 본문 기준·0.9에 맞춰져 있으므로 고정 (.env 값과 무관하게)
 F.settings = dataclasses.replace(F.settings, dedup_by="content", dedup_content_threshold=0.9)
