@@ -145,4 +145,27 @@ sense._custom_llm.invoke.return_value = sense._CustomSense(definition="d", alias
 long_desc = "가" * 40
 assert len(sense.select_described_sense(swu, long_desc).sense.name) == sense.CUSTOM_NAME_MAX_CHARS
 print("10 ok: 직접 입력은 설명 기준 (이름 · 포함 후보 · 검색어 · 답변 대상)")
+
+# 11) 저장된 직접 입력 의미를 후보로 고를 때: LLM을 다시 부르지 않고, 저장한 포함 후보는 다른 의미로 두지 않는다
+saved_swu = sense.SenseCandidates(query="서울여대", senses=[
+    Sense(name="서울 소재 여자대학교", definition="서울에 있는 여자대학교 전체", aliases=["이화여대"], related_terms=["입시"], is_custom=True),
+    *swu.senses,
+    Sense(name="밴드 서울여대", definition="d", related_terms=["앨범", "공연"], is_custom=True)],
+    custom_includes={"서울 소재 여자대학교": ["서울여자대학교"], "밴드 서울여대": []})
+sense._custom_llm = fake_llm(exc=AssertionError("저장된 직접 입력이면 LLM을 부르지 않아야 함"))
+a = sense.select_sense(saved_swu, 0)
+assert a.sense.is_custom and a.other_senses == [] and a.excluded_terms == []
+b = sense.select_described_sense(saved_swu, " 서울 소재 여자대학교")             # 같은 설명을 다시 입력해도 저장된 것
+assert b == a
+# LLM 후보를 고르면 다른 의미 = LLM 후보만 (저장된 직접 입력의 연관어 "앨범"이 배제어가 되지 않게)
+assert sense.select_sense(saved_swu, 1).other_senses == []
+band = sense.select_sense(saved_swu, 2)
+assert [o.name for o in band.other_senses] == ["서울여자대학교"] and "앨범" not in band.excluded_terms
+# 새 설명은 LLM 후보만 보고 포함 여부를 판단한다
+sense._custom_llm = fake_llm()
+sense._custom_llm.invoke.return_value = sense._CustomSense(definition="d", aliases=[], related_terms=["총동문회"], includes=[])
+new = sense.select_described_sense(saved_swu, "서울여대 동문회")
+prompt = sense._custom_llm.invoke.call_args[0][0][1][1]
+assert "밴드 서울여대" not in prompt and [o.name for o in new.other_senses] == ["서울여자대학교"]
+print("11 ok: 저장된 직접 입력 의미 재사용 (LLM 안 부름 · 다른 의미는 LLM 후보만)")
 print("ALL PASS")

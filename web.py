@@ -110,6 +110,7 @@ class PrepareRequest(BaseModel):
     query: str = Field(min_length=1)
     period_days: int = Field(ge=1, le=365)
     sense_index: Optional[int] = None       # 후보 번호 (0부터). 없으면 custom_description을 쓴다
+    sense_name: str = ""                    # 후보 이름 (있으면 번호 대신 이것으로 찾는다: 후보 순서는 고른 횟수에 따라 바뀔 수 있음)
     custom_description: str = ""            # "기타 (직접 입력)" 설명
     max_articles: int = Field(default=100, ge=1, le=500)
     memory: bool = False                    # DB 없이 메모리(FAISS) 버전
@@ -150,19 +151,40 @@ def senses(req: SensesRequest) -> dict:
         "query": query,
         "source": source,
         "senses": [{"name": s.name, "definition": s.definition,
-                    "aliases": s.aliases, "related_terms": s.related_terms}
+                    "aliases": s.aliases, "related_terms": s.related_terms,
+                    "is_custom": s.is_custom, "use_count": candidates.use_counts.get(s.name, 0)}
                    for s in candidates.senses],
     }
 
 
 def _select(req: PrepareRequest) -> SelectedSense:
-    from qupict.sense import load_sense_candidates, select_described_sense, select_sense
+    """고른 의미를 만들고 DB에 기록한다 (고른 횟수, 새 직접 입력 의미 저장 → 다음부터 후보로 나온다).
+    기록은 뒤에서 한다: 기록이 끝나기를 기다리지 않고 바로 준비 작업을 시작한다 (DB 왕복 약 0.1~0.2초 절약).
+    기록이 실패해도 경고만 출력하고 작업에는 영향이 없다."""
+    from qupict import sense
 
     query = req.query.strip()
     with _lock:
         candidates = _candidates.get(query)
     if candidates is None:                  # 서버를 다시 켠 경우 등: 후보를 다시 가져온다
-        candidates, _ = load_sense_candidates(query)
+        candidates, _ = sense.load_sense_candidates(query)
+    selected = _choose(req, candidates)
+    _remember_thread(sense.remember_selection, candidates, selected).start()
+    return selected
+
+
+def _remember_thread(fn, *args) -> threading.Thread:
+    return threading.Thread(target=fn, args=args, daemon=True)
+
+
+def _choose(req: PrepareRequest, candidates) -> SelectedSense:
+    from qupict.sense import select_described_sense, select_sense
+
+    if req.sense_name:
+        names = [s.name for s in candidates.senses]
+        if req.sense_name not in names:
+            raise HTTPException(400, "의미 후보가 바뀌었습니다. 검색어를 다시 입력해 주세요.")
+        return select_sense(candidates, names.index(req.sense_name))
     if req.sense_index is not None:
         if not 0 <= req.sense_index < len(candidates.senses):
             raise HTTPException(400, "의미 후보 번호가 맞지 않습니다. 검색어를 다시 입력해 주세요.")

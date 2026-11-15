@@ -6,6 +6,7 @@
 """
 import asyncio
 import sys
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,6 +27,11 @@ def main() -> None:
     cands = SenseCandidates(query="강남", senses=[Sense(name="방송인 강남", definition="가수 겸 방송인"),
                                                 Sense(name="지역 강남", definition="서울 강남구")])
     sense.load_sense_candidates = lambda q: (cands, "DB 캐시")
+    remembered = []
+    sense.remember_selection = lambda c, sel: remembered.append(sel.sense.name)   # 실제 DB에 기록하지 않게
+    threads = []
+    _make_thread = web._remember_thread
+    web._remember_thread = lambda fn, *a: threads.append(_make_thread(fn, *a)) or threads[-1]
     web.validate_settings = lambda: None
     web.settings = SimpleNamespace(database_url="postgresql://가짜", chat_model="가짜 모델")
 
@@ -114,6 +120,28 @@ def main() -> None:
     assert client.get("/api/info").json() == {"has_db": True, "chat_model": "가짜 모델"}
     r = client.post("/api/senses", json={"query": "강남"}).json()
     assert [s["name"] for s in r["senses"]] == ["방송인 강남", "지역 강남"]
+    assert r["senses"][0]["is_custom"] is False and r["senses"][0]["use_count"] == 0
+    # 이름으로 고르기: 후보 순서가 바뀌어도(많이 고른 순) 화면에서 본 의미를 고른다
+    assert web._select(web.PrepareRequest(query="강남", period_days=30, sense_index=0,
+                                          sense_name="지역 강남")).sense.name == "지역 강남"
+    try:
+        web._select(web.PrepareRequest(query="강남", period_days=30, sense_name="없는 의미"))
+        raise AssertionError("없는 이름이면 400")
+    except web.HTTPException as e:
+        assert e.status_code == 400
+    # 기록은 뒤에서: 기록이 느려도 고르기는 바로 끝난다
+    for t in threads: t.join(2)
+    assert remembered == ["지역 강남"]                # 없는 이름(400)은 기록하지 않음
+    slow = threading.Event()
+    sense.remember_selection = lambda c, sel: (slow.wait(2), remembered.append(sel.sense.name))
+    t0 = time.perf_counter()
+    web._select(web.PrepareRequest(query="강남", period_days=30, sense_name="방송인 강남"))
+    assert time.perf_counter() - t0 < 0.5 and remembered == ["지역 강남"]   # 기록을 기다리지 않음
+    slow.set(); threads[-1].join(2)
+    assert remembered == ["지역 강남", "방송인 강남"]
+    sense.remember_selection = lambda c, sel: remembered.append(sel.sense.name)
+    for t in threads: t.join(2)
+    remembered.clear()
     print("1 ok: 화면 · 의미 후보")
 
     job = client.post("/api/prepare", json={"query": "강남", "period_days": 30, "sense_index": 0,
@@ -124,7 +152,9 @@ def main() -> None:
             break
         time.sleep(0.05)
     assert status["status"] == "done", status
+    for t in threads: t.join(2)
     assert calls["collect"] == ("방송인 강남", 30, 20)
+    assert remembered == ["방송인 강남"]               # 고른 의미는 DB에 기록 (고른 횟수 · 직접 입력 저장)
     assert waited == [True]                           # 새로 저장한 것이 있으면 준비 완료 전에 한 번 기다린다
     assert status["early"] == 0 and calls["filter"] == 1  # 처음 검색하는 대상: 저장된 기사로 먼저 답하지 않음
     assert run.PREPARE_SETTLE_SECONDS == 3
