@@ -286,7 +286,7 @@ function enqueueQuestion(question) {
   const q = document.createElement("div"); q.className = "q"; q.textContent = question;
   const a = document.createElement("div"); a.className = "a waiting";
   a.innerHTML = state.sessionId ? `<span class="spinner"></span> 차례를 기다리는 중…`
-                                : `⏳ 3번 과정(이미지 글자 읽기까지)이 끝나면 답합니다.`;
+                                : `⏳ 3번 과정이 끝나면 답합니다.`;
   $("chat").append(q, a);
   a.scrollIntoView({ behavior: "smooth", block: "nearest" });
   // 이 질문이 기다릴 약속은 "질문을 적은 때"의 것이다 (그 사이 새 준비를 시작해도 섞이지 않게)
