@@ -193,9 +193,11 @@ function renderSenses(r) {
   $("sense-src").textContent = r.senses.length
     ? `의미 후보 출처: ${r.source}` + (r.senses.length === 1 ? " · 후보가 하나라 미리 골라 두었습니다." : "")
     : "의미 후보를 만들지 못했습니다. 찾고 싶은 대상을 직접 설명해 주세요.";
+  state.senseNames = r.senses.map(s => s.name);
+  const mark = s => [s.is_custom ? "직접 입력" : "", s.use_count ? `${s.use_count}회 선택` : ""].filter(Boolean).join(" · ");
   const items = r.senses.map((s, i) => `
     <label class="sense"><input type="radio" name="sense" value="${i}" ${i === 0 ? "checked" : ""}>
-      <span class="name">${esc(s.name)}</span>
+      <span class="name">${esc(s.name)}</span>${mark(s) ? ` <span class="note">${esc(mark(s))}</span>` : ""}
       <div class="def">${esc(s.definition)}</div>
       <div class="tags">${[...s.aliases.map(a => "별칭 " + a), ...s.related_terms].map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
     </label>`);
@@ -217,6 +219,7 @@ $("f-sense").addEventListener("submit", async (e) => {
     query: state.query, period_days: Number($("days").value), max_articles: Number($("maxn").value),
     memory: $("memory").checked,
     sense_index: v === "custom" ? null : Number(v), custom_description: v === "custom" ? $("custom").value : "",
+    sense_name: v === "custom" ? "" : (state.senseNames || [])[Number(v)] || "",
   };
   if (v === "custom" && !body.custom_description.trim()) { $("custom").focus(); return; }
   $("b-sense").disabled = true;

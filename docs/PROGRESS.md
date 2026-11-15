@@ -414,6 +414,25 @@ python admin.py status
 - `run.py`, `admin.py`, `python -m qupict.sense`, 라벨링 스크립트 모두 이 함수를 씁니다. DB 없이 LLM만 부르려면 `generate_sense_candidates`
 - 후보를 **다시 만들고 싶을 때**: 지금은 DB의 해당 검색어 행을 지워야 합니다 (같은 이름은 덮어쓰지만, 이름이 바뀐 옛 후보는 남아서 섞이기 때문)
 
+### 후보가 쌓이는 방식: 직접 입력 저장 + 많이 고른 순 (2026-11-15)
+
+저장 위치는 **DB(`query_senses`)** 입니다. JSON · MD 파일 대신 DB를 쓴 이유:
+웹 서버에 여러 사람이 동시에 들어와도 한 곳에 쌓이고(파일은 동시에 쓰면 깨지거나 덮어씀), 팀원 모두 같은 후보를 보며,
+`topics.sense_id`가 이미 이 테이블을 가리키고 있어 의미 ↔ 수집 데이터가 이어져 있기 때문입니다.
+
+| 상황 | 동작 |
+| --- | --- |
+| "기타"로 **새 설명** 입력 | LLM이 정리한 의미를 `is_custom = TRUE`로 저장 → **다음부터 이 검색어의 후보로 나옴** |
+| 같은 설명을 다시 입력 / 저장된 직접 입력 후보 선택 | LLM을 부르지 않고 저장된 의미 사용 |
+| 의미를 고를 때마다 | `use_count + 1`, `last_used_at` 기록 (`sense.remember_selection` → `db.record_sense_use`) |
+| 후보 순서 | 많이 고른 순 → LLM 순위 → 직접 입력. 직접 입력 후보는 많이 고른 것 3개까지 (`MAX_SAVED_CUSTOM`) |
+| 직접 입력만 저장된 검색어 (예전에 LLM이 후보를 못 만듦) | LLM을 다시 시도하고, 저장된 직접 입력을 뒤에 붙임 |
+
+- **배제어는 그대로**: '다른 의미'(배제어 · LLM 대조 기준)는 지금처럼 LLM 후보만 씁니다. 직접 입력 후보는 LLM 후보와 겹치거나 더 넓은 대상일 때가 많아(예: "서울 소재 여자대학교" ⊃ 서울여자대학교), 배제어로 쓰면 원하는 기사를 걸러 버리기 때문입니다.
+- 직접 입력 의미를 저장할 때 **포함 후보(`includes`)** 도 저장합니다 → 다음에 그 후보를 고를 때도 같은 '다른 의미'가 나옵니다.
+- 웹 화면은 후보 옆에 "직접 입력 · N회 선택"을 표시하고, 순서가 바뀌어도 맞는 의미를 고르도록 번호 대신 **이름**(`sense_name`)으로 보냅니다.
+- **이미 만든 DB는 `python admin.py init-db`를 한 번 실행**해야 새 열(`includes`, `use_count`, `last_used_at`)이 생깁니다. 예전 직접 입력 의미의 포함 후보 · 횟수는 저장된 topic에서 채웁니다. 실행 전에는 DB 읽기가 실패해 LLM으로 대신합니다 (멈추지는 않음).
+
 ### 실제 결과 (예전 `targets.yaml` 기준 기록, 지금은 사람이 고친 값 없이 LLM 후보만 씀)
 
 **① 한 가지 의미를 찾는 검색어**
@@ -612,7 +631,7 @@ print(outcome.summary())   # 중복 0건 | 규칙 무관 0건 | LLM 관련 6 · 
 
 | 테이블 | 내용 | 단계 |
 | --- | --- | --- |
-| `query_senses` | 검색어별 LLM 의미 후보 (같은 검색어면 재사용) | 0 |
+| `query_senses` | 검색어별 의미 후보: LLM 후보 + "기타"로 직접 입력해 저장된 의미, 고른 횟수 (같은 검색어면 재사용) | 0 |
 | `topics` | 검색어 + 고른 의미 (사람이 고친 별칭·정의 포함), 배제어, 대조할 다른 의미, 마지막 수집 시각 | 0 |
 | `articles` | 제목, 링크, 발행일, 언론사, 본문, 수집 시각, 기사 임베딩 | 1 |
 | `article_images` | 이미지 주소, 원래 캡션, LLM 설명 | 1·4 |
@@ -681,7 +700,7 @@ python tests/check_db.py
 | 단계 | 함수 | 하는 일 |
 | --- | --- | --- |
 | 공통 | `init_db()` | 테이블 만들기 (`python admin.py init-db`) |
-| 0 | `get_sense_candidates(query)` / `save_sense_candidates(c)` | 의미 후보 캐시 읽기 / 저장 |
+| 0 | `get_sense_candidates(query)` / `save_sense_candidates(c)` / `record_sense_use(query, sense, includes)` | 의미 후보 캐시 읽기 / 저장 / 고른 의미 기록 (횟수 +1, 새 직접 입력 저장) |
 | 0 | `save_topic(selected)` → topic id, `get_topic(query, sense_name)` | topic 만들기·재사용 / 읽기 |
 | 1 | `collect.collect_to_db(selected, period_days)` → topic id | **1단계 DB 버전 (완성)**: topic 저장 → 검색 → 이미 있는 기사는 연결만 → 새 기사만 크롤링·저장 |
 | 1 | `link_known_articles(topic_id, metas)`, `save_articles(topic_id, articles)` | 위 함수가 안에서 씀 |

@@ -7,12 +7,20 @@
 
 흐름:
   load_sense_candidates("애플")           ← DB에 있으면 DB 것, 없으면 LLM으로 만들어 DB에 저장
-      → SenseCandidates: 자주 쓰이는 순 최대 3개 (정의 + 별칭 + 연관어)
+      → SenseCandidates: LLM 후보(자주 쓰이는 순 최대 3개) + 예전에 "기타"로 직접 입력해 저장된 의미
+         (많이 고른 순으로 정렬. 직접 입력 의미는 최대 MAX_SAVED_CUSTOM개)
       (generate_sense_candidates = DB 없이 LLM만 부르는 함수)
   후보가 2개 이상  → 사용자가 하나 선택       → select_sense(...)
   후보가 1개       → 자동 선택               → select_sense(..., 0)
   후보가 0개 / "기타" → 사용자가 직접 설명 입력 → select_described_sense(...) (이름은 설명 그대로, 기준은 설명)
+  고른 뒤          → remember_selection(...)  → 고른 횟수 +1, 새 직접 입력 의미는 DB에 저장 → 다음부터 후보로 나온다
   DB에 저장된 topic 다시 처리 → 의미 이름으로 후보 찾기 → select_sense_by_name(...)
+
+후보가 쌓이는 방식 (저장 위치 = DB query_senses):
+  - 처음 보는 검색어: LLM이 후보를 만들어 저장 (이후 LLM 안 부름)
+  - "기타"로 새 설명이 들어오면: LLM이 정리한 의미를 저장 → 다음 사용자에게는 후보로 바로 보인다
+  - 같은 설명을 다시 입력하거나 저장된 직접 입력 후보를 고르면 LLM을 부르지 않는다
+  - 많이 고른 의미일수록 위에 보인다 (use_count)
 
 의미·별칭·연관어는 LLM이 만든 후보만 쓴다 (사람이 적은 값으로 덮어쓰지 않는다).
 
@@ -42,6 +50,7 @@ from qupict.schemas import SelectedSense, Sense, SenseCandidates, unique_terms
 
 MAX_CANDIDATES = 3
 MAX_RELATED_TERMS = 8
+MAX_SAVED_CUSTOM = 3   # 후보로 보여 줄 직접 입력 의미 수 (많이 고른 순)
 
 
 # ---------------------------------------------------------------------------
@@ -185,8 +194,9 @@ def load_sense_candidates(query: str) -> tuple[SenseCandidates, str]:
     왜 필요한가: LLM은 temperature=0이어도 같은 검색어에 연관어를 조금씩 다르게 낸다.
     그러면 배제어(2단계 규칙 필터 기준)가 실행할 때마다 바뀌어 실험을 재현할 수 없다.
     처음 만든 후보를 DB(query_senses)에 저장해 두고 계속 쓰면 기준이 고정되고 LLM 비용도 0이 된다.
+    예전에 "기타"로 직접 입력해 저장된 의미도 함께 돌려준다 (많이 고른 순, 최대 MAX_SAVED_CUSTOM개).
 
-    돌려주는 값: (후보 목록, 출처) — 출처는 "DB", "LLM → DB 저장", "LLM (DB 없음)" 중 하나
+    돌려주는 값: (후보 목록, 출처) — 출처는 "DB", "LLM → DB 저장", "LLM (DB 없음)" 등
 
       - DATABASE_URL이 비어 있으면 DB 없이 LLM만 쓴다 (DB를 안 띄운 팀원도 실행 가능)
       - DB 연결에 실패해도 멈추지 않고 LLM으로 계속한다 (경고만 출력)
@@ -203,18 +213,59 @@ def load_sense_candidates(query: str) -> tuple[SenseCandidates, str]:
     except Exception as e:
         print(f"  [경고] DB에서 의미 후보를 읽지 못했습니다 ({type(e).__name__}). LLM으로 만듭니다.")
         return generate_sense_candidates(query), "LLM (DB 오류)"
-    if cached is not None:
-        return cached, "DB"
+    saved_custom = _trim_custom(cached) if cached is not None else None
+    if saved_custom is not None and any(not s.is_custom for s in saved_custom.senses):
+        n = sum(s.is_custom for s in saved_custom.senses)
+        return saved_custom, "DB" + (f" (직접 입력 {n}개 포함)" if n else "")
 
+    # LLM 후보가 아직 없다 (처음 보는 검색어, 또는 예전에 LLM이 후보를 못 만들어 직접 입력만 저장된 검색어)
     candidates = generate_sense_candidates(query)
     if not candidates.senses:
-        return candidates, "LLM (후보 없음, 저장 안 함)"
+        source = "LLM (후보 없음, 저장 안 함)"
+    else:
+        try:
+            db.save_sense_candidates(candidates)
+            source = "LLM → DB 저장"
+        except Exception as e:
+            print(f"  [경고] 의미 후보를 DB에 저장하지 못했습니다 ({type(e).__name__}).")
+            source = "LLM (DB 저장 실패)"
+    if saved_custom is not None:   # 저장된 직접 입력 의미는 LLM 후보 뒤에 붙인다
+        names = {s.name for s in candidates.senses}
+        extra = [s for s in saved_custom.senses if s.name not in names]
+        candidates = candidates.model_copy(update={
+            "senses": [*candidates.senses, *extra],
+            "custom_includes": saved_custom.custom_includes, "use_counts": saved_custom.use_counts})
+        source += f" + DB 직접 입력 {len(extra)}개"
+    return candidates, source
+
+
+def _trim_custom(candidates: SenseCandidates) -> SenseCandidates:
+    """직접 입력 의미는 많이 고른 순으로 MAX_SAVED_CUSTOM개만 남긴다 (DB가 이미 그 순서로 준다)."""
+    kept, n = [], 0
+    for s in candidates.senses:
+        if s.is_custom:
+            n += 1
+            if n > MAX_SAVED_CUSTOM:
+                continue
+        kept.append(s)
+    return candidates.model_copy(update={"senses": kept})
+
+
+def remember_selection(candidates: SenseCandidates, selected: SelectedSense) -> None:
+    """고른 의미를 DB에 기록한다: 고른 횟수 +1, 처음 보는 직접 입력 의미는 저장 (→ 다음부터 후보로 나온다).
+    DB가 없거나 실패해도 멈추지 않는다 (경고만 출력)."""
+    if not settings.database_url:
+        return
+    from qupict import db
+
+    includes: list[str] = []
+    if selected.sense.is_custom:   # '다른 의미'로 두지 않은 LLM 후보 = 포함 후보 (다음에 고를 때 그대로 재현)
+        others = {o.name for o in selected.other_senses}
+        includes = [s.name for s in candidates.senses if not s.is_custom and s.name not in others]
     try:
-        db.save_sense_candidates(candidates)
+        db.record_sense_use(selected.query, selected.sense, includes)
     except Exception as e:
-        print(f"  [경고] 의미 후보를 DB에 저장하지 못했습니다 ({type(e).__name__}).")
-        return candidates, "LLM (DB 저장 실패)"
-    return candidates, "LLM → DB 저장"
+        print(f"  [경고] 고른 의미를 DB에 기록하지 못했습니다 ({type(e).__name__}).")
 
 
 # ---------------------------------------------------------------------------
@@ -331,7 +382,11 @@ def select_sense(candidates: SenseCandidates, index: int) -> SelectedSense:
     if not 0 <= index < len(candidates.senses):
         raise IndexError(f"후보는 {len(candidates.senses)}개입니다. (받은 번호: {index})")
     chosen = candidates.senses[index]
-    others = [s for i, s in enumerate(candidates.senses) if i != index]
+    # '다른 의미'(배제어 · LLM 대조 기준)는 LLM 후보만. 저장된 직접 입력 의미는 다른 의미로 쓰지 않는다
+    # (직접 입력은 LLM 후보와 겹치거나 더 넓은 대상일 때가 많아, 배제어로 쓰면 원하는 기사를 걸러 버린다)
+    includes = set(candidates.custom_includes.get(chosen.name, [])) if chosen.is_custom else set()
+    others = [s for i, s in enumerate(candidates.senses)
+              if i != index and not s.is_custom and s.name not in includes]
     return _make_selection(candidates.query, chosen, others)
 
 
@@ -340,7 +395,7 @@ def select_custom_sense(candidates: SenseCandidates, custom: Sense,
     """직접 입력한 의미를 고른다. LLM 후보는 '고르지 않은 의미'가 되어 배제어 · LLM 검증의 대조 기준으로 쓰인다.
     includes: 찾는 대상에 포함되는 후보 이름 → 다른 의미로 두지 않는다
     (예: "서울 소재 여자대학교"를 찾는데 후보 "서울여자대학교"를 다른 의미로 두면 그 기사가 무관이 된다)."""
-    others = [s for s in candidates.senses if s.name not in set(includes)]
+    others = [s for s in candidates.senses if not s.is_custom and s.name not in set(includes)]
     return _make_selection(candidates.query, custom, others)
 
 
@@ -349,12 +404,15 @@ def select_described_sense(candidates: SenseCandidates, description: str) -> Sel
 
     설명이 LLM 후보의 이름과 같으면(예: "서울여자대학교") 그 후보를 고른 것으로 본다.
     직접 입력으로 만들면 같은 topic(검색어, 의미 이름)에 직접 입력 값이 덮어써져
-    그 후보 topic의 정의 · 연관어가 바뀌기 때문이다 (topic은 수집 · 판정 · 라벨이 쌓인 공용 데이터)."""
+    그 후보 topic의 정의 · 연관어가 바뀌기 때문이다 (topic은 수집 · 판정 · 라벨이 쌓인 공용 데이터).
+    예전에 같은 설명으로 저장된 직접 입력 의미가 있으면 그것을 고른다 (LLM을 다시 부르지 않는다)."""
     wanted = _normalize(description)
+    as_custom = _normalize(_custom_name(description))
     for i, s in enumerate(candidates.senses):
-        if wanted and _normalize(s.name) == wanted:
+        if wanted and _normalize(s.name) in ((as_custom,) if s.is_custom else (wanted,)):
             return select_sense(candidates, i)
-    custom, includes = describe_custom_sense(candidates.query, description, candidates.senses)
+    llm_senses = [s for s in candidates.senses if not s.is_custom]
+    custom, includes = describe_custom_sense(candidates.query, description, llm_senses)
     return select_custom_sense(candidates, custom, includes)
 
 
@@ -391,7 +449,22 @@ def select_sense_by_name(candidates: SenseCandidates, name: str) -> SelectedSens
 # ---------------------------------------------------------------------------
 
 def choose_sense_interactively(candidates: SenseCandidates) -> SelectedSense:
-    """터미널에서 후보를 보여 주고 번호로 고르게 한다. (run.py도 이 함수를 쓴다)"""
+    """터미널에서 후보를 보여 주고 번호로 고르게 한다. (run.py도 이 함수를 쓴다)
+    고른 의미는 DB에 기록한다 (고른 횟수, 새 직접 입력 의미 저장)."""
+    selected = _choose(candidates)
+    remember_selection(candidates, selected)
+    return selected
+
+
+def sense_label(candidates: SenseCandidates, s: Sense) -> str:
+    """후보 옆에 붙이는 표시: 직접 입력으로 저장된 의미인지, 몇 번 골랐는지."""
+    marks = ["직접 입력"] if s.is_custom else []
+    if candidates.use_counts.get(s.name):
+        marks.append(f"{candidates.use_counts[s.name]}회 선택")
+    return f" [{' · '.join(marks)}]" if marks else ""
+
+
+def _choose(candidates: SenseCandidates) -> SelectedSense:
     if not candidates.senses:
         print("의미 후보를 만들지 못했습니다. 찾고 싶은 대상을 직접 설명해 주세요.")
         desc = input("설명> ").strip()
@@ -402,7 +475,7 @@ def choose_sense_interactively(candidates: SenseCandidates) -> SelectedSense:
         return select_sense(candidates, 0)
 
     for i, s in enumerate(candidates.senses, 1):
-        print(f"  {i}. {s.name} — {s.definition}")
+        print(f"  {i}. {s.name} — {s.definition}{sense_label(candidates, s)}")
     print("  0. 기타 (직접 입력)")
     while True:
         choice = input("번호> ").strip()

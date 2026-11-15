@@ -24,6 +24,8 @@ import eval_retrieval as R
 from qupict import db
 from qupict.filtering import Verdict
 from qupict.schemas import Article, SelectedSense, Sense
+import qupict.sense
+qupict.sense.remember_selection = lambda c, s: None   # 고른 의미를 실제 DB에 기록하지 않게
 
 tmp = Path(tempfile.mkdtemp())
 sel = SelectedSense(query="강남", sense=Sense(name="방송인 강남", definition="가수 겸 방송인",
