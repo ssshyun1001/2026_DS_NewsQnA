@@ -186,9 +186,11 @@ def image_text_mode() -> str | None:
     return mode
 
 
-async def add_image_text(topic_id: int, log: Callable[[str], None] = print) -> None:
+async def add_image_text(topic_id: int, log: Callable[[str], None] = print,
+                         note: str = "그동안 질문해도 됩니다.") -> None:
     """[4단계 뒤] 기사 이미지를 글로 바꿔(OCR 또는 VLM) 이미지 청크를 더한다.
-    "준비 완료" 뒤에 돌려서, 그동안 질문을 받는다. 끝나면 그 뒤 질문부터 이미지 내용도 검색된다."""
+    터미널(run.py)은 "준비 완료" 뒤에 돌려서 그동안 질문을 받는다. 끝나면 그 뒤 질문부터 이미지 내용도 검색된다.
+    웹(web.py)은 이게 끝나야 질문에 답한다 → note로 시작 안내 문구를 바꿔 넘긴다."""
     from qupict.indexing import index_topic
 
     mode = image_text_mode()
@@ -196,7 +198,7 @@ async def add_image_text(topic_id: int, log: Callable[[str], None] = print) -> N
         return
     name = IMAGE_TEXT_NAMES[mode]
     timing.reset()
-    log(f"[이미지] {name}를 뒤에서 진행합니다. 그동안 질문해도 됩니다.")
+    log(f"[이미지] {name}를 뒤에서 진행합니다. {note}")
     with timing.timed(name):
         result = await index_topic(topic_id, describe_images=(mode == "vlm"), ocr_images=(mode == "ocr"))
     log(f"[이미지] {name} 끝 → {result.summary()}")

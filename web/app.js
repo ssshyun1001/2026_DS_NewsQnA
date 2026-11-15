@@ -139,11 +139,11 @@ $("f-sense").addEventListener("submit", async (e) => {
   $("c-job").classList.remove("hidden");
   $("log").textContent = "";
   busy($("s-job"), "작업을 시작하는 중…");
-  // 질문 칸은 준비가 끝나기 전부터 연다: 수집하는 동안 질문을 적어 두면 준비가 끝나는 대로 차례로 답한다
+  // 질문 칸은 준비가 끝나기 전부터 연다: 그동안 질문을 적어 두면 3번 과정(이미지 글자 읽기까지)이 끝나는 대로 차례로 답한다
   newReady();
   $("chat").innerHTML = "";
   $("qa-label").textContent = "";
-  $("qa-note").textContent = "준비가 끝나면 답합니다. 그동안 질문을 적어 두면 준비가 끝나는 대로 차례로 답합니다.";
+  $("qa-note").textContent = "3번 과정이 모두 끝나면 답합니다. 그동안 질문을 적어 두면 끝나는 대로 차례로 답합니다.";
   $("c-qa").classList.remove("hidden");
   // 많이 보도된 기사 카드도 질문 칸처럼 미리 연다. 내용은 준비가 끝난 뒤 채운다 (renderHot)
   $("hot").innerHTML = `<div class="muted">⏳ 뉴스 준비가 끝나면 같은 내용을 다룬 기사가 많은 순서로 보여 드립니다.</div>`;
@@ -171,12 +171,12 @@ function hotFailed() {
    3. 진행 상황 확인  (3번 카드, 서버의 준비 작업을 몇 초마다 확인)
    --------------------------------------------------------------------------- */
 
-// 서버 응답 j = { status, logs, session_id, label, error, early, elapsed, images, hot, hot_articles }
+// 서버 응답 j = { status, logs, session_id, label, error, elapsed, images, hot, hot_articles }
 //   status   "running"(준비 중) / "done"(완료) / "error"(실패)
-//   session_id  질문을 받을 수 있게 되면 채워진다 (예전에 준비한 검색어면 준비가 끝나기 전에도)
+//   session_id  3번 과정(수집 · 필터링 · 인덱싱 · 이미지 글자 읽기)이 모두 끝나면 채워진다. 그 전에는 질문에 답하지 않는다
 //   images   준비 완료 뒤 이미지 속 글자 읽기(OCR): "" 안 함 / "running" / "done"
 //   hot      준비 완료 뒤 많이 보도된 기사 정리: "" / "running" / "done" / "error"
-// 다시 확인하는 간격: 준비 중 1.5초, Top 5 정리 중 1초, 이미지 읽는 중 3초. 셋 다 끝나면 멈춘다.
+// 다시 확인하는 간격: 준비 중 1.5초, Top 5 정리 중 1초, 이미지 읽는 중 · 질문 열리기 전 3초. 모두 끝나면 멈춘다.
 async function poll(jobId) {
   if (jobId !== state.jobId) return;          // 새 검색어·새 준비를 시작했으면 이전 작업은 더 보지 않는다
   try {
@@ -184,43 +184,39 @@ async function poll(jobId) {
     if (jobId !== state.jobId) return;        // 기다리는 사이에 새 작업이 시작된 경우
     $("log").textContent = j.logs.join("\n");
     $("log").scrollTop = $("log").scrollHeight; // 로그는 항상 맨 아래(최신)가 보이게
-    // 질문을 받을 수 있게 되면 한 번만: 미리 적어 둔 질문이 이제 차례로 나간다.
-    // 예전에 준비한 검색어·의미는 준비가 끝나기 전에 DB에 저장된 기사로 먼저 열린다 (j.early = 그 기사 수)
+    // 3번 과정이 모두 끝나 질문을 받을 수 있게 되면 한 번만: 미리 적어 둔 질문이 이제 차례로 나간다
     if (j.session_id && state.sessionId !== j.session_id) {
       state.sessionId = j.session_id;
       $("qa-label").textContent = j.label;
-      $("qa-note").textContent = j.status === "running" && j.early
-        ? `DB에 저장된 기사 ${j.early}건으로 먼저 답합니다. 새 기사는 수집·판정이 끝나는 대로 답변에 들어갑니다.` : "";
+      $("qa-note").textContent = "";
       state.ready.resolve(j.session_id);
       $("question").focus();
     }
     if (j.status === "running") {
-      busy($("s-job"), j.session_id
-        ? "새 기사를 수집하는 중… 질문은 지금 바로 할 수 있습니다 (DB에 저장된 기사로 답함)."
-        : "처리 중… 기사 수에 따라 몇 분 걸릴 수 있습니다. 그동안 아래에서 질문을 적어 둘 수 있어요.");
+      busy($("s-job"), "처리 중… 기사 수에 따라 몇 분 걸릴 수 있습니다. 그동안 아래에서 질문을 적어 둘 수 있어요.");
       setTimeout(() => poll(jobId), 1500);
       return;
     }
     $("b-sense").disabled = false;            // 준비가 끝났으니(완료든 실패든) 다시 준비할 수 있게
     if (j.status === "done") {
-      $("qa-note").textContent = "";
       renderHot(j);                            // 많이 보도된 기사 Top 5 (준비 완료 뒤 서버가 이어서 만든다)
       const took = `준비 완료 · ${j.elapsed}초`;
-      // 이미지 속 글자 읽기도 준비 완료 뒤 서버에서 이어서 한다 → 끝날 때까지 가끔 확인 (질문은 지금도 됨)
-      if (j.images === "running") {
-        busy($("s-job"), `${took} · 이미지 속 글자를 읽는 중… 질문은 지금 해도 되고, 끝나면 이미지 내용도 답변에 쓰입니다.`);
+      // 이미지 속 글자 읽기도 준비 완료 뒤 서버에서 이어서 한다. 이게 끝나야 질문에 답한다 → 끝날 때까지 가끔 확인
+      if (j.images === "running" || !j.session_id) {
+        busy($("s-job"), j.images === "running"
+          ? `${took} · 이미지 속 글자를 읽는 중… 끝나면 질문에 답합니다.`
+          : `${took} · 마무리하는 중…`);
+        if (!j.session_id) $("qa-note").textContent = "이미지 속 글자 읽기가 끝나면 답합니다. 질문은 지금 적어 두어도 됩니다.";
       } else {
-        setStatus($("s-job"), j.images === "done" ? `${took} · 이미지 속 글자까지 반영됨` : took, "ok");
+        setStatus($("s-job"), j.images === "done" ? `${took} · 이미지 속 글자까지 반영됨 · 이제 질문할 수 있습니다` : `${took} · 이제 질문할 수 있습니다`, "ok");
       }
       if (j.hot === "running") setTimeout(() => poll(jobId), 1000);
-      else if (j.images === "running") setTimeout(() => poll(jobId), 3000);
+      else if (j.images === "running" || !j.session_id) setTimeout(() => poll(jobId), 3000);
     } else {
       const msg = j.error || "작업이 실패했습니다.";
       setStatus($("s-job"), msg, "err");
-      $("qa-note").textContent = j.session_id
-        ? "새 기사 준비는 실패했지만, DB에 저장된 기사로는 계속 질문할 수 있습니다."
-        : "뉴스 준비에 실패해 질문에 답할 수 없습니다. 의미·기간을 바꿔 다시 준비해 주세요.";
-      state.ready.reject(new Error(msg));      // 이미 저장된 기사로 열려 있으면 아무 일도 안 한다
+      $("qa-note").textContent = "뉴스 준비에 실패해 질문에 답할 수 없습니다. 의미·기간을 바꿔 다시 준비해 주세요.";
+      state.ready.reject(new Error(msg));      // 적어 둔 질문에 "답할 수 없습니다"를 띄운다
       hotFailed();
     }
   } catch (err) {                              // 서버에 연결이 안 되는 경우 등
@@ -290,7 +286,7 @@ function enqueueQuestion(question) {
   const q = document.createElement("div"); q.className = "q"; q.textContent = question;
   const a = document.createElement("div"); a.className = "a waiting";
   a.innerHTML = state.sessionId ? `<span class="spinner"></span> 차례를 기다리는 중…`
-                                : `⏳ 뉴스 준비가 끝나면 답합니다.`;
+                                : `⏳ 3번 과정(이미지 글자 읽기까지)이 끝나면 답합니다.`;
   $("chat").append(q, a);
   a.scrollIntoView({ behavior: "smooth", block: "nearest" });
   // 이 질문이 기다릴 약속은 "질문을 적은 때"의 것이다 (그 사이 새 준비를 시작해도 섞이지 않게)

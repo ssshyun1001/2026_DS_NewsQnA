@@ -12,33 +12,84 @@
 
 
 /* ---------------------------------------------------------------------------
-   1. 색 변수 (밝은 화면 / 어두운 화면)
+   1. 색 변수 — 주요 색은 SWU BLUE, 나머지는 서울여대 색 계열에서 골라 쓴다
+      출처: https://www.swu.ac.kr/swu/797/subview.do (UI 색상)
+
+        SWU BLUE    Pantone 2747C   R16 G16 B119  → #101077  주요 색 (QuPicT 로고와 같은 색)
+        SWU YELLOW  Pantone 1235C   R255 G179 B0  → #ffb300  포인트 (★ 많이 보도된 기사 Top 5)
+        SWU PURPLE  Pantone 201C    R158 G26 B32  → #9e1a20  오류 글자
+        SWU GRAY2   Cool Gray 9C    K60           → #666666  흐린 글자
+
+      옅은 바탕 · 테두리는 SWU BLUE의 불투명도를 낮춰 만든다: rgba(16, 16, 119, 0.06) = BLUE 6%.
+      → 회색 대신 아주 옅은 남색 기운이 돌아서 화면 전체가 로고 색과 어울린다.
+
+      변수는 두 종류
+        --accent       버튼 · 말풍선처럼 "칠하는" 강조색
+        --accent-text  링크 · 순위 숫자처럼 "글자"로 쓰는 강조색
+      밝은 화면에서는 둘 다 SWU BLUE. 어두운 화면에서는 남색 글자가 안 보이므로 --accent-text만 밝은 남색으로 바꾼다.
    --------------------------------------------------------------------------- */
 
 :root {
-  --bg: #f6f7f9;           /* 페이지 바탕 */
-  --card: #ffffff;         /* 카드(흰 상자) 바탕 */
-  --text: #1d2330;         /* 기본 글자 */
-  --muted: #6b7280;        /* 흐린 글자 (설명 · 날짜 · 언론사) */
-  --line: #e3e6eb;         /* 테두리 선 */
-  --accent: #2f6fde;       /* 강조색 (버튼 · 링크 · 단계 번호) */
-  --accent-soft: #e8f0fd;  /* 강조색의 옅은 바탕 (단계 번호 동그라미 · 고른 의미) */
-  --ok: #1f9d55;           /* 성공 글자 ("준비 완료") */
-  --err: #d64545;          /* 오류 글자 */
-  --log: #f1f3f6;          /* 진행 로그 · 답변 · 비슷한 기사 목록의 회색 바탕 */
+  /* 학교 색 */
+  --swu-blue: #101077;
+  --swu-yellow: #ffb300;
+  --swu-purple: #9e1a20;
+  --swu-gray2: #666666;
+
+  /* 화면에서 쓰는 이름 (아래 규칙은 모두 이 이름으로 쓴다 → 색을 바꾸려면 여기만 고친다) */
+  --bg: #f4f5fa;                         /* 페이지 바탕: 아주 옅은 남색 기운의 흰색 */
+  --card: #ffffff;                       /* 카드(흰 상자) 바탕 · 입력칸 바탕 */
+  --text: #000000;                       /* 기본 글자: 검은색 */
+  --title: var(--swu-blue);              /* 큰 제목 "QuPicT 뉴스 Q&A" */
+  --muted: var(--swu-gray2);             /* 흐린 글자 (설명 · 날짜 · 언론사) */
+  --placeholder: #9a9aa8;                /* 입력칸 안의 예시 글자 */
+  --line: rgba(16, 16, 119, 0.10);       /* 카드 테두리 · 구분선: BLUE 10% */
+  --line-strong: rgba(16, 16, 119, 0.28);/* 입력칸 테두리 · 머리말 아래 선: BLUE 28% */
+  --accent: var(--swu-blue);             /* 칠하는 강조색 (버튼 · 단계 번호 · 질문 말풍선) */
+  --accent-hover: #2b2ba3;               /* 버튼에 마우스를 올렸을 때: 조금 밝은 남색 */
+  --accent-text: var(--swu-blue);        /* 글자 강조색 (링크 · 순위 · "비슷한 기사 N건" · "(기사 1)") */
+  --on-accent: #ffffff;                  /* 강조색 위의 글자 (버튼 글자 등) */
+  --accent-soft: rgba(16, 16, 119, 0.07);/* 고른 의미 상자 바탕: BLUE 7% */
+  --ring: rgba(16, 16, 119, 0.22);       /* 입력칸을 눌렀을 때 바깥 번짐: BLUE 22% */
+  --highlight: var(--swu-yellow);        /* 포인트 (★ 동그라미) */
+  --ok: #1d7a46;                         /* 성공 글자 ("준비 완료"): 초록 */
+  --err: var(--swu-purple);              /* 오류 글자 */
+  --log: rgba(16, 16, 119, 0.04);        /* 진행 로그 · 답변 · 비슷한 기사 목록 바탕: BLUE 4% */
+  --disabled: #c4c4cf;                   /* 누를 수 없는 버튼 */
+  --shadow: 0 1px 2px rgba(16, 16, 119, 0.05), 0 6px 20px rgba(16, 16, 119, 0.05);  /* 카드 그림자 (남색 기운) */
+
+  color-scheme: light dark;
+  /* 라디오 버튼 · 체크박스 같은 브라우저 기본 부품도 강조색으로 */
+  accent-color: var(--accent);
 }
 
-/* 컴퓨터가 어두운 화면(다크 모드)이면 같은 변수를 어두운 색으로 바꾼다 */
+/* 컴퓨터가 어두운 화면(다크 모드)이면: 아주 진한 남색 바탕 + 밝은 글자. SWU BLUE는 버튼 · 말풍선에 그대로 쓴다 */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #14171c; --card: #1c2027; --text: #e6e8eb; --muted: #9aa3ae; --line: #2d333c;
-    --accent: #6c9cf0; --accent-soft: #23314a; --ok: #4cc38a; --err: #f07070; --log: #161a20;
+    --bg: #0a0a26;
+    --card: #12123a;
+    --text: #f2f2f7;
+    --title: #ffffff;
+    --muted: #a7a9bd;
+    --placeholder: #6f7190;
+    --line: rgba(255, 255, 255, 0.10);
+    --line-strong: rgba(255, 255, 255, 0.25);
+    --accent: #2a2a9e;                   /* SWU BLUE는 어두운 바탕에서 묻혀서 한 단계 밝게 */
+    --accent-hover: #3a3ab8;
+    --accent-text: #a9a9ff;              /* 글자로 쓰는 강조색은 밝은 남색 */
+    --accent-soft: rgba(169, 169, 255, 0.10);
+    --ring: rgba(169, 169, 255, 0.30);
+    --ok: #5ccf8e;
+    --err: #ff8a8f;
+    --log: rgba(255, 255, 255, 0.05);
+    --disabled: #3b3b5c;
+    --shadow: none;
   }
 }
 
 
 /* ---------------------------------------------------------------------------
-   2. 페이지 전체 · 제목
+   2. 페이지 전체 · 머리말(로고 + 제목)
    --------------------------------------------------------------------------- */
 
 /* 너비 · 높이에 테두리와 안쪽 여백을 포함해서 계산한다 (칸이 삐져나오지 않게) */
@@ -48,14 +99,28 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+  /* 화면 맨 위의 SWU BLUE 띠 */
+  border-top: 6px solid var(--swu-blue);
   /* 윈도우는 맑은 고딕, 맥은 Apple SD 고딕 Neo로 한글이 보인다 */
   font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
 }
 
 /* 내용 전체를 가운데에 최대 820px 너비로 */
-main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+main { max-width: 820px; margin: 0 auto; padding: 28px 16px 80px; }
 
-h1 { font-size: 22px; margin: 0 0 4px; }
+/* 머리말: 로고와 제목을 한 줄에. 아래에 옅은 남색 선 */
+.brand {
+  display: flex; align-items: center; gap: 14px;
+  padding-bottom: 14px; margin-bottom: 14px;
+  border-bottom: 1px solid var(--line-strong);
+}
+.brand .logo { width: 56px; height: 56px; flex: none; }   /* 로고 크기 (휴대폰에서는 10번에서 줄인다) */
+/* 어두운 화면: 남색 로고가 바탕에 묻히지 않게 흰 동그라미 위에 올린다 */
+@media (prefers-color-scheme: dark) {
+  .brand .logo { background: #ffffff; border-radius: 50%; padding: 3px; }
+}
+
+h1 { font-size: 24px; margin: 0; color: var(--title); letter-spacing: -0.3px; }
 
 /* 제목 아래 설명 (서비스 소개 · 주의 문구 · LLM 모델 이름) */
 .sub { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
@@ -68,19 +133,23 @@ h1 { font-size: 22px; margin: 0 0 4px; }
 .card {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 20px;
   margin-bottom: 16px;
+  box-shadow: var(--shadow);   /* 옅은 남색 그림자로 바탕에서 살짝 떠 보이게 */
 }
+
+/* ★ 많이 보도된 기사 카드의 별 동그라미만 SWU YELLOW (포인트) */
+#c-hot .step { background: var(--highlight); color: var(--swu-blue); }
 
 /* 카드 제목: 단계 번호 동그라미와 글자를 한 줄에 */
 .card h2 { font-size: 15px; margin: 0 0 12px; display: flex; gap: 8px; align-items: center; }
 
-/* 단계 번호 동그라미 (1, 2, 3, ★, 4) */
+/* 단계 번호 동그라미 (1, 2, 3, ★, 4): SWU BLUE 바탕에 흰 글자 */
 .step {
-  display: inline-grid; place-items: center;
-  width: 22px; height: 22px; border-radius: 50%;
-  background: var(--accent-soft); color: var(--accent);
+  display: inline-grid; place-items: center; flex: none;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent);
   font-size: 12px; font-weight: 700;
 }
 
@@ -96,32 +165,45 @@ label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px
 
 /* 입력칸 한 묶음(이름표 + 칸). 기본은 넓게, small은 좁게(기간) */
 .field { flex: 1 1 160px; }
-.field.small { flex: 0 1 110px; }
+.field.small { flex: 0 1 130px; }
 
 input[type=text], input[type=number], textarea {
   width: 100%;
   padding: 9px 11px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
-  background: var(--bg);
+  background: var(--card);
   color: var(--text);
   font: inherit;
 }
-/* 입력 중인 칸에 강조색 테두리 */
-input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+/* 숫자 칸(기간 · 최대 수집 기사 수)의 위아래 화살표 버튼을 없앤다. 숫자는 직접 입력한다
+   (크롬 · 사파리 · 엣지는 ::-webkit-… 규칙, 파이어폭스는 appearance 규칙으로 숨긴다) */
+input[type=number] { appearance: textfield; -moz-appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* 입력칸 안의 예시 글자 (placeholder) */
+::placeholder { color: var(--placeholder); }
+/* 입력 중인 칸: 강조색 테두리 + 바깥으로 옅게 번지는 테두리(ring) */
+input:focus, textarea:focus { outline: none; border-color: var(--accent-text); box-shadow: 0 0 0 3px var(--ring); }
 
 button {
-  padding: 9px 16px; border: 0; border-radius: 8px;
-  background: var(--accent); color: #fff;
+  padding: 9px 18px; border: 0; border-radius: 8px;
+  background: var(--accent); color: var(--on-accent);
   font: inherit; font-weight: 600; cursor: pointer;
+  transition: background .15s;
 }
-/* 처리하는 동안 버튼을 막아 두면(disabled) 흐리게 */
-button:disabled { opacity: .5; cursor: default; }
+/* 마우스를 올리면 조금 밝은 남색 */
+button:hover:not(:disabled) { background: var(--accent-hover); }
+/* 키보드(Tab)로 옮겨 왔을 때 테두리 */
+button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+/* 처리하는 동안 버튼을 막아 두면(disabled) 회색으로 */
+button:disabled { background: var(--disabled); cursor: default; }
 /* 테두리만 있는 버튼 (지금은 쓰지 않지만 남겨 둠) */
-button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+button.ghost { background: transparent; color: var(--accent-text); border: 1px solid var(--line-strong); }
 
-/* 검색어 카드 아래의 추가 설정 (최대 수집 기사 수) */
-.opts { margin-top: 10px; font-size: 13px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; }
+/* 카드 맨 아래 버튼 자리 (1번 [의미 찾기], 2번 [이 의미로 뉴스 모으기]) — 입력칸 · 목록과 띄운다 */
+.actions { margin-top: 14px; }
 
 
 /* ---------------------------------------------------------------------------
@@ -131,16 +213,18 @@ button.ghost { background: transparent; color: var(--accent); border: 1px solid 
 .senses { display: grid; gap: 8px; }
 
 /* 의미 후보 하나 = 누를 수 있는 상자 (라디오 버튼 포함) */
-.sense { display: block; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer; }
+/* <label>이라 위의 label 규칙(흐린 글자 · 13px)을 물려받는다 → 기본 글자색 · 크기로 되돌린다 */
+.sense { display: block; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer;
+         color: var(--text); font-size: 15px; margin: 0; }
 /* 고른 의미는 강조색 테두리와 옅은 바탕 */
-.sense:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.sense:has(input:checked) { border-color: var(--accent-text); background: var(--accent-soft); }
 .sense input { margin-right: 6px; }
 .sense .name { font-weight: 600; }
 .sense .def { color: var(--muted); font-size: 14px; margin-top: 2px; }
 
 /* 별칭 · 관련어 꼬리표 */
 .tags { margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; }
-.tag { font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--log); color: var(--muted); }
+.tag { font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--card); color: var(--muted); border: 1px solid var(--line); }
 
 /* 카드 안의 작은 안내 문구 */
 .note { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
@@ -161,12 +245,12 @@ button.ghost { background: transparent; color: var(--accent); border: 1px solid 
 /* 상태 한 줄 ("처리 중…", "준비 완료", 오류). err/ok 클래스로 색이 바뀐다 */
 .status { font-size: 13px; margin-top: 8px; }
 .status.err { color: var(--err); }
-.status.ok { color: var(--ok); }
+.status.ok { color: var(--ok); font-weight: 600; }
 
 /* 도는 동그라미 (기다리는 중 표시) */
 .spinner {
   display: inline-block; width: 12px; height: 12px;
-  border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--accent-text); border-radius: 50%;
   animation: spin .8s linear infinite; vertical-align: -1px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -179,15 +263,15 @@ button.ghost { background: transparent; color: var(--accent); border: 1px solid 
 /* 순위 목록. 한 줄 = [순위 숫자 | 제목 · 요약 · 언론사 · 비슷한 기사] */
 .hot { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
 .hot li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; }
-.hot .rank { font-weight: 700; color: var(--accent); text-align: center; }
+.hot .rank { font-weight: 700; color: var(--accent-text); text-align: center; }
 
 /* 대표 기사 제목 (누르면 원문이 새 탭에서 열림) */
 .hot a { color: var(--text); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
-.hot a:hover { color: var(--accent); text-decoration: underline; }
+.hot a:hover { color: var(--accent-text); text-decoration: underline; }
 
 .hot .sum { font-size: 14px; margin-top: 2px; }                   /* 한 줄 요약 */
 .hot .meta { font-size: 12px; color: var(--muted); margin-top: 2px; } /* 언론사 · 날짜 · 비슷한 기사 */
-.hot .dup { color: var(--accent); font-weight: 600; }               /* "비슷한 기사 N건" 글자 */
+.hot .dup { color: var(--accent-text); font-weight: 600; }               /* "비슷한 기사 N건" 글자 */
 
 /* 비슷한 기사 토글: "비슷한 기사 N건 ▸"을 누르면 묶인 기사 목록이 펼쳐진다.
    HTML의 <details>/<summary>를 쓴다 → 누르면 열리고 다시 누르면 닫히는 동작은 브라우저가 해 준다 */
@@ -219,18 +303,18 @@ button.ghost { background: transparent; color: var(--accent); border: 1px solid 
 /* 사용자 질문 말풍선 (오른쪽, 강조색) */
 .q {
   justify-self: end; max-width: 85%;
-  background: var(--accent); color: #fff;
+  background: var(--accent); color: var(--on-accent);
   padding: 8px 14px; border-radius: 14px 14px 4px 14px;
 }
 
 /* 답변 말풍선 (왼쪽, 회색). 줄바꿈을 그대로 보여 준다 */
 .a { background: var(--log); padding: 12px 14px; border-radius: 14px 14px 14px 4px; white-space: pre-wrap; }
-.a .cite { color: var(--accent); font-weight: 600; }   /* 답변 속 "(기사 1)" 표시 */
+.a .cite { color: var(--accent-text); font-weight: 600; }   /* 답변 속 "(기사 1)" 표시 */
 .a.waiting { color: var(--muted); }                    /* 답변을 기다리는 동안 */
 
 /* 답변이 만들어지는 동안 끝에 깜빡이는 커서 */
 .caret {
-  display: inline-block; width: 7px; height: 1em; background: var(--accent);
+  display: inline-block; width: 7px; height: 1em; background: var(--accent-text);
   vertical-align: -2px; margin-left: 1px;
   animation: blink 1s steps(1) infinite;
 }
@@ -238,7 +322,7 @@ button.ghost { background: transparent; color: var(--accent); border: 1px solid 
 
 /* 답변 아래 출처 목록 */
 .srcs { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; white-space: normal; }
-.srcs a { color: var(--accent); text-decoration: none; }
+.srcs a { color: var(--accent-text); text-decoration: none; }
 .srcs a:hover { text-decoration: underline; }
 .srcs li { margin-bottom: 4px; }
 .srcs ol { margin: 4px 0 0; padding-left: 0; list-style: none; }
@@ -249,6 +333,51 @@ button.ghost { background: transparent; color: var(--accent); border: 1px solid 
 
 /* 흐린 글자 */
 .muted { color: var(--muted); }
+
+/* 링크 기본색 (출처 · 기사 제목 외에 따로 정하지 않은 링크) */
+a { color: var(--accent-text); }
+
+
+/* ---------------------------------------------------------------------------
+   10. 휴대폰 화면 (화면 너비 600px 이하)
+       - 입력칸 · 버튼을 한 줄에 하나씩 세로로 쌓는다 (질문 칸은 버튼과 나란히 유지)
+       - 여백 · 로고 · 제목을 조금 줄인다
+       - 입력칸 글자를 16px로: 아이폰은 16px보다 작은 칸을 누르면 화면을 확대해 버린다
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 600px) {
+  main { padding: 18px 12px 60px; }
+
+  .brand { gap: 10px; padding-bottom: 12px; margin-bottom: 12px; }
+  .brand .logo { width: 44px; height: 44px; }
+  h1 { font-size: 20px; }
+  .sub { font-size: 13px; margin-bottom: 18px; }
+
+  .card { padding: 16px 14px; border-radius: 10px; margin-bottom: 12px; }
+
+  /* 검색어 · 기간 · [의미 찾기]를 세로로: 각각 한 줄 전체 너비 */
+  .row { flex-direction: column; align-items: stretch; }
+  .field, .field.small { flex: none; width: 100%; }
+  .actions button { width: 100%; padding: 11px 16px; }   /* 카드 맨 아래 버튼은 화면 너비 전체 */
+
+  /* 질문 칸은 [입력칸 | 질문] 버튼을 나란히 둔다 (대화창처럼) */
+  #f-ask { flex-direction: row; align-items: stretch; }
+  #f-ask .field { flex: 1 1 auto; width: auto; }
+  #f-ask button { width: auto; }
+
+  input[type=text], input[type=number], textarea { font-size: 16px; }
+
+  /* 진행 로그: 글자를 조금 작게, 높이를 낮게 */
+  .log { font-size: 12px; max-height: 200px; padding: 10px; }
+
+  /* Top 5: 순위 칸을 좁게 */
+  .hot li { grid-template-columns: 18px 1fr; gap: 8px; }
+
+  /* 말풍선을 화면에 더 넓게 */
+  .q { max-width: 92%; }
+  .a { padding: 10px 12px; }
+}
+
 
 /* 숨김: app.js가 이 클래스를 붙였다 뗐다 해서 카드 · 칸을 보이거나 숨긴다.
    파일 맨 끝에 두는 이유: 같은 강도의 규칙은 뒤에 있는 것이 이긴다 → display를 정한 다른 규칙보다 항상 우선 */
