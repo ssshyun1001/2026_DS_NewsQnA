@@ -87,7 +87,10 @@ def main() -> None:
     def fake_top(topic_id, period_days=None):
         calls["hot"] = (topic_id, period_days)
         return [hot.HotArticle(title="강남 새 예능 출연", link="https://hot/1", press="연합뉴스",
-                               pub_date=_dt(2026, 11, 1, tzinfo=_tz.utc), description="요약문", content="본문", duplicates=7),
+                               pub_date=_dt(2026, 11, 1, tzinfo=_tz.utc), description="요약문", content="본문", duplicates=7,
+                               similar=[hot.SimilarArticle("강남, 예능 또 출연", "https://dup/1", "뉴스1",
+                                                           _dt(2026, 11, 2, tzinfo=_tz.utc)),
+                                        hot.SimilarArticle("강남 예능 출연 화제", "https://dup/2", None, None)]),
                 hot.HotArticle(title="강남 귀화 소식", link="https://hot/2", press=None, pub_date=None,
                                description="", content="강남이 귀화했다. 뒷이야기.", duplicates=2)]
 
@@ -101,7 +104,11 @@ def main() -> None:
     assert client.get("/").status_code == 200
     # 웹 화면은 첫 질문을 고정하지 않는다 (터미널 run.py만 qa.first_question으로 요약부터 답한다)
     page = client.get("/").text
-    assert "enqueueQuestion(`" not in page and "전체적인 요약을 제공해줘" not in page
+    # 화면은 세 파일: 뼈대(index.html) · 모양(style.css) · 동작(app.js). 둘 다 /static/에서 받을 수 있어야 한다
+    assert '/static/style.css' in page and '/static/app.js' in page
+    css, js = client.get("/static/style.css"), client.get("/static/app.js")
+    assert css.status_code == js.status_code == 200 and ".hot" in css.text and "function poll" in js.text
+    assert "enqueueQuestion(`" not in js.text and "전체적인 요약을 제공해줘" not in page + js.text
     assert 'id="c-hot"' in page and page.index('id="c-job"') < page.index('id="c-hot"') < page.index('id="c-qa"')
     assert qa.first_question(" 강남 ") == "강남에 대해 수집된 기사들의 전체적인 요약을 제공해줘."
     assert client.get("/api/info").json() == {"has_db": True, "chat_model": "가짜 모델"}
@@ -132,9 +139,11 @@ def main() -> None:
     assert later["hot"] == "done" and calls["hot"] == (19, 30), (later, calls)
     assert later["hot_articles"] == [
         {"title": "강남 새 예능 출연", "link": "https://hot/1", "press": "연합뉴스", "pub_date": "2026-11-01",
-         "duplicates": 7, "summary": "강남이 새 예능에 나온다."},
+         "duplicates": 7, "summary": "강남이 새 예능에 나온다.",
+         "similar": [{"title": "강남, 예능 또 출연", "link": "https://dup/1", "press": "뉴스1", "pub_date": "2026-11-02"},
+                     {"title": "강남 예능 출연 화제", "link": "https://dup/2", "press": "알 수 없음", "pub_date": ""}]},
         {"title": "강남 귀화 소식", "link": "https://hot/2", "press": "알 수 없음", "pub_date": "",
-         "duplicates": 2, "summary": ""}], later["hot_articles"]
+         "duplicates": 2, "summary": "", "similar": []}], later["hot_articles"]
     for _ in range(100):
         later = client.get(f"/api/jobs/{job['job_id']}").json()
         if later["images"] != "running":

@@ -36,6 +36,7 @@ from typing import Callable, Iterator, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from qupict.cli import setup_console
@@ -44,9 +45,11 @@ from qupict.schemas import Answer, SelectedSense, SenseCandidates
 
 setup_console()
 
-WEB_DIR = Path(__file__).parent / "web"
+WEB_DIR = Path(__file__).parent / "web"     # 화면 파일: index.html(뼈대) · style.css(모양) · app.js(동작)
 
 app = FastAPI(title="QuPicT 뉴스 Q&A")
+# web/ 폴더의 파일을 /static/… 주소로 내보낸다 (index.html이 /static/style.css · /static/app.js를 불러 쓴다)
+app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 
 # ---------------------------------------------------------------------------
@@ -298,10 +301,13 @@ def _open_from_db(job: Job, selected: SelectedSense, period_days: int, current: 
 
 
 def _hot_payload(h) -> dict:
-    """많이 보도된 기사 하나 → 화면에 보낼 내용 (qupict.hot.HotArticle)"""
+    """많이 보도된 기사 하나 → 화면에 보낼 내용 (qupict.hot.HotArticle)
+    similar: 묶인 비슷한 기사 목록 (화면에서 "비슷한 기사 N건"을 누르면 펼쳐진다)"""
+    day = lambda d: d.strftime("%Y-%m-%d") if d else ""
     return {"title": h.title, "link": h.link, "press": h.press or "알 수 없음",
-            "pub_date": h.pub_date.strftime("%Y-%m-%d") if h.pub_date else "",
-            "duplicates": h.duplicates, "summary": h.summary}
+            "pub_date": day(h.pub_date), "duplicates": h.duplicates, "summary": h.summary,
+            "similar": [{"title": s.title, "link": s.link, "press": s.press or "알 수 없음",
+                         "pub_date": day(s.pub_date)} for s in h.similar]}
 
 
 @app.post("/api/prepare")
