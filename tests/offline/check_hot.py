@@ -87,12 +87,16 @@ d = lambda day: datetime(2026, 11, day, tzinfo=timezone.utc)
 reps = [Article(title="대표1", link="r1", content="본문1", pub_date=d(1)),
         Article(title="대표2", link="r2", content="본문2", pub_date=d(5)),
         Article(title="대표3", link="r3", content="본문3", pub_date=d(9))]
-pool = reps + [Article(title=f"중복{i}", link=f"d{i}", content=f"중복 본문{i}") for i in range(5)]
+pool = reps + [Article(title=f"중복{i}", link=f"d{i}", content=f"중복 본문{i}", press=f"언론{i}",
+                       pub_date=d(10 + i) if i != 2 else None) for i in range(5)]
 dups = {"d0": "r1", "d1": "r1", "d2": "r2", "d3": "r2", "d4": "r3", "없는기사": "r3"}
 top = hot.top_duplicated(reps, dups, limit=2, pool=pool)
 assert [(h.link, h.duplicates) for h in top] == [("r3", 2), ("r2", 2)]   # 같은 수면 최신 기사 먼저, 상위 2건
 assert top[0].members == [("중복4", "중복 본문4")]                         # pool에 없는 기사는 본문을 모르니 뺀다
 assert top[1].members == [("중복2", "중복 본문2"), ("중복3", "중복 본문3")]
+# 화면 목록(similar): 링크 · 언론사 · 날짜, 최신순 (날짜 모르는 기사는 맨 뒤), pool에 없는 기사는 링크를 모르니 뺀다
+assert [(s.link, s.press) for s in top[0].similar] == [("d4", "언론4")]
+assert [s.link for s in top[1].similar] == ["d3", "d2"]
 assert hot.top_duplicated(reps, {}) == []                                 # 중복이 없으면 보여 줄 기사 없음
 print("4 ok: 메모리 버전 순위 · 묶인 기사")
 print("ALL PASS")

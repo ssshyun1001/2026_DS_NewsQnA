@@ -58,6 +58,15 @@ LENGTH_PENALTY = 0.3
 
 
 @dataclass
+class SimilarArticle:
+    """대표 기사에 묶인 비슷한 기사 하나 (화면에서 토글을 열면 보이는 목록)."""
+    title: str
+    link: str
+    press: Optional[str]
+    pub_date: Optional[datetime]
+
+
+@dataclass
 class HotArticle:
     title: str
     link: str
@@ -69,6 +78,13 @@ class HotArticle:
     summary: str = ""       # 한 줄 요약 (summarize가 채운다)
     # 묶인 비슷한 기사들의 (제목, 본문) — 한 줄 요약에서 "다른 언론사도 쓴 단어"를 셀 때 쓴다
     members: list[tuple[str, str]] = field(default_factory=list, repr=False)
+    # 묶인 비슷한 기사들의 제목 · 링크 · 언론사 · 날짜 (최신순) — 화면에서 하나씩 눌러 원문을 연다
+    similar: list[SimilarArticle] = field(default_factory=list, repr=False)
+
+
+def _latest_first(items: list[SimilarArticle]) -> list[SimilarArticle]:
+    """최신 기사 먼저. 날짜를 모르는 기사는 맨 뒤 (정렬은 안정적이라 같은 날짜는 원래 순서 그대로)."""
+    return sorted(items, key=lambda s: -s.pub_date.timestamp() if s.pub_date else math.inf)
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +95,8 @@ def top_duplicated_db(topic_id: int, period_days: Optional[int] = None, limit: i
                       statuses: Iterable[str] = ANSWER_STATUSES) -> list[HotArticle]:
     """[DB 버전] topic의 대표 기사 중 중복이 많이 묶인 순으로 limit건. 중복이 하나도 없는 기사는 빠진다.
     period_days: 대표 기사 발행일이 최근 며칠 이내인 것만 (질문 검색과 같은 기간).
-    묶인 기사들의 제목 · 본문(members)도 함께 가져온다 (한 줄 요약용, 같은 연결에서 쿼리 한 번 더)."""
+    묶인 기사들의 제목 · 본문(members, 한 줄 요약용)과 링크 · 언론사 · 날짜(similar, 화면 목록용)도
+    함께 가져온다 (같은 연결에서 쿼리 한 번 더)."""
     from qupict import db
 
     params: dict = {"topic_id": topic_id, "statuses": list(statuses), "limit": limit}
@@ -103,17 +120,22 @@ def top_duplicated_db(topic_id: int, period_days: Optional[int] = None, limit: i
             params,
         ).fetchall()
         members: dict[int, list[tuple[str, str]]] = {}
+        similar: dict[int, list[SimilarArticle]] = {}
         if rows:
             for m in conn.execute(
-                """SELECT at.duplicate_of AS rep, a.title, a.content FROM article_topics at
+                """SELECT at.duplicate_of AS rep, a.title, a.content, a.link, a.press, a.pub_date
+                   FROM article_topics at
                    JOIN articles a ON a.id = at.article_id
                    WHERE at.topic_id = %s AND at.duplicate_of = ANY(%s)""",
                 (topic_id, [r["id"] for r in rows]),
             ).fetchall():
                 members.setdefault(m["rep"], []).append((m["title"], m["content"] or ""))
+                similar.setdefault(m["rep"], []).append(
+                    SimilarArticle(m["title"], m["link"], m["press"], m["pub_date"]))
     return [HotArticle(title=r["title"], link=r["link"], press=r["press"], pub_date=r["pub_date"],
                        description=r["description"] or "", content=r["content"] or "",
-                       duplicates=r["duplicates"], members=members.get(r["id"], [])) for r in rows]
+                       duplicates=r["duplicates"], members=members.get(r["id"], []),
+                       similar=_latest_first(similar.get(r["id"], []))) for r in rows]
 
 
 def top_duplicated(articles: list[Article], duplicates: dict[str, str], limit: int = TOP_N,
@@ -124,14 +146,17 @@ def top_duplicated(articles: list[Article], duplicates: dict[str, str], limit: i
     counts = Counter(duplicates.values())
     by_link = {a.link: a for a in pool}
     members: dict[str, list[tuple[str, str]]] = {}
+    similar: dict[str, list[SimilarArticle]] = {}
     for dup, rep in duplicates.items():
         if dup in by_link:
-            members.setdefault(rep, []).append((by_link[dup].title, by_link[dup].content))
+            a = by_link[dup]
+            members.setdefault(rep, []).append((a.title, a.content))
+            similar.setdefault(rep, []).append(SimilarArticle(a.title, a.link, a.press, a.pub_date))
     hot = [a for a in articles if counts.get(a.link)]
     hot.sort(key=lambda a: (-counts[a.link], -(a.pub_date.timestamp() if a.pub_date else 0)))
     return [HotArticle(title=a.title, link=a.link, press=a.press, pub_date=a.pub_date,
                        description=a.description, content=a.content, duplicates=counts[a.link],
-                       members=members.get(a.link, []))
+                       members=members.get(a.link, []), similar=_latest_first(similar.get(a.link, [])))
             for a in hot[:limit]]
 
 
