@@ -42,6 +42,7 @@ def save_desc(iid, d, m=None):
     saved["desc"].append(iid); desc_store.setdefault(link_of[iid], []).append((iid, I.image_chunk_text("", d)))
 db.get_images_to_describe = lambda tid, statuses=("관련",): [i for i in imgs if i.image_id not in {x for v in desc_store.values() for x, _ in v}]
 db.save_image_description = save_desc
+db.save_image_descriptions = lambda items, m=None: [save_desc(i, d) for i, d in items]
 I.described_images = lambda links: {l: desc_store[l] for l in links if l in desc_store}
 all_articles = [Article(title="제목A", link="A", content="본문 하나. 본문 둘."), Article(title="제목B", link="B", content=""),
                 Article(title="제목C", link="C", content="")]
@@ -51,6 +52,7 @@ db.get_articles_without_chunks = lambda tid, statuses=("관련",): [a for a in a
 def save_chunks(link, chunks, model=None):
     saved["chunks"][link] = [(c.source, c.image_id) for c in chunks]; no_chunks.discard(link)
 db.save_chunks = save_chunks
+db.save_chunks_many = lambda items, model=None: [save_chunks(l, c) for l, c in items]
 real_describe = I.describe_image
 async def fake_describe(image, title, link=""): return None if image.url == "u4" else f"설명({image.url})"
 I.describe_image = fake_describe
@@ -108,13 +110,80 @@ ctx, sources, kinds = Q.build_chunk_context(hits)
 assert [s.link for s in sources] == ["A", "B"] and kinds == ["본문", "이미지 설명"]
 assert "[기사 1]" in ctx and "- 본문1\n- 본문2" in ctx and "발행일: 2026-11-06" in ctx and "[기사 2]" in ctx
 class FakeChain:
-    def invoke(self, x): FakeChain.ctx = x["context"]; return "답변"
+    def invoke(self, x): FakeChain.ctx, FakeChain.subject, FakeChain.period = x["context"], x["subject"], x["period"]; return "답변"
 Q._get_chain = lambda: FakeChain()
 ans = Q.generate_answer_from_chunks("질문", hits)
 assert ans.answer == "답변" and ans.source_kinds == ["본문", "이미지 설명"] and len(ans.sources) == 2
+assert FakeChain.subject == Q.NO_SUBJECT                                    # 대상을 안 주면 "(지정 없음)"
 ans0 = Q.generate_answer_from_chunks("질문", [])
 assert ans0.sources == [] and FakeChain.ctx == Q.NO_ARTICLE_CONTEXT
 print("5 ok: 청크 답변 (번호·근거 종류·근거 없음)")
+
+# 5-1) 검색 대상: 고른 의미가 답변 프롬프트의 [검색 대상]으로 들어간다
+assert Q.answer_subject(sel) == "강남 (방송인 강남: M.I.B 출신)"
+assert Q.answer_subject(SelectedSense(query="베라", sense=Sense(name="배스킨라빈스", definition=""))) == "베라 (배스킨라빈스)"
+assert Q.answer_subject(None) == Q.NO_SUBJECT
+Q.generate_answer_from_chunks("아내가 누구야?", hits, subject=Q.answer_subject(sel))
+assert FakeChain.subject == "강남 (방송인 강남: M.I.B 출신)"
+Q.generate_answer("아내가 누구야?", [], subject=Q.answer_subject(sel))       # 메모리 버전도 같은 대상을 넘긴다
+assert FakeChain.subject == "강남 (방송인 강남: M.I.B 출신)"
+msgs = Q._prompt.format_messages(subject="강남 (방송인 강남)", period="2026-10-14 ~ 2026-11-13",
+                                 question="아내가 누구야?", context="-", history=Q.NO_HISTORY)
+assert msgs[1].content.startswith("[검색 대상] 강남 (방송인 강남)\n[이전 대화]\n(없음)\n"
+                                  "[참고 가능한 기사 기간] 2026-10-14 ~ 2026-11-13\n질문: 아내가 누구야?")
+print("5-1 ok: 답변 프롬프트에 검색 대상")
+
+# 5-3) 이전 대화: 최근 2번만, 답변은 앞부분만, (기사 N) 표시는 뺀다. 답변 · 검색에 넘어간다
+assert Q.history_text([]) == Q.NO_HISTORY
+long_answer = "강남의 아내는 이상화입니다(기사 1). " + "가" * 400
+h = Q.history_text([("첫 질문", "첫 답(기사 2)."), ("와이프가 누군데?", "강남의 아내는 이상화입니다(기사 1, 이미지)."),
+                    ("그 사람 직업은?", long_answer)])
+assert "첫 질문" not in h and h.startswith("사용자: 와이프가 누군데?\n답변: 강남의 아내는 이상화입니다.\n사용자: 그 사람 직업은?")
+assert "(기사" not in h and h.endswith("…") and len(h.splitlines()[-1]) <= len("답변: ") + Q.HISTORY_ANSWER_CHARS
+_plain_invoke = FakeChain.invoke
+FakeChain.invoke = lambda self, x: (setattr(FakeChain, "history", x["history"]), "답변")[1]
+Q.generate_answer_from_chunks("그 사람 직업은?", hits, history=h)
+assert FakeChain.history == h
+Q.generate_answer_from_chunks("질문", hits)
+assert FakeChain.history == Q.NO_HISTORY                                   # 안 주면 "(없음)"
+FakeChain.invoke = _plain_invoke
+seen_ctx = []
+R.build_search_texts = lambda q, ctx, hy, m: seen_ctx.append((q, ctx)) or ["q"]
+R.search_topic(3, "그 사람 직업은?", sel, history=h)
+assert seen_ctx[-1][0] == "그 사람 직업은?"                               # 이전 대화가 있으면 검색어를 붙이지 않는다
+assert seen_ctx[-1][1].startswith(R.topic_context(sel)) and "이상화" in seen_ctx[-1][1]   # HyDE·변형 질문 맥락에 이전 대화
+R.search_topic(3, "근황은?", sel)
+assert seen_ctx[-1][0] == "강남 근황은?"                                   # 첫 질문에 검색어가 없으면 앞에 붙인다 (LLM 없이)
+R.search_topic(3, "강남 근황", sel)
+assert seen_ctx[-1] == ("강남 근황", R.topic_context(sel))                # 검색어가 있으면 그대로, 이전 대화 없으면 맥락도 그대로
+alias = SelectedSense(query="삼전", sense=Sense(name="삼성전자", definition="d", aliases=["삼성전자"]))
+assert R.with_subject("삼성전자 실적은?", alias) == "삼성전자 실적은?" and R.with_subject("실적은?", alias) == "삼전 실적은?"
+print("5-3 ok: 이전 대화 · 질문에 검색어 붙이기")
+
+# 5-4) 직접 입력한 의미: 답변 · 검색에서 대상을 검색어가 아니라 사용자가 설명한 대상으로 부른다
+custom = SelectedSense(query="서울여대", sense=Sense(name="서울 소재 여자대학교", definition="서울에 있는 여자대학교 전체",
+                                                   aliases=["이화여대", "숙명여대"], is_custom=True))
+assert Q.answer_subject(custom) == ("서울 소재 여자대학교 (검색어 '서울여대'로 찾는 대상: 서울에 있는 여자대학교 전체; "
+                                    "포함: 이화여대, 숙명여대)")
+assert R.topic_context(custom) == Q.answer_subject(custom)                 # HyDE · 변형 질문의 맥락도 같은 대상
+assert R.with_subject("최근 소식은?", custom) == "서울 소재 여자대학교 최근 소식은?"
+assert R.with_subject("숙명여대 소식은?", custom) == "숙명여대 소식은?"        # 포함된 이름이 있으면 그대로
+assert Q.answer_subject(sel).startswith("강남 (방송인 강남:")                # LLM 후보를 고르면 예전과 같음
+assert "괄호 앞의 이름" in Q._SYSTEM_PROMPT and "한 곳의 소식만으로 전체를 대표하지 마세요" in Q._SYSTEM_PROMPT
+print("5-4 ok: 직접 입력한 의미는 설명한 대상 기준으로 답변 · 검색")
+
+# 5-2) 기사 기간: 가장 오래된 기사 날짜 ~ 오늘 (한국 시간 기준), 기사가 없으면 "(알 수 없음)"
+kst_late = datetime(2026, 10, 13, 16, tzinfo=timezone.utc)                 # 한국 시간 10월 14일 새벽 1시
+assert Q.answer_period(kst_late, today=datetime(2026, 11, 13, 1, tzinfo=timezone.utc)) == "2026-10-14 ~ 2026-11-13"
+assert Q.answer_period(None) == Q.NO_PERIOD
+arts = [Article(title="a", link="a", pub_date=datetime(2026, 11, 1, tzinfo=timezone.utc)),
+        Article(title="b", link="b", pub_date=kst_late), Article(title="c", link="c")]
+assert Q.oldest_date(arts) == kst_late and Q.oldest_date([Article(title="c", link="c")]) is None
+Q.generate_answer_from_chunks("아내가 누구야?", [], period="2026-10-14 ~ 2026-11-13")
+assert FakeChain.period == "2026-10-14 ~ 2026-11-13"
+Q.generate_answer_from_chunks("아내가 누구야?", [])
+assert FakeChain.period == Q.NO_PERIOD                                      # 안 주면 "(알 수 없음)"
+print("5-2 ok: 기사 기간")
 
 # 6) describe_image: 주소 먼저 → 실패하면 내려받아 파일로
 sent = []

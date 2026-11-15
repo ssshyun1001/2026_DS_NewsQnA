@@ -102,7 +102,7 @@ async def collect_target(selected: SelectedSense, period_days: int = DEFAULT_PER
                          max_articles: int = COLLECT_MAX_PER_TARGET) -> CollectTargetResult:
     """수집 → 중복 제거 (임베딩만, LLM 판정 없음). 라벨 붙일 대표 기사가 몇 건인지 같이 돌려준다."""
     collected = await collect_to_db(selected, period_days, max_articles)
-    duplicates = await dedup_topic(collected.topic_id)
+    duplicates = await dedup_topic(collected.topic_id, selected.match_terms)
     return CollectTargetResult(collected, len(duplicates), count_representatives(collected.topic_id), max_articles)
 
 
@@ -145,10 +145,11 @@ def topic_status() -> list[TopicStatus]:
                       count(at.duplicate_of) AS duplicates,
                       count(*) FILTER (WHERE at.article_id IS NOT NULL AND at.duplicate_of IS NULL
                                        AND at.status IS NULL) AS unjudged,
-                      count(*) FILTER (WHERE at.stage = 'rule' AND at.status = '무관') AS rule_irrelevant,
-                      count(*) FILTER (WHERE at.stage = 'llm' AND at.status = '관련') AS llm_relevant,
-                      count(*) FILTER (WHERE at.stage = 'llm' AND at.status = '무관') AS llm_irrelevant,
-                      count(*) FILTER (WHERE at.stage = 'llm' AND at.status = '보류') AS llm_hold,
+                      -- 판정 칸은 대표 기사만 센다 (중복 기사는 대표 판정을 복사해 가지므로 "중복" 칸에서만 센다)
+                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.stage = 'rule' AND at.status = '무관') AS rule_irrelevant,
+                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.stage = 'llm' AND at.status = '관련') AS llm_relevant,
+                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.stage = 'llm' AND at.status = '무관') AS llm_irrelevant,
+                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.stage = 'llm' AND at.status = '보류') AS llm_hold,
                       count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.label IS NOT NULL) AS labeled,
                       count(*) FILTER (WHERE at.article_id IS NOT NULL AND at.duplicate_of IS NULL) AS to_label,
                       count(*) FILTER (WHERE EXISTS (SELECT 1 FROM article_chunks c
@@ -178,6 +179,32 @@ def count_representatives(topic_id: int) -> int:
         r = conn.execute("SELECT count(*) AS n FROM article_topics WHERE topic_id = %s AND duplicate_of IS NULL",
                          (topic_id,)).fetchone()
     return r["n"]
+
+
+@dataclass
+class PendingWork:
+    """수집 뒤 topic에 남은 일 (count_pending). 둘 다 0이면 판정·인덱싱을 건너뛰어도 된다."""
+    unjudged: int     # 판정이 비어 있는 기사 (새 기사 + 판정을 아직 못 받은 중복 기사) → filter_topic 대상
+    unindexed: int    # 질문에 쓰는 판정인데 청크가 없는 대표 기사 → index_topic 대상
+
+
+def count_pending(topic_id: int, statuses: tuple[str, ...] = ("관련", "보류")) -> PendingWork:
+    """판정·인덱싱할 기사가 남았는지 개수만 센다 (DB 왕복 1번, 약 0.2초).
+
+    filter_topic · index_topic은 할 일이 0건이어도 topic 기사 전체(임베딩 포함)를 불러와서
+    각각 1.5초 안팎이 걸렸다 (측정 2026-11-14, 방송인 강남 기사 55건). 같은 검색어를 다시 준비할 때는
+    대부분 새 기사가 없으므로, 먼저 세어 보고 0건인 단계는 부르지 않는다 (run.prepare_topic).
+    statuses는 indexing.INDEX_STATUSES와 같게 둔다."""
+    with db.connect() as conn:
+        r = conn.execute(
+            """SELECT count(*) FILTER (WHERE at.status IS NULL) AS unjudged,
+                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.status = ANY(%(statuses)s)
+                                         AND NOT EXISTS (SELECT 1 FROM article_chunks c
+                                                         WHERE c.article_id = at.article_id)) AS unindexed
+               FROM article_topics at WHERE at.topic_id = %(topic_id)s""",
+            {"topic_id": topic_id, "statuses": list(statuses)},
+        ).fetchone()
+    return PendingWork(r["unjudged"], r["unindexed"])
 
 
 def articles_to_label(topic_id: int, include_labeled: bool = False,

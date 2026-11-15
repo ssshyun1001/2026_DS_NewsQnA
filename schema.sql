@@ -5,12 +5,15 @@
 --   - 기사(articles)는 link 기준으로 한 번만 저장한다. 여러 topic에 걸린 기사는 article_topics로 연결한다.
 --   - topic에는 기간을 저장하지 않는다. 기간은 질문 시점 기준으로 articles.pub_date(발행일)로 거른다.
 --     같은 topic을 다시 쓰면 이미 있는 기사는 그대로 쓰고, DB에 없는 기사만 새로 수집한다.
---   - 중복 여부는 article_topics.duplicate_of 하나로만 표시한다 (값이 있으면 중복, status는 비움).
+--   - 중복 여부는 article_topics.duplicate_of 하나로만 표시한다 (값이 있으면 중복).
+--     중복 기사의 status는 대표 기사의 판정을 따른다. 청크 · 검색에는 대표 기사만 쓴다 (duplicate_of IS NULL).
 --   - 임베딩 차원 1536 = text-embedding-3-small. 모델을 바꾸면 vector(N)과 인덱스를 함께 바꿔야 한다.
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- [0단계] 검색어별 의미 후보. 같은 검색어면 LLM을 다시 부르지 않고 재사용한다.
+-- "기타 (직접 입력)"로 들어온 의미도 여기 저장되어(is_custom) 다음부터 후보로 나온다 (LLM 다시 안 부름).
+-- 후보는 많이 고른 순(use_count)으로 보여 준다.
 CREATE TABLE IF NOT EXISTS query_senses (
     id             BIGSERIAL PRIMARY KEY,
     query          TEXT        NOT NULL,
@@ -20,10 +23,17 @@ CREATE TABLE IF NOT EXISTS query_senses (
     aliases        TEXT[]      NOT NULL DEFAULT '{}',
     related_terms  TEXT[]      NOT NULL DEFAULT '{}',
     is_custom      BOOLEAN     NOT NULL DEFAULT FALSE,
+    includes       TEXT[]      NOT NULL DEFAULT '{}',  -- 직접 입력: 찾는 대상에 포함되는 LLM 후보 이름 (다른 의미로 두지 않음)
+    use_count      INT         NOT NULL DEFAULT 0,     -- 사용자가 이 의미를 고른 횟수
+    last_used_at   TIMESTAMPTZ,
     model          TEXT        NOT NULL DEFAULT '',  -- 후보를 만든 LLM (재현성)
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (query, name)
 );
+-- 이미 만든 DB에 열 추가 (2026-11-15)
+ALTER TABLE query_senses ADD COLUMN IF NOT EXISTS includes     TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE query_senses ADD COLUMN IF NOT EXISTS use_count    INT    NOT NULL DEFAULT 0;
+ALTER TABLE query_senses ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;
 
 -- 수집 대상 = 검색어 + 고른 의미. 의미 내용은 그 시점 값을 그대로 복사해 둔다
 -- (targets.yaml에서 별칭·정의를 사람이 고쳐 쓰는 경우가 있어서 query_senses와 다를 수 있음).
@@ -43,6 +53,19 @@ CREATE TABLE IF NOT EXISTS topics (
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (query, sense_name)
 );
+
+-- 예전에 저장된 직접 입력 의미 채우기 (열을 추가하기 전 데이터. 여러 번 실행해도 안전: 빈 값만 채운다)
+--   includes  = 그 topic에서 '다른 의미'로 두지 않은 LLM 후보
+--   use_count = 그 의미로 만든 topic 수
+UPDATE query_senses qs SET includes = ARRAY(
+        SELECT l.name FROM query_senses l
+        WHERE l.query = qs.query AND NOT l.is_custom
+          AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(t.other_senses) o WHERE o->>'name' = l.name)
+        ORDER BY l.rank)
+    FROM topics t
+    WHERE t.sense_id = qs.id AND qs.is_custom AND qs.includes = '{}' AND qs.last_used_at IS NULL;
+UPDATE query_senses qs SET use_count = (SELECT count(*) FROM topics t WHERE t.sense_id = qs.id)
+    WHERE qs.use_count = 0 AND qs.last_used_at IS NULL;
 
 -- [1단계] 기사. link(언론사 원문 주소)가 기준.
 CREATE TABLE IF NOT EXISTS articles (
@@ -88,7 +111,9 @@ CREATE TABLE IF NOT EXISTS article_topics (
     labeled_at     TIMESTAMPTZ,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (article_id, topic_id),
-    CHECK (duplicate_of IS NULL OR status IS NULL),     -- 중복이면 판정하지 않는다
+    -- 중복 기사도 판정을 가진다 (대표 기사 판정을 복사: db.copy_duplicate_judgments).
+    -- 예전 규칙 CHECK (duplicate_of IS NULL OR status IS NULL)은 2026-11-13에 지웠다.
+    -- 이미 만든 DB: ALTER TABLE article_topics DROP CONSTRAINT article_topics_check;
     CHECK (duplicate_of IS DISTINCT FROM article_id)
 );
 CREATE INDEX IF NOT EXISTS article_topics_topic_idx ON article_topics (topic_id, status);

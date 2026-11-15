@@ -22,9 +22,11 @@
 
 ## 결과 섞기 (_interleave)
 
-  검색어마다 최신순으로 최대 300건(100건씩 3쪽, 기간 밖으로 나가면 일찍 멈춤)을 받은 뒤,
-  검색어별로 돌아가며 하나씩 뽑아 상한(ask 100건, collect-all 300건)을 채운다.
-  첫 검색어 결과만으로 상한이 차 버리는 것을 막아, 여러 검색어의 기사가 고르게 들어오게 한다.
+  1순위 관련성, 2순위 최신성 (search_news)
+  검색어마다 관련도순 상위 100건과 최신순 최대 300건(100건씩 3쪽, 기간 밖으로 나가면 일찍 멈춤)을 받는다.
+  관련도순 결과(기간 안)를 "관련 후보"로 삼고, 그 안에서 최신 기사부터 검색어별로 돌아가며 하나씩 뽑아
+  상한(ask 100건, collect-all 300건)을 채운다. 모자라면 최신순 결과를 같은 방식으로 뽑아 나머지를 채운다.
+  돌아가며 뽑는 이유: 첫 검색어 결과만으로 상한이 차 버리는 것을 막아, 여러 검색어의 기사가 고르게 들어오게.
 
 ## 기간
 
@@ -33,7 +35,12 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import ssl
+import warnings
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -41,6 +48,8 @@ import aiohttp
 from bs4 import BeautifulSoup, Tag, UnicodeDammit
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from qupict import timing
+from qupict.concurrency import timed_call
 from qupict.config import settings
 from qupict.schemas import Article, ArticleImage, NewsMeta, SelectedSense, unique_terms
 
@@ -50,7 +59,15 @@ _TAG_RE = re.compile(r"<.*?>")
 _NAVER_MAX_DISPLAY = 100        # 네이버 뉴스 검색 API가 한 번에 주는 최대 건수
 DEFAULT_MAX_ARTICLES = 100      # 대상 하나당 수집할 기사 수 상한 (ask 기본값. 모이는 날 collect-all은 300)
 SEARCH_PAGES = 3                # 검색어 하나당 최대 몇 쪽(1쪽 = 100건)까지 받을지. 기간 밖으로 나가면 일찍 멈춘다
-MAX_RELATED_IN_QUERY = 8        # "검색어 + 연관어" 조합에 쓸 연관어 개수 (= 연관어 최대 개수, API 호출 수 = 이 값 + 별칭 수)
+RELEVANCE_PAGES = 1             # 관련도순으로 받을 쪽수 (검색어당 상위 100건). 뒤쪽으로 갈수록 관련성이 떨어지고,
+                                #   관련도순은 일찍 멈출 수 없어 쪽수만큼 호출이 늘어난다
+# 네이버 검색 요청 하나를 기다리는 최대 시간(초). 예전에는 지정하지 않아 aiohttp 기본값 300초(5분)를 썼다.
+#   검색 요청(검색어 × 관련도순·최신순, 약 18개)은 모두 끝나야 1단계가 넘어가므로, 네이버가 한 요청에 답하지 않으면
+#   화면이 "[1단계] 검색어 → …"에서 5분 넘게 멈췄다 (실패 시 @retry로 3번까지 다시 보내서 최대 약 15분).
+#   정상일 때는 18개 전부 합쳐 약 0.8초. 10초면 멈춘 요청 하나가 최대 약 33초(10초 × 3번 + 쉬는 시간)만 붙잡고,
+#   그래도 실패하면 그 검색어만 빼고 나머지 결과로 계속한다 (search_news의 return_exceptions).
+SEARCH_TIMEOUT_SECONDS = 10
+MAX_RELATED_IN_QUERY = 8       # "검색어 + 연관어" 조합에 쓸 연관어 개수 (= 연관어 최대 개수, API 호출 수 = 이 값 + 별칭 수)
 
 
 # ---------------------------------------------------------------------------
@@ -73,6 +90,11 @@ def build_search_terms(selected: SelectedSense) -> list[str]:
     """고른 의미로 네이버 검색어 목록을 만든다: 검색어 + 연관어, 별칭. (검색어 단독은 좁힐 단어가 없을 때만)"""
     query = selected.query
     combos = [f"{query} {t}" for t in selected.sense.related_terms[:MAX_RELATED_IN_QUERY]]
+    if selected.sense.is_custom and selected.sense.aliases:
+        # 직접 입력은 사용자의 설명이 기준이다. 대상이 여러 개를 묶은 것이면(예: "서울 소재 여자대학교" →
+        # 이화여대, 숙명여대 …) 각각의 이름(별칭)으로 검색하고, "검색어 + 연관어"는 한 번만 섞는다.
+        # 연관어 조합을 다 넣으면 검색어 하나(서울여대)가 결과의 절반 가까이를 채웠다 (확인 2026-11-15).
+        return unique_terms([*selected.sense.aliases, *combos[:1]]) or [query]
     return unique_terms([*combos, *selected.sense.aliases]) or [query]
 
 
@@ -94,12 +116,13 @@ def _interleave(results_by_term: list[list[NewsMeta]], limit: int) -> list[NewsM
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
-async def _fetch_page(session: aiohttp.ClientSession, keyword: str, start: int) -> list[dict]:
+async def _fetch_page(session: aiohttp.ClientSession, keyword: str, start: int, sort: str = "date") -> list[dict]:
+    """네이버 뉴스 검색 한 쪽. sort: "date"(최신순) 또는 "sim"(관련도순)."""
     headers = {
         "X-NCP-APIGW-API-KEY-ID": settings.naver_client_id,
         "X-NCP-APIGW-API-KEY": settings.naver_client_secret,
     }
-    params = {"query": keyword, "display": _NAVER_MAX_DISPLAY, "start": start, "sort": "date"}
+    params = {"query": keyword, "display": _NAVER_MAX_DISPLAY, "start": start, "sort": sort}
     async with session.get(_NAVER_NEWS_URL, headers=headers, params=params) as resp:
         resp.raise_for_status()
         data = await resp.json(content_type=None)
@@ -107,21 +130,24 @@ async def _fetch_page(session: aiohttp.ClientSession, keyword: str, start: int) 
 
 
 async def _fetch_one_keyword(session: aiohttp.ClientSession, keyword: str,
-                             cutoff: datetime | None = None, pages: int = None) -> list[dict]:
-    """검색어 하나를 최신순으로 최대 pages쪽(1쪽 = 100건)까지 받는다.
+                             cutoff: datetime | None = None, pages: int = None,
+                             sort: str = "date") -> list[dict]:
+    """검색어 하나를 최대 pages쪽(1쪽 = 100건)까지 받는다. sort: "date"(최신순) 또는 "sim"(관련도순).
 
     네이버는 한 번에 100건만 주므로, 인기 검색어는 첫 쪽이 하루치밖에 안 될 수 있다.
-    다음 쪽을 이어 받되, 결과가 100건보다 적거나 쪽의 마지막 기사가 기간(cutoff) 밖이면 멈춘다.
+    다음 쪽을 이어 받되, 결과가 100건보다 적으면 멈춘다.
+    최신순일 때는 쪽의 마지막 기사가 기간(cutoff) 밖이면 멈춘다 (그 뒤는 전부 더 오래된 기사).
+    관련도순은 날짜가 섞여 있어서 이 규칙을 쓸 수 없다 → 정한 쪽수만큼 받는다.
     """
     pages = SEARCH_PAGES if pages is None else pages
     items: list[dict] = []
     for page in range(pages):
-        batch = await _fetch_page(session, keyword, 1 + page * _NAVER_MAX_DISPLAY)
+        batch = await _fetch_page(session, keyword, 1 + page * _NAVER_MAX_DISPLAY, sort)
         items.extend(batch)
         if len(batch) < _NAVER_MAX_DISPLAY:
             break
         last = _parse_pubdate(batch[-1].get("pubDate", ""))
-        if cutoff and last and last < cutoff:
+        if sort == "date" and cutoff and last and last < cutoff:
             break
     return items
 
@@ -152,22 +178,45 @@ async def search_news(
     period_days: int,
     max_articles: int = DEFAULT_MAX_ARTICLES,
 ) -> list[NewsMeta]:
-    """고른 의미로 검색어들을 만들어 동시에 검색하고, 기간 안의 기사를 최대 max_articles건 돌려준다."""
+    """고른 의미로 검색어들을 만들어 동시에 검색하고, 기간 안의 기사를 최대 max_articles건 돌려준다.
+
+    고르는 순서: 1순위 관련성, 2순위 최신성
+      1) 검색어마다 관련도순 상위 결과(기간 안)를 "관련 후보"로 삼는다. → 관련 없는 기사가 걸러진다
+      2) 관련 후보 안에서 최신 기사부터, 검색어별로 돌아가며 뽑아 상한을 채운다.
+      3) 그래도 상한에 모자라면 최신순 결과(기간 안)로 나머지를 채운다.
+    관련도순 결과에는 오래된 기사가 섞여 있어서 기간으로 거르면 상한에 못 미칠 수 있다 → 3)이 필요하다.
+    네이버는 관련도 "점수"를 주지 않고 순서만 주므로, 관련도순 상위에 들었는지(후보인지)만 관련성으로 쓴다.
+    """
     terms = build_search_terms(selected)
     cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=SEARCH_TIMEOUT_SECONDS)) as session:
+        # 검색어마다 관련도순 · 최신순 두 가지를 모두, 전부 동시에 받는다 (API 호출은 무료)
         responses = await asyncio.gather(
-            *(_fetch_one_keyword(session, t, cutoff) for t in terms), return_exceptions=True
+            *(_fetch_one_keyword(session, t, cutoff, pages=RELEVANCE_PAGES, sort="sim") for t in terms),
+            *(_fetch_one_keyword(session, t, cutoff) for t in terms),
+            return_exceptions=True,
         )
 
-    results_by_term = []
-    for term, items in zip(terms, responses):
-        if isinstance(items, Exception):  # 검색어 하나가 실패해도 나머지는 쓴다
-            print(f"  [검색 실패] '{term}': {type(items).__name__}")
-            continue
-        results_by_term.append(_to_metas(items, term, cutoff))
-    return _interleave(results_by_term, max_articles)
+    by_relevance, by_date = [], []
+    for kind, results, part in (("관련도순", by_relevance, responses[:len(terms)]),
+                                ("최신순", by_date, responses[len(terms):])):
+        for term, items in zip(terms, part):
+            if isinstance(items, Exception):  # 검색 하나가 실패해도 나머지는 쓴다
+                print(f"  [검색 실패] '{term}' ({kind}): {type(items).__name__}")
+                continue
+            results.append(_to_metas(items, term, cutoff))
+
+    # 관련 후보 안에서는 최신 기사부터 (게시일을 모르는 기사는 맨 뒤). 같은 날짜면 관련도순 순서가 유지된다
+    oldest = datetime.min.replace(tzinfo=timezone.utc)
+    by_relevance = [sorted(results, key=lambda m: m.pub_date or oldest, reverse=True) for results in by_relevance]
+
+    picked = _interleave(by_relevance, max_articles)
+    if len(picked) < max_articles:              # 모자란 만큼 최신순 결과로 채운다 (이미 뽑은 기사는 건너뜀)
+        seen = {m.link for m in picked}
+        rest = [[m for m in results if m.link not in seen] for results in by_date]
+        picked += _interleave(rest, max_articles - len(picked))
+    return picked
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +246,9 @@ _SELECTOR_CANDIDATES = [
     "#articleBody",
     "#article_body",
     "div.article_view",
-    "article",                         # 마지막 수단 (사이드바 기사 목록까지 잡힐 수 있음)
+    "#news_body_area",                 # 프라임경제 (측정 2026-11-11: 본문 영역을 못 찾아 61자만 잡혔다)
+    "div.newsview div.content",        # bnt뉴스 (<p> 없이 div 안에 바로 본문이 있어서 예전에는 0자였다)
+    "article",                      # 마지막 수단 (사이드바 기사 목록까지 잡힐 수 있음)
 ]
 
 _MIN_CONTENT_LENGTH = 100
@@ -305,46 +356,161 @@ def _decode_html(raw: bytes, header_charset: str | None) -> str:
     return dammit.unicode_markup or raw.decode("utf-8", errors="replace")
 
 
+# 기사 페이지 하나를 기다리는 최대 시간(초). 설정값(CRAWL_TIMEOUT_SECONDS, 기본 10초)이 더 짧으면 그 값을 쓴다.
+#   측정(2026-11-11, 기사 257건): 본문을 가져온 요청 중 가장 느린 것이 1.93초였다 (5초를 넘긴 성공 0건).
+#   crawl_articles는 모든 기사가 끝나야 끝나므로, 응답 없는 사이트 하나가 전체를 타임아웃만큼 붙잡는다
+#   (같은 기사 목록을 반복해 받을 때 가끔 한 건이 멈춰 전체가 1.3초 → 10.9초가 됐다). 5초면 그 손해가 절반.
+#   이미지 내려받기(download_images)는 파일이 커서 예전 설정값을 그대로 쓴다.
+CRAWL_PAGE_TIMEOUT_SECONDS = 5
+
+_lenient_ssl: ssl.SSLContext | None = None
+
+
+def _lenient_ssl_context() -> ssl.SSLContext:
+    """인증서 검사를 하지 않고 오래된 암호화 방식도 받아 주는 연결 설정. 보안 연결이 실패한 사이트에만 쓴다.
+
+    측정(2026-11-11, 기사 257건): 실패 13건 중 7건이 보안 연결(SSL) 실패였다. 다시 받아도 똑같이 실패한다.
+      - 인증서 검증 실패 5건 (viva100 · kbmaeil · metroseoul): 사이트가 중간 인증서를 빼고 보내서
+        파이썬이 검증하지 못한다 (브라우저는 빠진 인증서를 알아서 받아 오므로 문제없이 열린다).
+      - 연결 협상 실패 2건 (kbench): 사이트가 오래된 암호화 방식만 지원한다.
+    이 설정으로 받으면 7건 모두 본문을 가져온다.
+
+    검사를 끄면 중간에서 누가 내용을 바꿔도 알 수 없다. 공개된 기사 본문만 읽고 비밀번호 같은 것을
+    보내지 않으므로 감수한다. 처음부터 끄지 않고, 정상 연결이 실패했을 때만 쓴다.
+    """
+    global _lenient_ssl
+    if _lenient_ssl is None:
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        context.set_ciphers("DEFAULT:@SECLEVEL=0")                 # 오래된 암호화 방식 허용
+        context.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0x4)
+        with warnings.catch_warnings():                             # TLS 1.0은 "오래됨" 경고가 뜬다
+            warnings.simplefilter("ignore", DeprecationWarning)
+            context.minimum_version = ssl.TLSVersion.TLSv1
+        _lenient_ssl = context
+    return _lenient_ssl
+
+
 async def _get_html(session: aiohttp.ClientSession, url: str) -> str | None:
+    """기사 페이지를 받는다. 보안 연결(SSL) 문제로 실패하면 느슨한 설정으로 한 번 더 받는다."""
+    timeout = aiohttp.ClientTimeout(total=min(settings.crawl_timeout_seconds, CRAWL_PAGE_TIMEOUT_SECONDS))
+    for lenient in (False, True):
+        options = {"ssl": _lenient_ssl_context()} if lenient else {}
+        try:
+            async with session.get(url, headers=_HEADERS, timeout=timeout, **options) as resp:
+                if resp.status != 200:
+                    return None
+                return _decode_html(await resp.read(), resp.charset)
+        except aiohttp.ClientSSLError:          # 인증서 검증 실패 · 연결 협상 실패 → 느슨한 설정으로 다시
+            continue
+        except (aiohttp.ClientError, asyncio.TimeoutError):
+            return None
+    return None
+
+
+# ---------------------------------------------------------------------------
+# HTML 해석을 여러 프로세스에서
+#
+# 측정(2026-11-10, 기사 91건): 크롤링 시간의 대부분은 네트워크가 아니라 BeautifulSoup 해석이다
+#   (한 건 평균 77ms, 91건 합 7.0초. 다운로드는 동시에 되므로 2~3초면 끝남).
+# 파이썬은 한 프로세스 안에서 계산을 한 번에 하나만 하므로(GIL) 스레드로 옮기면 오히려 느려졌다
+#   (측정: 7.0초 → 12.1초). 그래서 프로세스 여러 개(CPU 코어)에 나눠 해석한다.
+# 해석 함수(parse_article_html)는 그대로라 결과는 예전과 같다.
+#
+# 주의: Windows는 새 프로세스가 실행 파일을 다시 읽는다. crawl_articles를 부르는 실행 파일은
+#   if __name__ == "__main__": 안에서 실행해야 한다 (run.py · admin.py · evaluate.py는 이미 그렇다).
+#   프로세스를 못 쓰는 상황이면 자동으로 예전처럼 이 프로세스에서 해석한다.
+# ---------------------------------------------------------------------------
+
+PARSE_PROCESSES = min(8, os.cpu_count() or 1)   # 0 또는 1이면 프로세스를 쓰지 않는다 (예전 방식)
+_parse_pool: ProcessPoolExecutor | None = None
+
+
+def _get_parse_pool() -> ProcessPoolExecutor | None:
+    global _parse_pool
+    if _parse_pool is None and PARSE_PROCESSES > 1:
+        _parse_pool = ProcessPoolExecutor(max_workers=PARSE_PROCESSES)
+    return _parse_pool
+
+
+_parse_pool_warmed = False
+
+
+def warm_up_parser() -> None:
+    """해석용 프로세스를 미리 띄워 둔다 (프로세스 시작에 약 1초). 검색하는 동안 불러 두면 기다림이 겹친다.
+    여러 번 불러도 처음 한 번만 띄운다."""
+    global _parse_pool_warmed
+    pool = _get_parse_pool()
+    if pool is None or _parse_pool_warmed:
+        return
+    _parse_pool_warmed = True
     try:
-        timeout = aiohttp.ClientTimeout(total=settings.crawl_timeout_seconds)
-        async with session.get(url, headers=_HEADERS, timeout=timeout) as resp:
-            if resp.status != 200:
-                return None
-            return _decode_html(await resp.read(), resp.charset)
-    except (aiohttp.ClientError, asyncio.TimeoutError):
-        return None
+        for _ in range(PARSE_PROCESSES):
+            pool.submit(parse_article_html, "")
+    except (BrokenProcessPool, RuntimeError):
+        _disable_parse_pool()
+
+
+def _disable_parse_pool() -> None:
+    global _parse_pool, PARSE_PROCESSES
+    PARSE_PROCESSES = 0
+    if _parse_pool is not None:
+        _parse_pool.shutdown(wait=False, cancel_futures=True)
+    _parse_pool = None
+
+
+async def _parse_html(html: str) -> tuple[str, list[ArticleImage], str | None]:
+    pool = _get_parse_pool()
+    if pool is not None:
+        try:
+            return await asyncio.get_running_loop().run_in_executor(pool, parse_article_html, html)
+        except (BrokenProcessPool, RuntimeError):
+            _disable_parse_pool()       # 프로세스를 못 쓰면 이후로는 예전 방식으로
+    return parse_article_html(html)
 
 
 async def _fetch_and_parse(
     session: aiohttp.ClientSession, meta: NewsMeta, semaphore: asyncio.Semaphore
 ) -> Article | None:
     urls = [u for u in (meta.naver_link, meta.link) if u]
-    async with semaphore:
-        for url in urls:
+    for url in urls:
+        async with semaphore:                   # 동시 다운로드 수만 제한한다 (해석하는 동안 자리를 비켜 줌)
             html = await _get_html(session, url)
-            if not html:
-                continue
-            content, images, press = parse_article_html(html)
-            if len(content) >= _MIN_CONTENT_LENGTH:
-                return Article(
-                    title=meta.title,
-                    link=meta.link,
-                    press=press or meta.press,
-                    pub_date=meta.pub_date,
-                    content=content[:_MAX_CONTENT_LENGTH],
-                    description=meta.description,
-                    search_term=meta.search_term,
-                    images=images,
-                    collected_at=datetime.now(timezone.utc),
-                )
+        if not html:
+            continue
+        content, images, press = await _parse_html(html)
+        if len(content) >= _MIN_CONTENT_LENGTH:
+            return Article(
+                title=meta.title,
+                link=meta.link,
+                press=press or meta.press,
+                pub_date=meta.pub_date,
+                content=content[:_MAX_CONTENT_LENGTH],
+                description=meta.description,
+                search_term=meta.search_term,
+                images=images,
+                collected_at=datetime.now(timezone.utc),
+            )
     return None
 
 
-async def crawl_articles(metas: list[NewsMeta], concurrency: int = 8) -> list[Article]:
-    """기사 정보 목록을 받아 병렬로 본문을 가져온다. 본문을 못 가져온 기사는 빠진다."""
+# 동시에 내려받는 기사 수. 측정(2026-11-10, 처음 받는 기사 100건): 10% 정도가 3초 넘게 걸린다
+#   (처음 접속하는 언론사 사이트의 주소 찾기·연결 재시도로 보임. 같은 기사를 두 번째 받으면 0.3초 안쪽).
+#   동시 8개면 느린 다운로드가 자리를 막아 나머지가 줄을 선다 → 24개로. 해석은 별도 프로세스라 부딪히지 않는다.
+# 측정(2026-11-11): 24개일 때 기사 한 건이 자리를 기다리는 시간(중앙 0.45초)이 다운로드(중앙 0.28초)보다 길었다.
+#   같은 기사 목록으로 비교: 100건은 차이가 오차 범위(1.2~1.7초), 257건은 24개 3.3~3.8초 → 64개 2.7~3.5초.
+#   한 사이트에 여는 연결 수(CRAWL_PER_HOST)는 그대로라 사이트 하나에 몰리지는 않는다.
+CRAWL_CONCURRENCY = 64
+CRAWL_PER_HOST = 8          # 한 사이트에 동시에 여는 연결 수 (네이버 뉴스에는 예전과 같은 8개까지만)
+
+
+async def crawl_articles(metas: list[NewsMeta], concurrency: int = CRAWL_CONCURRENCY) -> list[Article]:
+    """기사 정보 목록을 받아 병렬로 본문을 가져온다. 본문을 못 가져온 기사는 빠진다. (결과는 metas 순서)"""
+    warm_up_parser()
     semaphore = asyncio.Semaphore(concurrency)
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(limit_per_host=CRAWL_PER_HOST)
+    async with aiohttp.ClientSession(connector=connector) as session:
         results = await asyncio.gather(*(_fetch_and_parse(session, m, semaphore) for m in metas))
     return [a for a in results if a is not None]
 
@@ -381,7 +547,16 @@ async def _download_one(
                     return False
                 if resp.content_length and resp.content_length > MAX_IMAGE_BYTES:
                     return False
-                data = await resp.content.read(MAX_IMAGE_BYTES + 1)
+                # 끝까지 조각조각 읽는다. 예전 resp.content.read(n)은 "n바이트까지 전부"가 아니라
+                # "지금 도착해 있는 만큼(n 이하)"만 돌려줘서, 큰 이미지가 중간에 잘린 채 저장됐다
+                # (측정: 1200×995 JPEG가 16KB로 잘림 → OCR·이미지 해석 실패).
+                parts, size = [], 0
+                async for part in resp.content.iter_chunked(64 * 1024):
+                    size += len(part)
+                    if size > MAX_IMAGE_BYTES:
+                        return False
+                    parts.append(part)
+                data = b"".join(parts)
         except (aiohttp.ClientError, asyncio.TimeoutError):
             return False
     if not data or not (MIN_IMAGE_BYTES <= len(data) <= MAX_IMAGE_BYTES):
@@ -450,12 +625,25 @@ async def collect_to_db(
     """
     from qupict import db
 
-    topic_id = db.save_topic(selected)
-    metas = await search_news(selected, period_days, max_articles)
-    new_metas = db.link_known_articles(topic_id, metas)
-    articles = await crawl_articles(new_metas)
-    db.save_articles(topic_id, articles)
-    db.mark_topic_collected(topic_id)
+    warm_up_parser()        # 해석용 프로세스는 검색하는 동안 미리 띄운다
+    # topic 저장(DB 연결 약 1.6초)과 네이버 검색은 서로 상관없어서 동시에 한다
+    with timing.timed("topic 저장(DB) + 검색(네이버 API), 동시") as t:
+        (topic_id, topic_sec), metas = await asyncio.gather(
+            asyncio.to_thread(timed_call, db.save_topic, selected),
+            search_news(selected, period_days, max_articles),
+        )
+        t.note = (f"topic 저장 {topic_sec:.2f}초, 검색어 {len(build_search_terms(selected))}개 → "
+                  f"기사 {len(metas)}건")
+    with timing.timed("이미 있는 기사 연결(DB)") as t:
+        new_metas = db.link_known_articles(topic_id, metas)
+        t.note = f"재사용 {len(metas) - len(new_metas)}건"
+    with timing.timed("본문 크롤링") as t:
+        articles = await crawl_articles(new_metas)
+        t.note = f"성공 {len(articles)} / 시도 {len(new_metas)}건"
+    with timing.timed("기사 저장(DB)") as t:
+        db.save_articles(topic_id, articles)
+        db.mark_topic_collected(topic_id)
+        t.note = f"{len(articles)}건"
     return CollectResult(
         topic_id=topic_id,
         searched=len(metas),

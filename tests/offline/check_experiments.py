@@ -211,31 +211,4 @@ _, per_c = X.run()
 assert {r["id"] for r in per_c} == {"강남-001", "강남-002"}
 assert [r["has_evidence"] for r in per_c if r["method"] == "qupict"] == [True, False]
 print("8 ok: 정답 · 근거 빈 질문 처리")
-# 9) 실험은 DB 연결 하나를 같이 쓴다 (db.reuse_connection)
-from qupict import db as D
-class FakeConn:
-    def __init__(self): self.closed = False; self.commits = self.rollbacks = 0
-    def commit(self): self.commits += 1
-    def rollback(self): self.rollbacks += 1
-    def close(self): self.closed = True
-opened = []
-real_open, real_reg = D._open, D.register_vector
-D._open = lambda **kw: opened.append(FakeConn()) or opened[-1]
-D.register_vector = lambda conn: None
-with D.reuse_connection():
-    for _ in range(3):
-        with D.connect() as c1:
-            pass
-    try:
-        with D.connect():
-            raise ValueError
-    except ValueError:
-        pass
-    opened[0].closed = True                       # 서버가 끊으면 다시 연결
-    with D.connect() as c2:
-        pass
-assert len(opened) == 2 and c1 is opened[0] and c2 is opened[1] and opened[1].closed
-assert opened[0].commits == 3 and opened[0].rollbacks == 1 and D._shared is None
-D._open, D.register_vector = real_open, real_reg
-print("9 ok: 실험 DB 연결 재사용")
 print("ALL PASS")

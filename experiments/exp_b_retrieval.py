@@ -129,8 +129,7 @@ def main(query: str | None = None, with_faiss: bool = False, qa_path=None) -> No
     if not items:
         print("질문 세트가 없습니다. experiments/qa_set.csv에 질문을 넣거나 python evaluate.py make-qa 로 만드세요.")
         return
-    with db.reuse_connection():          # DB 연결 하나로 (새 연결은 1번에 1~2초)
-        summary, per_question = run(query, with_faiss, qa_path, items=items)
+    summary, per_question = run(query, with_faiss, qa_path, items=items)
     print()
     print_table(summary, ["engine", "variant", "questions", "recall@5", "mrr", "avg_seconds"])
     _, csv_path = save_results("exp_b_retrieval", summary + per_question,

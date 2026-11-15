@@ -23,7 +23,7 @@ eval_filter.py — Relevance Filter 효과 측정 스크립트
   - 정답이 '보류'인 기사는 맞고 틀림을 정할 수 없어서 지표에서 뺀다.
 
 사용법 (프로젝트 맨 위 폴더에서):
-  1) python evalset/build_labeled_set.py 로 evalset/labeled_set.json 생성 (사람이 라벨링)
+  1) python evalset/build_labeled_set.py 로 evalset/labeled_set_*.json 생성 (사람이 라벨링)
   2) python old/eval_filter.py 실행
   비용: V2에서 규칙을 통과한 기사 8건당 LLM 1번 (약 0.3 크레딧)
 
@@ -39,10 +39,11 @@ from pathlib import Path
 
 from _common import describe, pick_sense
 
+from evalset.labeled_store import load_entries
 from qupict.filtering import llm_verify, rule_verdict
 from qupict.schemas import Article, SelectedSense, Sense
 
-LABELED_SET_PATH = Path(__file__).resolve().parents[1] / "evalset" / "labeled_set.json"
+LABELED_SET_PATH = Path(__file__).resolve().parents[1] / "evalset"    # labeled_set_*.json 전부
 PASS_STATUSES = ("관련", "보류")   # 서비스가 답변에 쓰는 판정 = "관련 있다고 예측"
 
 
@@ -177,10 +178,8 @@ async def run_ablation(
 
 def load_labeled_set(path: Path | None = None) -> list[dict]:
     path = path or LABELED_SET_PATH      # 기본 경로는 부를 때 정한다 (정의할 때 정하면 경로를 바꿔도 반영 안 됨)
-    if not path.exists():
-        return []
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return load_entries(path)
     except json.JSONDecodeError as error:
         print(f"[오류] {path} JSON 파싱 실패: {error}")
         return []

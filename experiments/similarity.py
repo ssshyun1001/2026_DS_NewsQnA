@@ -178,9 +178,7 @@ def main_qa(query: str | None = None, qa_path=None) -> None:
     if not load_qa(qa_path, query=query):
         print("질문 세트가 없습니다. experiments/qa_set.csv에 질문을 넣거나 python evaluate.py make-qa 로 만드세요.")
         return
-    from qupict import db as _db
-    with _db.reuse_connection():          # DB 연결 하나로 (새 연결은 1번에 1~2초)
-        summary, per_question = qa_report(query, qa_path)
+    summary, per_question = qa_report(query, qa_path)
     if not per_question:
         return
 

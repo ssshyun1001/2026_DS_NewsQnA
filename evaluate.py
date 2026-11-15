@@ -3,7 +3,7 @@ QuPicT 평가 실행 파일 — 정답 라벨, 질문 세트, 실험 A·B·C (�
 
     python evaluate.py label   [--target 강남] [--limit 150]  최신 대표 기사 150건에 정답 라벨 (관련 / 무관 / 보류)
     python evaluate.py make-qa [--target 강남] [--suggest]    실험 B·C용 질문 세트 만들기 (experiments/qa_set.csv에 추가)
-    python evaluate.py exp-a   [--target 강남]                실험 A: 필터링 방법 비교 (정답 JSON evalset/labeled_set.json 기준)
+    python evaluate.py exp-a   [--target 강남]                실험 A: 필터링 방법 비교 (정답 JSON evalset/labeled_set_*.json 기준)
     python evaluate.py exp-b   [--target 강남] [--faiss]      실험 B: 검색 방식 비교 (Recall@5, MRR)
     python evaluate.py exp-c   [--target 강남] [--limit 10]   실험 C: LLM 단독 vs 기본 RAG vs QuPicT 답변 채점
         실험 B · C · sim은 질문 세트 experiments/qa_set.csv를 읽는다. --qa 골든셋.csv로 다른 CSV를 줄 수 있다
@@ -64,7 +64,7 @@ def cmd_label(query: str | None, limit: int | None = None) -> None:
     # [2단계 중복 제거] 비슷한 기사는 대표 기사 하나만 라벨을 붙이면 된다 (임베딩만, LLM 판정 없음)
     from qupict.filtering import dedup_topic
     print("\n중복 기사 찾는 중 (임베딩만 씀, LLM 판정 없음)…")
-    duplicates = asyncio.run(dedup_topic(topic.topic_id))
+    duplicates = asyncio.run(dedup_topic(topic.topic_id, record.selected.match_terms))
     print(f"  비슷한 기사 {len(duplicates)}건을 중복으로 표시했습니다 → 대표 기사만 보여 줍니다."
           if duplicates else "  새로 찾은 중복 기사는 없습니다.")
     remaining = limit - topic.labeled

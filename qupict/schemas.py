@@ -29,6 +29,10 @@ class SenseCandidates(BaseModel):
     query: str
     senses: list[Sense] = Field(default_factory=list)
     model: str = ""  # 후보를 만든 LLM 모델명 (재현성 기록용)
+    # 예전에 "기타"로 직접 입력해 저장된 의미(is_custom)의 포함 후보 이름: {직접 입력 의미 이름: [LLM 후보 이름]}
+    # 이 후보들은 그 의미를 고를 때 '다른 의미'로 두지 않는다 (sense.select_sense)
+    custom_includes: dict[str, list[str]] = Field(default_factory=dict)
+    use_counts: dict[str, int] = Field(default_factory=dict)  # 의미 이름 → 사용자가 고른 횟수 (DB)
 
     @property
     def needs_selection(self) -> bool:
@@ -49,6 +53,14 @@ class SelectedSense(BaseModel):
     def match_terms(self) -> list[str]:
         """기사에서 이 대상을 찾을 때 쓸 표기 목록 (검색어 원문 + 별칭)."""
         return unique_terms([self.query, *self.sense.aliases])
+
+    @property
+    def subject_name(self) -> str:
+        """답변 · 검색 문장에서 이 대상을 부르는 이름.
+        LLM 후보를 고르면 검색어 (예: "강남" — 방송인 강남), 직접 입력이면 사용자가 설명한 대상
+        (예: 검색어 "서울여대" + 직접 입력 "서울 소재 여자대학교" → "서울 소재 여자대학교").
+        직접 입력은 검색어와 다른 대상(더 넓은 묶음 등)일 수 있어서, 검색어로 부르면 답이 검색어 하나로 좁혀진다."""
+        return self.sense.name if self.sense.is_custom else self.query
 
 
 def unique_terms(items: list[str]) -> list[str]:
@@ -94,7 +106,9 @@ class Article(BaseModel):
     search_term: str = ""
     images: list[ArticleImage] = Field(default_factory=list)
     collected_at: Optional[datetime] = None  # 수집 시각 (검색 결과는 날짜마다 달라지므로 기록)
-    embedding: Optional[list[float]] = None
+    embedding: Optional[list[float]] = None        # 제목+본문 임베딩 (DB 저장, 검색에도 재사용)
+    title_embedding: Optional[list[float]] = None  # 제목만 임베딩 (중복 제거용, DB에 저장하지 않음)
+    passage_embedding: Optional[list[float]] = None  # 검색어가 들어간 문단 임베딩 (중복 제거용, DB에 저장하지 않음)
 
     def to_context_block(self, idx: int) -> str:
         return (

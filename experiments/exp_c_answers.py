@@ -196,8 +196,7 @@ def main(query: str | None = None, limit: int | None = None, qa_path=None) -> No
     if not load_qa(qa_path, query=query):
         print("질문 세트가 없습니다. experiments/qa_set.csv에 질문을 넣거나 python evaluate.py make-qa 로 만드세요.")
         return
-    with db.reuse_connection():          # DB 연결 하나로 (새 연결은 1번에 1~2초)
-        summary, per_answer = run(query, limit, qa_path)
+    summary, per_answer = run(query, limit, qa_path)
     print()
     print_table(summary, ["method", "answers", "accuracy", "grounding_rate", "hallucination_rate", "citation_accuracy"])
     json_path, csv_path = save_results("exp_c_answers", summary + [{k: v for k, v in r.items() if k != "claim_details"}

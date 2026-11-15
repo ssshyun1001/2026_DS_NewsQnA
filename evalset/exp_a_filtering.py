@@ -1,7 +1,7 @@
 """
 실험 A — 관련성 필터링 성능 비교 (기획안 7단계), 정답 JSON 기준
 
-evalset/labeled_set.json(python evalset/build_labeled_set.py로 만든 정답)을 읽어, 방법별로
+evalset/labeled_set_*.json(python evalset/build_labeled_set.py로 만든 정답, 검색어 단위로 나뉜 파일 전부)을 읽어, 방법별로
 "관련 기사를 얼마나 정확히 골라내는지" 비교한다. DB는 쓰지 않는다.
 기준(고른 의미·별칭·연관어·배제어·다른 의미)은 라벨링할 때 JSON에 함께 저장한 값을 그대로 쓴다.
 
@@ -25,7 +25,7 @@ evalset/labeled_set.json(python evalset/build_labeled_set.py로 만든 정답)�
 - 1c는 기준값별 결과도 함께 낸다 (규칙 기준값을 정할 때 참고).
 
 실행 (프로젝트 맨 위 폴더에서):
-    python evalset/exp_a_filtering.py [--target 강남] [--file evalset/labeled_set.json]
+    python evalset/exp_a_filtering.py [--target 강남] [--file evalset/labeled_set_2.json]   (--file 없으면 전부)
     python evaluate.py exp-a [--target 강남]          (같은 실험)
 결과: evalset/results/exp_a_filtering_날짜시각.json / .csv
 """
@@ -46,9 +46,10 @@ if str(ROOT) not in sys.path:            # evalset/ 안의 파일을 바로 실�
 from experiments.common import BinaryScores, print_table, save_results           # noqa: E402
 from qupict.filtering import LLM_BATCH_SIZE, llm_verify, rule_check, rule_verdict  # noqa: E402
 from qupict.schemas import Article, SelectedSense, Sense                          # noqa: E402
+from evalset.labeled_store import LABELED_DIR, load_entries                      # noqa: E402
 
 EVALSET_DIR = Path(__file__).resolve().parent
-LABELED_SET_PATH = EVALSET_DIR / "labeled_set.json"
+LABELED_SET_PATH = LABELED_DIR             # 폴더면 labeled_set_*.json 전부, 파일이면 그 파일만
 RESULTS_DIR = EVALSET_DIR / "results"
 LLM_CACHE = RESULTS_DIR / "llm_cache.json"
 
@@ -112,10 +113,7 @@ def _selected_from_entry(entry: dict) -> SelectedSense:
 def load_groups(path: Path = LABELED_SET_PATH, query: str | None = None) -> tuple[list[Group], int]:
     """정답 JSON → 대상별 묶음. (묶음 목록, 읽지 못해 건너뛴 항목 수)
     같은 대상의 기준은 그 대상의 첫 항목에 저장된 값을 쓴다 (라벨링 때 고른 기준)."""
-    if not path.exists():
-        return [], 0
-    text = path.read_text(encoding="utf-8").strip()
-    entries = json.loads(text) if text else []
+    entries = load_entries(path)
     groups: dict[tuple[str, str], Group] = {}
     skipped = 0
     for entry in entries:
@@ -267,6 +265,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="python evalset/exp_a_filtering.py",
                                      description="실험 A: 정답 JSON으로 필터링 방법 비교")
     parser.add_argument("--target", help="이 검색어만 (예: 강남)")
-    parser.add_argument("--file", type=Path, default=LABELED_SET_PATH, help="정답 JSON (기본 evalset/labeled_set.json)")
+    parser.add_argument("--file", type=Path, default=LABELED_SET_PATH, help="정답 JSON 파일 하나만 쓸 때 (기본: evalset/labeled_set_*.json 전부)")
     args = parser.parse_args()
     main(args.target, args.file)

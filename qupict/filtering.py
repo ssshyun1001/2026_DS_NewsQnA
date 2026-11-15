@@ -3,9 +3,17 @@
 
 0단계에서 고른 의미(SelectedSense)를 기준으로, 수집한 기사가 그 대상을 실제로 다루는지 판정한다.
 
-  [2단계] 중복 제거      같은 사안을 다룬 비슷한 기사는 대표 기사 1건만 남긴다 (임베딩 유사도)
+  [2단계] 중복 제거      같은 사안을 다룬 비슷한 기사는 대표 기사 1건만 남긴다
+                         기준 DEDUP_BY (쉼표로 여러 개):
+                           title    제목 임베딩 유사도                  (DEDUP_TITLE_THRESHOLD)
+                           content  검색어가 들어간 문단 임베딩 유사도    (DEDUP_CONTENT_THRESHOLD)
+                                    문단 = 검색어·별칭이 든 문장 ± k문장 (k = DEDUP_PASSAGE_WINDOW),
+                                    검색어가 없으면 본문 앞 N문장 (N = DEDUP_LEAD_SENTENCES)
+                           noun     제목의 드문 고유명사 겹침 (TF-IDF)   (DEDUP_NOUN_THRESHOLD)
+                           jaccard  제목+검색어 문단 글자 3-gram 자카드  (DEDUP_JACCARD_THRESHOLD, 문단은 content와 같음)
+                         여러 기준을 묶는 방법 DEDUP_RULE: "and"(모두 넘어야 중복) | "or"(하나만 넘어도) | 숫자 k(k개 이상 넘으면)
   [2단계] 1차 규칙 필터  분명히 무관한 기사만 규칙으로 걸러 LLM 호출을 줄인다      → stage = "rule"
-  [3단계] 2차 LLM 검증   나머지를 LLM이 관련 / 무관 / 보류로 판정하고 근거 한 줄을 남긴다 → stage = "llm"
+  [3단계] 2차 LLM 검증   나머지를 LLM이 관련 / 무관으로 판정하고 근거 한 줄을 남긴다 → stage = "llm"
 
   filter_articles(articles, selected)   메모리 버전 (run.py가 사용)
   filter_topic(topic_id, selected)      DB 버전 (DB의 기사를 판정하고 결과를 article_topics에 저장)
@@ -29,7 +37,7 @@
   LLM에게 고른 의미(정의·별칭·연관어)와 고르지 않은 의미들을 함께 보여 주고 대조하게 한다.
     관련  찾는 대상이 기사의 주요 소재다
     무관  다른 의미의 기사이거나, 찾는 대상이 스쳐 지나가듯 언급만 된다
-    보류  주어진 내용만으로는 판단하기 어렵다 (Recall을 지키기 위해 바로 버리지 않는다)
+    보류 없음: 애매해도 관련 / 무관 중 더 가까운 쪽으로 반드시 판정한다 (예전에는 보류가 있었지만 한 번도 나오지 않았다)
   LLM이 답하지 못한 기사는 판정하지 않고 남겨 둔다 (DB 버전은 다음 실행 때 다시 시도).
 """
 from __future__ import annotations
@@ -42,15 +50,22 @@ from typing import Literal, Optional
 import numpy as np
 from pydantic import BaseModel, Field
 
+from qupict import timing
 from qupict.config import settings
-from qupict.llm import get_embeddings, get_structured_model
+from qupict.concurrency import run_parallel
+from qupict.llm import aembed_in_batches, get_embeddings, get_structured_model
 from qupict.schemas import Article, SelectedSense
 
 RULE_REJECT_SCORE = -2          # 규칙 점수가 이 값 이하면 '무관' (정답 라벨이 생기면 실험으로 조정)
 LLM_BATCH_SIZE = 8              # LLM 한 번에 판정할 기사 수
-LLM_CONCURRENCY = 4             # 동시에 보내는 LLM 요청 수 (게이트웨이 한도: 60초 120회)
+# 동시에 보내는 LLM 요청 수 (게이트웨이 한도: 60초 120회). 4 → 8: 기사 100건이면 요청 13번 안팎이라
+# 8개씩 보내도 1분에 수십 번 수준. 배치 나누는 방식은 그대로라 각 요청의 입력(= 판정 결과)은 예전과 같다.
+LLM_CONCURRENCY = 8
 LLM_BODY_CHARS = 800            # LLM에 보여 줄 본문 앞부분 길이
-EMBED_CHARS = 2000              # 중복 제거용 임베딩에 쓰는 본문 길이 (임베딩 입력 한도 안쪽, 비교에는 충분)
+EMBED_CHARS = 2000              # 기사 임베딩에 쓰는 본문 길이 (임베딩 입력 한도 안쪽, 비교에는 충분)
+DEDUP_CRITERIA = ("title", "content", "noun", "jaccard")
+JACCARD_NGRAM = 3               # 자카드 유사도에 쓰는 글자 n-gram 길이
+DEDUP_RULES = ("and", "or")
 
 STATUSES = ("관련", "무관", "보류")
 
@@ -91,10 +106,188 @@ async def embed_articles(articles: list[Article]) -> list[Article]:
     to_embed = [a for a in articles if a.embedding is None]
     if to_embed:
         texts = [f"{a.title}\n{a.content[:EMBED_CHARS]}" for a in to_embed]
-        vectors = await get_embeddings().aembed_documents(texts)
+        vectors = await aembed_in_batches(get_embeddings(), texts)   # 100건씩 나눈 요청을 동시에
         for article, vec in zip(to_embed, vectors):
             article.embedding = vec
     return articles
+
+
+_SENTENCE_END = re.compile(r"(?<=[.!?。])\s+|(?<=[.!?。][\"'”’)\]])\s+|\n+")
+# 문장 끝: . ! ? 뒤(닫는 따옴표·괄호 하나까지 포함)의 공백, 또는 줄바꿈. "3.5%"처럼 공백 없는 점은 안 나눈다
+
+
+def _sentences(text: str | None) -> list[str]:
+    return [x.strip() for x in _SENTENCE_END.split(text or "") if x and x.strip()]
+
+
+def lead_text(article: Article, n: int | None = None) -> str:
+    """본문 앞 n문장. 문장 끝(. ! ?) 뒤 공백이나 줄바꿈으로 나눈다.
+    본문이 비어 있으면 제목을 쓴다 (빈 문자열은 임베딩할 수 없으므로)."""
+    n = settings.dedup_lead_sentences if n is None else n
+    return " ".join(_sentences(article.content)[:n]) or article.title
+
+
+def passage_text(article: Article, terms: list[str] | None, window: int | None = None) -> str:
+    """검색어가 들어간 문단 (중복 제거 content 기준).
+
+    수집한 본문에는 문단 구분(줄바꿈)이 남아 있지 않아서, 검색어·별칭(terms)이 들어간 문장마다
+    앞뒤 window문장씩을 붙여 문단으로 본다. 여러 문장에 나오면 겹치는 구간을 합쳐 본문 순서대로 잇는다.
+      예) window=1, 검색어가 3·8번째 문장에 있음 → 2~4번째 + 7~9번째 문장
+    검색어는 대소문자·띄어쓰기·특수문자를 무시하고 찾는다 ("M.I.B" = "MIB").
+    본문에 검색어가 없거나 terms가 비어 있으면 본문 앞 n문장(lead_text)을 쓴다.
+    길이는 EMBED_CHARS까지 (검색어가 아주 많이 나오는 긴 기사)."""
+    window = settings.dedup_passage_window if window is None else window
+    keys = [k for k in (_normalize(t) for t in terms or ()) if k]
+    sentences = _sentences(article.content)
+    hits = [i for i, x in enumerate(sentences) if any(k in _normalize(x) for k in keys)]
+    if not hits:
+        return lead_text(article)
+    picked = sorted({j for i in hits for j in range(max(0, i - window), min(len(sentences), i + window + 1))})
+    return " ".join(sentences[j] for j in picked)[:EMBED_CHARS]
+
+
+async def embed_passages(articles: list[Article], terms: list[str] | None) -> list[Article]:
+    """검색어가 들어간 문단으로 임베딩을 채운다 (중복 제거용). DB에 저장하지 않으므로 실행할 때마다 계산한다."""
+    to_embed = [a for a in articles if a.passage_embedding is None]
+    if to_embed:
+        vectors = await aembed_in_batches(get_embeddings(), [passage_text(a, terms) for a in to_embed])
+        for article, vec in zip(to_embed, vectors):
+            article.passage_embedding = vec
+    return articles
+
+
+async def embed_titles(articles: list[Article]) -> list[Article]:
+    """제목만으로 임베딩을 채운다 (중복 제거용). DB에 저장하지 않으므로 실행할 때마다 계산한다 (제목이라 저렴)."""
+    to_embed = [a for a in articles if a.title_embedding is None]
+    if to_embed:
+        vectors = await aembed_in_batches(get_embeddings(), [a.title for a in to_embed])
+        for article, vec in zip(to_embed, vectors):
+            article.title_embedding = vec
+    return articles
+
+
+def _dedup_criteria(by: str | None = None) -> list[str]:
+    """DEDUP_BY → 비교할 기준 목록. "title,content,noun"처럼 쉼표로 여러 개, "both" = title,content,
+    "all" = title,content,noun,jaccard (넷 다, 기본값)."""
+    raw = (by or settings.dedup_by).strip().lower()
+    alias = {"both": "title,content", "all": ",".join(DEDUP_CRITERIA)}
+    criteria = [c.strip() for c in alias.get(raw, raw).split(",") if c.strip()]
+    if not criteria or any(c not in DEDUP_CRITERIA for c in criteria):
+        raise ValueError(f"DEDUP_BY는 {DEDUP_CRITERIA} 중 하나 이상(쉼표로 구분) 또는 both/all이어야 합니다: {raw!r}")
+    return list(dict.fromkeys(criteria))
+
+
+def _dedup_rule(rule: str | int | None, n_criteria: int) -> int:
+    """→ 중복이 되려면 임계값을 넘어야 하는 기준 수. "and" = 전부, "or" = 1, 숫자 k = k개
+    (k가 기준 수보다 크면 기준 수로 줄인다. 예: DEDUP_BY=title에 k=2면 title 하나만 넘으면 됨)"""
+    raw = str(settings.dedup_rule if rule is None else rule).strip().lower()
+    if raw == "and":
+        return n_criteria
+    if raw == "or":
+        return 1
+    if raw.isdigit() and int(raw) >= 1:
+        return min(int(raw), n_criteria)
+    raise ValueError(f"DEDUP_RULE은 {DEDUP_RULES} 또는 1 이상의 정수여야 합니다: {rule!r}")
+
+
+_EMBEDDING_OF = {
+    "title": lambda a: a.title_embedding,    # 제목만
+    "content": lambda a: a.passage_embedding,   # 검색어가 들어간 문단
+}
+
+
+async def embed_for_dedup(articles: list[Article], terms: list[str] | None = None,
+                          by: str | None = None) -> list[Article]:
+    """find_duplicates에 필요한 임베딩을 채운다 (title: 제목 / content: 검색어가 들어간 문단,
+    noun·jaccard는 임베딩 불필요). terms = 검색어·별칭 (SelectedSense.match_terms).
+    terms를 안 주면 content는 모든 기사가 본문 앞 n문장으로 비교된다."""
+    criteria = _dedup_criteria(by)
+    jobs = []
+    if "title" in criteria:
+        jobs.append(embed_titles(articles))
+    if "content" in criteria:
+        jobs.append(embed_passages(articles, terms))
+    await asyncio.gather(*jobs)   # 제목 · 검색어 문단 임베딩 요청을 동시에
+    return articles
+
+
+# --- 고유명사 겹침 (noun 기준) ---------------------------------------------------
+#  기사 제목에서 고유명사(NNP)·영문 단어(SL)를 뽑아 TF-IDF로 가중치를 매기고 코사인 유사도를 잰다.
+#  IDF는 이번에 비교하는 기사 묶음 안에서 계산한다:
+#    거의 모든 기사에 나오는 단어(검색어 "강남" 등)  → 가중치 낮음
+#    몇몇 기사에만 나오는 드문 고유명사(인물·장소·행사명) → 가중치 높음
+#  → 드문 고유명사를 제목에 같이 쓰는 기사끼리 유사도가 높아진다 (같은 사건을 다룬 기사).
+#  제목에 고유명사가 하나도 없으면 이 기준에서는 어떤 기사와도 비슷하지 않다 (유사도 0).
+
+_NOUN_TAGS = ("NNP", "SL")
+_kiwi = None
+
+
+def get_kiwi():
+    """형태소 분석기 Kiwi (처음 한 번만 만든다. qupict/hot.py도 같은 것을 쓴다)."""
+    global _kiwi
+    if _kiwi is None:
+        try:
+            from kiwipiepy import Kiwi
+        except ImportError as e:
+            raise ImportError("고유명사 기준(noun) 중복 제거에는 kiwipiepy가 필요합니다: pip install kiwipiepy") from e
+        _kiwi = Kiwi()
+    return _kiwi
+
+
+def extract_nouns(text: str) -> list[str]:
+    """고유명사(NNP)와 영문 단어(SL, 소문자로)를 등장 순서대로 (중복 포함). 한 글자는 뺀다."""
+    return [t.form.lower() if t.tag == "SL" else t.form
+            for t in get_kiwi().tokenize(text or "") if t.tag in _NOUN_TAGS and len(t.form) >= 2]
+
+
+def noun_text(article: Article) -> str:
+    """고유명사를 뽑을 텍스트: 제목만 (본문에 스쳐 지나가듯 나온 이름은 섞지 않는다)."""
+    return article.title
+
+
+def noun_tfidf(articles: list[Article]) -> dict[str, np.ndarray]:
+    """기사 묶음의 고유명사 TF-IDF 벡터 {link: 벡터}.
+    tf = 1 + log(등장 횟수), idf = log((1 + 기사 수) / (1 + 그 단어가 나온 기사 수)) + 1"""
+    tokens = {a.link: extract_nouns(noun_text(a)) for a in articles}
+    vocab = {w: i for i, w in enumerate(dict.fromkeys(w for ws in tokens.values() for w in ws))}
+    df = np.zeros(len(vocab))
+    for ws in tokens.values():
+        for w in set(ws):
+            df[vocab[w]] += 1
+    idf = np.log((1 + len(tokens)) / (1 + df)) + 1
+    vectors = {}
+    for link, ws in tokens.items():
+        v = np.zeros(len(vocab))
+        for w in ws:
+            v[vocab[w]] += 1
+        nz = v > 0
+        v[nz] = (1 + np.log(v[nz])) * idf[nz]
+        vectors[link] = v
+    return vectors
+
+
+
+
+def shingles(text: str, n: int = JACCARD_NGRAM) -> frozenset[str]:
+    norm = re.sub(r"[^0-9a-z가-힣]", "", (text or "").lower())
+    if len(norm) < n:
+        return frozenset([norm]) if norm else frozenset()
+    return frozenset(norm[i:i + n] for i in range(len(norm) - n + 1))
+
+
+def jaccard_text(article: Article, terms: list[str] | None = None) -> str:
+    """자카드 비교에 쓸 텍스트: 제목 + 검색어가 들어간 문단 (content 기준과 같은 passage_text).
+    terms가 없거나 본문에 검색어가 없으면 제목 + 본문 앞 n문장."""
+    passage = passage_text(article, terms)
+    return article.title if passage == article.title else f"{article.title} {passage}"
+
+
+def jaccard(a: frozenset[str], b: frozenset[str]) -> float:
+    if not a or not b:
+        return 0.0
+    inter = len(a & b)
+    return inter / (len(a) + len(b) - inter)
 
 
 def _unit(vectors: np.ndarray) -> np.ndarray:
@@ -106,10 +299,30 @@ def _unit(vectors: np.ndarray) -> np.ndarray:
 def find_duplicates(
     articles: list[Article],
     existing: list[Article] = (),
-    threshold: float | None = None,
     keep: set[str] | frozenset[str] = frozenset(),
+    terms: list[str] | None = None,
+    by: str | None = None,
+    title_threshold: float | None = None,
+    content_threshold: float | None = None,
+    noun_threshold: float | None = None,
+    jaccard_threshold: float | None = None,
+    rule: str | int | None = None,
 ) -> dict[str, str]:
-    """임베딩 유사도가 threshold 이상인 기사를 중복으로 묶는다. {중복 기사 link: 대표 기사 link}
+    """유사도가 임계값 이상인 기사를 중복으로 묶는다. {중복 기사 link: 대표 기사 link}
+
+    - by: 비교 기준 (쉼표로 여러 개). 비우면 settings.dedup_by.
+        title    제목 임베딩
+        content  검색어가 들어간 문단 임베딩 (passage_text)
+        noun     제목 고유명사 TF-IDF (드문 고유명사를 같이 쓰는 기사일수록 비슷함, 임베딩 불필요)
+        jaccard  제목+검색어 문단의 글자 3-gram 자카드 유사도 (문장이 실제로 겹쳐야 높음, 임베딩 불필요)
+        both = title,content / all = title,content,noun,jaccard (넷 다)
+      임베딩은 미리 채워 둬야 한다 (embed_for_dedup). 필요한 임베딩이 없는 기사는 비교에서 빠진다.
+    - terms: 검색어·별칭 (SelectedSense.match_terms). jaccard 기준이 검색어 문단을 비교할 때 쓴다
+      (content 기준은 embed_for_dedup에 넘긴 terms로 이미 임베딩돼 있음). 비우면 본문 앞 n문장.
+    - *_threshold: 기준별 임계값. 비우면 settings 값.
+    - rule: 기준이 여러 개일 때 "and"(모두 임계값 이상이어야 중복) | "or"(하나라도 이상이면 중복)
+      | 숫자 k(k개 이상이 임계값 이상이면 중복, 예: 2). 비우면 settings.dedup_rule.
+      비슷한 대표 기사가 여럿이면 (기준별 유사도 평균이) 가장 높은 대표 기사에 묶는다.
 
     - 대표 기사는 본문이 가장 긴 기사 (정보가 가장 많다고 본다)
     - existing: 이미 판정을 마친 대표 기사들 (DB 버전에서 새 기사만 처리할 때).
@@ -118,19 +331,48 @@ def find_duplicates(
     - keep: articles 중 절대 중복으로 바꾸면 안 되는 기사 link (사람이 이미 정답 라벨을 붙인 기사).
       중복이 되면 실험 A에서 빠져서 라벨이 버려지므로, 이 기사들은 항상 대표로 남긴다.
     """
-    threshold = settings.dedup_similarity_threshold if threshold is None else threshold
-    reps: list[Article] = [a for a in existing if a.embedding is not None]
+    criteria = _dedup_criteria(by)
+    need = _dedup_rule(rule, len(criteria))     # 임계값을 넘어야 하는 기준 수
+    thresholds = np.array([[{
+        "title": settings.dedup_title_threshold if title_threshold is None else title_threshold,
+        "content": settings.dedup_content_threshold if content_threshold is None else content_threshold,
+        "noun": settings.dedup_noun_threshold if noun_threshold is None else noun_threshold,
+        "jaccard": settings.dedup_jaccard_threshold if jaccard_threshold is None else jaccard_threshold,
+    }[c]] for c in criteria])
+    has_vectors = lambda a: all(_EMBEDDING_OF[c](a) is not None for c in criteria if c in _EMBEDDING_OF)
+    existing = [a for a in existing if has_vectors(a)]
+    articles = [a for a in articles if has_vectors(a)]
+
+    # 기준별 단위 벡터 {link: 벡터}를 미리 만든다 (코사인 유사도 = 단위 벡터 내적)
+    pool = existing + articles
+    unit: dict[str, dict[str, np.ndarray]] = {}
+    grams = {a.link: shingles(jaccard_text(a, terms)) for a in pool} if "jaccard" in criteria else {}
+    for c in criteria:
+        if c == "jaccard":
+            continue
+        raw = noun_tfidf(pool) if c == "noun" else {a.link: np.asarray(_EMBEDDING_OF[c](a), dtype=float) for a in pool}
+        links = list(raw)
+        mat = _unit(np.array([raw[l] for l in links])) if links else np.zeros((0, 0))
+        unit[c] = dict(zip(links, mat))
+
+    reps: list[Article] = list(existing)
     duplicates: dict[str, str] = {}
     # 라벨 붙은 기사를 먼저 대표로 세우고, 나머지는 긴 기사부터 대표 후보로 본다
     # → 비슷한 기사 무리에서 (라벨 붙은 기사가 없으면) 가장 긴 기사가 대표가 된다
-    ordered = sorted((a for a in articles if a.embedding is not None),
-                     key=lambda a: (a.link not in keep, -len(a.content)))
+    ordered = sorted(articles, key=lambda a: (a.link not in keep, -len(a.content)))
     for article in ordered:
         if reps and article.link not in keep:
-            sims = _unit(np.array([r.embedding for r in reps])) @ _unit(np.array([article.embedding]))[0]
-            best = int(np.argmax(sims))
-            if sims[best] >= threshold:
-                duplicates[article.link] = reps[best].link
+            sims = np.array([   # [기준 수, 대표 수]
+                np.array([jaccard(grams[r.link], grams[article.link]) for r in reps])
+                if c == "jaccard" else
+                np.array([unit[c][r.link] for r in reps]) @ unit[c][article.link]
+                for c in criteria
+            ])
+            passed = sims >= thresholds
+            matched = passed.sum(axis=0) >= need
+            if matched.any():
+                score = np.where(matched, sims.mean(axis=0), -np.inf)
+                duplicates[article.link] = reps[int(np.argmax(score))].link
                 continue
         reps.append(article)
     return duplicates
@@ -198,7 +440,9 @@ class _LLMVerdict(BaseModel):
     # 근거를 먼저 쓰고 그에 맞춰 판정하게 한다.
     index: int = Field(description="기사 번호")
     reason: str = Field(description="판단 근거 한 줄 (40자 이내, 근거가 된 단어나 내용)")
-    status: Literal["관련", "무관", "보류"] = Field(description="위 근거에 따른 판정")
+    # 보류는 받지 않는다: 관련 / 무관 중 하나로 반드시 판정하게 한다 (실제로도 보류는 한 번도 나오지 않았다).
+    # DB·검색 쪽의 '보류'(STATUSES 등)는 예전 판정 · 사람 라벨과 맞추려고 그대로 둔다.
+    status: Literal["관련", "무관"] = Field(description="위 근거에 따른 판정")
 
 
 class _LLMVerdictBatch(BaseModel):
@@ -220,9 +464,10 @@ _VERIFY_SYSTEM_PROMPT = """\
 판정 기준:
 - 관련: 찾는 대상이 기사의 주요 소재이거나, 기사에서 의미 있게 다뤄진다.
 - 무관: 다른 의미의 기사이거나, 찾는 대상이 한두 줄 스쳐 지나가듯 언급만 된다.
-- 보류: 주어진 내용만으로는 판단하기 어렵다. (예: 대상이 실제로 관여하는지 불분명)
 
 규칙:
+- 모든 기사를 반드시 '관련' 또는 '무관' 중 하나로 판정하라. 판정을 비워 두거나 건너뛰지 마라.
+- 판단이 애매해도 망설이지 말고, 아주 조금이라도 더 가까운 쪽을 골라라. 반반이라고 느껴져도 둘 중 하나를 택하라.
 - 검색어 글자가 들어 있다는 이유만으로 '관련'이라고 하지 마라. 어떤 의미로 쓰였는지 봐라.
 - reason은 한국어 한 줄(40자 이내)로, 판단 근거가 된 단어나 내용을 적어라.
 - 입력된 모든 기사 번호에 대해 하나씩 답하라.
@@ -247,8 +492,22 @@ def _articles_block(articles: list[Article]) -> str:
     )
 
 
+# LLM이 답하지 않은 기사(요청 실패 · 응답에서 빠진 번호)는 답할 때까지 계속 다시 묻는다 (횟수 제한 없음).
+# 다시 물을 때는 기사 1건씩 따로 보낸다 (묶음이 작을수록 빠뜨리지 않는다).
+# 판정은 항상 LLM이 관련 / 무관 중에서 직접 고른다. 코드가 대신 채워 넣지 않고, 판정 없이 남기지도 않는다.
+# 주의: 게이트웨이가 계속 멈춰 있으면 판정 단계도 그동안 끝나지 않고 기다린다.
+LLM_RETRY_WAIT_SECONDS = 1.0           # n번째 다시 묻기 전에 n × 이 값만큼 쉰다 (게이트웨이가 잠깐 막혔을 때 대비)
+LLM_RETRY_WAIT_MAX_SECONDS = 30.0      # 쉬는 시간의 상한 (이 이상 늘리지 않고 이 간격으로 계속 묻는다)
+
+
 async def llm_verify(articles: list[Article], selected: SelectedSense) -> tuple[list[Verdict], list[str]]:
-    """LLM으로 관련 / 무관 / 보류를 판정한다. (판정 목록, 판정 못 한 기사 link 목록)"""
+    """LLM으로 관련 / 무관을 판정한다 (보류 없음). (판정 목록, 판정 못 한 기사 link 목록 — 항상 비어 있음)
+
+    모든 기사를 LLM이 직접 판정할 때까지 묻는다:
+      1) LLM_BATCH_SIZE건씩 묶어 판정
+      2) 답이 없던 기사는 1건씩 따로 다시 묻는다. 답이 나올 때까지 계속 (회차마다 조금씩 더 쉬고, 최대 30초 간격)
+    두 번째 돌려주는 값(판정 못 한 기사)은 예전 호출 코드와 맞추려고 남겨 둔 것으로, 항상 빈 목록이다.
+    """
     if not articles:
         return [], []
     llm = get_structured_model(_LLMVerdictBatch)
@@ -262,7 +521,7 @@ async def llm_verify(articles: list[Article], selected: SelectedSense) -> tuple[
                     [("system", system), ("human", f"아래 기사들을 판정하라.\n\n{_articles_block(batch)}")]
                 )
             except Exception as e:
-                print(f"  [경고] LLM 판정 실패 ({type(e).__name__}) — 기사 {len(batch)}건은 판정하지 않음")
+                print(f"  [경고] LLM 판정 실패 ({type(e).__name__}) — 기사 {len(batch)}건은 다시 묻는다")
                 return []
         verdicts, seen = [], set()
         for v in result.verdicts:
@@ -272,10 +531,20 @@ async def llm_verify(articles: list[Article], selected: SelectedSense) -> tuple[
                                         v.reason.strip()[:200], settings.chat_model))
         return verdicts
 
-    batches = [articles[i:i + LLM_BATCH_SIZE] for i in range(0, len(articles), LLM_BATCH_SIZE)]
-    verdicts = [v for vs in await asyncio.gather(*(judge(b) for b in batches)) for v in vs]
-    judged = {v.link for v in verdicts}
-    return verdicts, [a.link for a in articles if a.link not in judged]
+    async def judge_all(batches: list[list[Article]]) -> list[Verdict]:
+        return [v for vs in await asyncio.gather(*(judge(b) for b in batches)) for v in vs]
+
+    verdicts = await judge_all([articles[i:i + LLM_BATCH_SIZE] for i in range(0, len(articles), LLM_BATCH_SIZE)])
+    n = 0
+    while True:
+        judged = {v.link for v in verdicts}
+        missing = [a for a in articles if a.link not in judged]
+        if not missing:
+            return verdicts, []
+        n += 1
+        print(f"  [다시 묻기 {n}회차] LLM이 답하지 않은 기사 {len(missing)}건을 1건씩 다시 판정합니다")
+        await asyncio.sleep(min(LLM_RETRY_WAIT_SECONDS * n, LLM_RETRY_WAIT_MAX_SECONDS))
+        verdicts += await judge_all([[a] for a in missing])           # 답이 없던 기사만 1건씩 다시
 
 
 # ---------------------------------------------------------------------------
@@ -290,19 +559,32 @@ async def filter_articles(
 ) -> FilterOutcome:
     """[메모리 버전] 중복 제거 → 규칙 → LLM. 기사 목록은 바꾸지 않고 판정 결과만 돌려준다.
     keep: 중복으로 바꾸지 않을 기사 link (정답 라벨 붙은 기사, find_duplicates 참고)"""
-    await embed_articles(articles)
-    duplicates = find_duplicates(articles, existing, keep=keep)
+    with timing.timed("새 기사 임베딩") as t:
+        t.note = f"{sum(a.embedding is None for a in articles)}건 계산"
+        await embed_articles(articles)
+    with timing.timed("중복 제거용 임베딩(제목 · 검색어 문단)") as t:
+        t.note = f"기준 {','.join(_dedup_criteria())}"
+        await embed_for_dedup(list(articles) + list(existing), selected.match_terms)
+    with timing.timed("중복 비교") as t:
+        duplicates = find_duplicates(articles, existing, keep=keep, terms=selected.match_terms)
+        t.note = f"기사 {len(articles)}건 vs 대표 {len(existing)}건 → 중복 {len(duplicates)}건"
     candidates = [a for a in articles if a.link not in duplicates]
 
     rule_verdicts, to_llm = [], []
-    for a in candidates:
-        v = rule_verdict(a, selected)
-        if v:
-            rule_verdicts.append(v)
-        else:
-            to_llm.append(a)
+    with timing.timed("1차 규칙 필터") as t:
+        for a in candidates:
+            v = rule_verdict(a, selected)
+            if v:
+                rule_verdicts.append(v)
+            else:
+                to_llm.append(a)
+        t.note = f"무관 {len(rule_verdicts)}건, LLM으로 {len(to_llm)}건"
 
-    llm_verdicts, unjudged = await llm_verify(to_llm, selected)
+    with timing.timed("2차 LLM 판정") as t:
+        llm_verdicts, unjudged = await llm_verify(to_llm, selected)
+        batches = -(-len(to_llm) // LLM_BATCH_SIZE)
+        t.note = (f"{len(to_llm)}건, 요청 {batches}번 (배치 {LLM_BATCH_SIZE}, 동시 {LLM_CONCURRENCY})"
+                  f"{f', 실패 {len(unjudged)}건' if unjudged else ''}")
     return FilterOutcome(duplicates, rule_verdicts + llm_verdicts, unjudged)
 
 
@@ -318,13 +600,14 @@ def _labeled_links(topic_id: int) -> set[str]:
     return {r["link"] for r in rows}
 
 
-async def dedup_topic(topic_id: int) -> dict[str, str]:
+async def dedup_topic(topic_id: int, terms: list[str] | None = None) -> dict[str, str]:
     """[DB 버전, 2단계만] 판정 없이 중복 표시만 한다. 라벨 붙이기 전에 쓴다 (python evaluate.py label).
 
     - LLM을 부르지 않는다. 기사 임베딩만 계산한다 (이미 DB에 있으면 다시 계산 안 함, 크레딧 거의 0).
     - 아직 판정하지 않은 기사끼리, 그리고 이미 판정한 대표 기사와 비교한다 (filter_topic과 같은 기준).
     - 대표 기사는 판정하지 않은 채로 남는다 → 나중에 filter-all이 대표 기사만 규칙·LLM으로 판정한다.
     - 여러 번 실행해도 결과가 같다. 라벨 붙은 기사는 중복으로 바뀌지 않는다.
+    - terms: 검색어·별칭 (SelectedSense.match_terms). content·jaccard 기준에서 검색어가 들어간 문단을 비교한다.
     돌려주는 값: 이번에 새로 중복으로 표시한 {중복 기사 link: 대표 기사 link}
     """
     from qupict import db
@@ -335,9 +618,11 @@ async def dedup_topic(topic_id: int) -> dict[str, str]:
     existing = db.get_topic_articles(topic_id, statuses=STATUSES, include_duplicates=False)
     missing = [a for a in new + existing if a.embedding is None]
     await embed_articles(new + existing)
-    duplicates = find_duplicates(new, existing, keep=_labeled_links(topic_id))
+    await embed_for_dedup(new + existing, terms)
+    duplicates = find_duplicates(new, existing, keep=_labeled_links(topic_id), terms=terms)
     db.save_article_embeddings(missing)
     db.save_duplicates(topic_id, duplicates)
+    db.copy_duplicate_judgments(topic_id)     # 이미 판정된 대표 기사의 중복이면 그 판정을 바로 받는다
     return duplicates
 
 
@@ -355,18 +640,42 @@ async def filter_topic(
     """
     from qupict import db
 
-    if redo:
-        db.reset_topic_filter(topic_id)
-    new = db.get_topic_articles(topic_id, period_days=period_days, unjudged_only=True)
-    if not new:
-        return FilterOutcome()
-    existing = db.get_topic_articles(topic_id, statuses=STATUSES, include_duplicates=False)
+    with timing.timed("판정할 기사 불러오기(DB)") as t:
+        if redo:
+            await asyncio.to_thread(db.reset_topic_filter, topic_id)
+        # 세 조회는 서로 상관없어서 동시에 한다 (DB 연결 1.6초씩 3번 → 한 번 정도). 읽는 내용은 예전과 같다
+        new, existing, keep = await asyncio.to_thread(
+            run_parallel,
+            lambda: db.get_topic_articles(topic_id, period_days=period_days, unjudged_only=True),
+            lambda: db.get_topic_articles(topic_id, statuses=STATUSES, include_duplicates=False),
+            lambda: _labeled_links(topic_id),
+        )
+        t.note = f"새 기사 {len(new)}건"
+        if not new:
+            # 판정할 새 기사가 없어도, 판정이 빈 중복 기사(예전 데이터 · 라벨링 전 중복 표시)가 있으면 채워 둔다
+            await asyncio.to_thread(db.copy_duplicate_judgments, topic_id)
+            return FilterOutcome()
+        t.note += f", 판정된 대표 {len(existing)}건"
 
     missing = [a for a in new + existing if a.embedding is None]   # 임베딩을 새로 계산할 기사
-    await embed_articles(existing)
-    outcome = await filter_articles(new, selected, existing, keep=_labeled_links(topic_id))
-    db.save_article_embeddings(missing)
-    db.save_duplicates(topic_id, outcome.duplicates)
-    db.save_judgments(topic_id, [db.Judgment(v.link, v.status, v.stage, v.reason, v.model)
-                                 for v in outcome.verdicts])
+    with timing.timed("기사 임베딩(기존 · 새, 동시)") as t:
+        t.note = f"{len(missing)}건 계산"
+        # 예전처럼 기존 기사 / 새 기사를 따로 요청하되(같은 요청 묶음 → 같은 임베딩 값) 두 요청을 동시에 보낸다.
+        # 한 요청으로 합치면 묶음이 달라져 값이 아주 조금 달라질 수 있다 (indexing.build_article_chunks 참고)
+        await asyncio.gather(embed_articles(existing), embed_articles(new))
+    outcome = await filter_articles(new, selected, existing, keep=keep)
+    with timing.timed("판정 저장(DB, 동시)"):
+        # 세 저장은 서로 다른 칸·행을 고친다 (기사 임베딩 / 중복 기사 행 / 판정한 대표 기사 행) → 동시에 해도 결과가 같다
+        await asyncio.to_thread(
+            run_parallel,
+            lambda: db.save_article_embeddings(missing),
+            lambda: db.save_duplicates(topic_id, outcome.duplicates),
+            lambda: db.save_judgments(topic_id, [db.Judgment(v.link, v.status, v.stage, v.reason, v.model)
+                                                 for v in outcome.verdicts]),
+        )
+    with timing.timed("중복 기사에 대표 판정 복사(DB)") as t:
+        # 중복 기사는 따로 판정하지 않고 대표 기사의 판정(관련/무관)을 그대로 받는다 → 판정이 비는 행이 없게.
+        # 위 저장이 모두 끝난 뒤에 해야 한다 (대표 기사의 판정이 먼저 있어야 복사할 수 있음).
+        copied = await asyncio.to_thread(db.copy_duplicate_judgments, topic_id)
+        t.note = f"{copied}건"
     return outcome

@@ -9,6 +9,7 @@ sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2]
 import admin, evaluate, run
 from qupict import pipeline as P, db, sense
 from qupict.schemas import Sense, SenseCandidates, SelectedSense
+sense.remember_selection = lambda c, s: None   # 고른 의미를 실제 DB에 기록하지 않게
 
 # 1) 명령 해석: 서비스(run.py) / 서비스 DB 관리(admin.py) / 평가(evaluate.py)
 called = {}
@@ -99,7 +100,7 @@ saves = []
 db.save_labels = lambda tid, labels: saves.append(dict(labels))
 import qupict.filtering as F2
 dedup_calls = []
-async def fake_dedup(tid):
+async def fake_dedup(tid, terms=None):
     dedup_calls.append(tid)
     return {"D1": "L0", "D2": "L3"}
 F2.dedup_topic = fake_dedup
@@ -138,7 +139,7 @@ from qupict.collect import CollectResult
 P3 = importlib.reload(P2)
 _sel = SelectedSense(query="강남", sense=Sense(name="방송인 강남", definition="d"))
 async def fake_collect(sel, days, mx): return CollectResult(3, searched=mx, reused=0, crawled=mx, crawl_failed=0, images=0)
-async def fake_dedup2(tid): return {"x": "y", "z": "y"}
+async def fake_dedup2(tid, terms=None): return {"x": "y", "z": "y"}
 P3.collect_to_db, P3.dedup_topic, P3.count_representatives = fake_collect, fake_dedup2, lambda tid: 120
 r = asyncio.run(P3.collect_target(_sel))
 assert r.collected.searched == 300 and r.duplicates == 2 and r.representatives == 120

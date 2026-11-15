@@ -6,7 +6,7 @@ articles.link가 UNIQUE라서 link만 알면 된다. id는 이 파일 안에서�
 
 단계별로 쓰는 함수
   초기화       init_db()
-  [0단계]      get_sense_candidates / save_sense_candidates
+  [0단계]      get_sense_candidates / save_sense_candidates / record_sense_use
                save_topic / get_topic / mark_topic_collected
   [1단계]      link_known_articles  → DB에 이미 있는 기사는 topic에 연결만 하고, 새로 크롤링할 것만 돌려준다
                save_articles
@@ -21,6 +21,9 @@ period_days일 전 ~ now 사이에 발행된(pub_date) 기사만 돌려준다.
 """
 from __future__ import annotations
 
+import atexit
+import threading
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -32,6 +35,7 @@ import psycopg
 from pgvector.psycopg import register_vector
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+from psycopg_pool import ConnectionPool
 
 from qupict.config import settings
 from qupict.schemas import Article, ArticleImage, NewsMeta, SelectedSense, Sense, SenseCandidates
@@ -52,46 +56,72 @@ def _open(**kwargs) -> psycopg.Connection:
     return psycopg.connect(settings.database_url, prepare_threshold=None, connect_timeout=10, **kwargs)
 
 
-_shared: Optional[psycopg.Connection] = None   # reuse_connection() 안에서 connect()가 같이 쓰는 연결
+# 커넥션 풀: 연결을 매번 새로 열지 않고 열어 둔 연결을 돌려 쓴다.
+#   측정(2026-11-10, 팀 Supabase): 새 연결 1번 = 약 1.4~1.6초 (연결 + 인증), 열린 연결에서 쿼리 1번 = 약 80ms.
+#   예전에는 db 함수를 부를 때마다 새로 연결해서, 함수 하나에 1.5초 이상이 걸렸다.
+# connect()의 사용법·동작(정상 종료면 commit, 예외면 rollback, 결과는 dict 행)은 예전과 같다.
+POOL_MIN_SIZE = 2           # 항상 열어 두는 연결 수
+POOL_MAX_SIZE = 8           # 동시에 쓸 수 있는 최대 연결 수 (Supabase 무료 플랜 동시 연결 한도보다 넉넉히 낮게)
+POOL_CHECK_AFTER = 30.0     # 이 초보다 오래 쉬던 연결은 쓰기 전에 살아 있는지 확인한다 (서버가 끊었을 수 있음)
+
+_pool: Optional[ConnectionPool] = None
+_pool_lock = threading.Lock()
+
+
+def _configure(conn: psycopg.Connection) -> None:
+    register_vector(conn)
+
+
+def _check(conn: psycopg.Connection) -> None:
+    """빌려주기 전 확인. 최근에 쓴 연결은 확인을 건너뛴다 (확인도 왕복 1번 = 약 80ms라서).
+    오래 쉬던 연결이 끊겨 있으면 예외가 나고, 풀이 그 연결을 버리고 새 연결을 준다."""
+    if time.monotonic() - getattr(conn, "_qupict_last_used", 0.0) > POOL_CHECK_AFTER:
+        conn.execute("SELECT 1")
+
+
+def _reset(conn: psycopg.Connection) -> None:
+    conn._qupict_last_used = time.monotonic()    # 풀에 돌아온 시각 (_check에서 씀)
+
+
+def _get_pool() -> ConnectionPool:
+    global _pool
+    with _pool_lock:
+        if _pool is None:
+            if not settings.database_url:
+                raise EnvironmentError("DATABASE_URL이 설정되지 않았습니다. .env 파일을 확인하세요 (.env.example 참고).")
+            _pool = ConnectionPool(
+                settings.database_url,
+                min_size=POOL_MIN_SIZE, max_size=POOL_MAX_SIZE,
+                # _open()과 같은 설정 (prepare_threshold=None: Supabase 풀러는 prepared statement를 못 쓸 수 있음)
+                kwargs={"prepare_threshold": None, "connect_timeout": 10, "row_factory": dict_row},
+                configure=_configure, check=_check, reset=_reset,
+                max_idle=300, max_lifetime=1800,   # 5분 넘게 놀거나 30분 지난 연결은 닫는다 (min_size 넘는 것만)
+                name="qupict", open=True,
+            )
+            atexit.register(close_pool)
+        return _pool
+
+
+def warm_up() -> None:
+    """풀을 미리 열어 둔다 (첫 연결 약 1.4초가 뒤에서 진행되고 바로 돌아온다). 웹 서버를 켤 때 부른다."""
+    if settings.database_url:
+        _get_pool()
+
+
+def close_pool() -> None:
+    """열어 둔 연결을 모두 닫는다 (프로그램이 끝날 때 자동으로 불린다)."""
+    global _pool
+    with _pool_lock:
+        if _pool is not None:
+            _pool.close(timeout=2)
+            _pool = None
 
 
 @contextmanager
 def connect() -> Iterator[psycopg.Connection]:
-    """DB 연결. with 블록이 정상 종료되면 commit, 예외가 나면 rollback 된다.
-    reuse_connection() 안이면 새로 연결하지 않고 그 연결을 쓴다 (블록마다 commit/rollback은 똑같이)."""
-    global _shared
-    if _shared is not None:
-        if _shared.closed:                       # 오래 돌다 서버가 끊었으면 다시 연결
-            _shared = _open(row_factory=dict_row)
-            register_vector(_shared)
-        try:
-            yield _shared
-        except BaseException:
-            _shared.rollback()
-            raise
-        else:
-            _shared.commit()
-        return
-    with _open(row_factory=dict_row) as conn:
-        register_vector(conn)
+    """DB 연결 (풀에서 빌려 쓰고 돌려준다). with 블록이 정상 종료되면 commit, 예외가 나면 rollback 된다."""
+    with _get_pool().connection() as conn:
         yield conn
-
-
-@contextmanager
-def reuse_connection() -> Iterator[None]:
-    """이 블록 안의 connect()가 연결 하나를 같이 쓴다. 새 연결은 1번에 1~2초라, 검색을 수백 번 하는
-    실험(exp-b · exp-c · sim)에서 쓴다. 한 스레드에서만 쓸 것 (웹 서버처럼 동시에 부르는 곳에는 쓰지 않는다)."""
-    global _shared
-    if _shared is not None:                      # 이미 안쪽이면 그대로
-        yield
-        return
-    _shared = _open(row_factory=dict_row)
-    register_vector(_shared)
-    try:
-        yield
-    finally:
-        conn, _shared = _shared, None
-        conn.close()
 
 
 def init_db() -> None:
@@ -129,25 +159,54 @@ def _article_ids(conn: psycopg.Connection, links: Iterable[str]) -> dict[str, in
 # ---------------------------------------------------------------- [0단계] 의미 후보
 
 def get_sense_candidates(query: str) -> Optional[SenseCandidates]:
-    """저장된 LLM 의미 후보를 돌려준다. 없으면 None (→ LLM을 불러 만들고 save_sense_candidates)."""
+    """저장된 의미 후보를 돌려준다: LLM 후보 + 예전에 "기타"로 직접 입력해 저장된 의미.
+    많이 고른 순(use_count) → LLM 순위 → 직접 입력(먼저 저장한 순). 저장된 게 없으면 None."""
     with connect() as conn:
         rows = conn.execute(
-            """SELECT name, definition, aliases, related_terms, model FROM query_senses
-               WHERE query = %s AND NOT is_custom ORDER BY rank""",
+            """SELECT name, definition, aliases, related_terms, is_custom, includes, use_count, model
+               FROM query_senses WHERE query = %s
+               ORDER BY use_count DESC, is_custom, rank NULLS LAST, created_at, id""",
             (query,),
         ).fetchall()
     if not rows:
         return None
     senses = [Sense(name=r["name"], definition=r["definition"], aliases=r["aliases"],
-                    related_terms=r["related_terms"]) for r in rows]
-    return SenseCandidates(query=query, senses=senses, model=rows[0]["model"])
+                    related_terms=r["related_terms"], is_custom=r["is_custom"]) for r in rows]
+    model = next((r["model"] for r in rows if not r["is_custom"]), "")
+    return SenseCandidates(
+        query=query, senses=senses, model=model,
+        custom_includes={r["name"]: list(r["includes"]) for r in rows if r["is_custom"]},
+        use_counts={r["name"]: r["use_count"] for r in rows},
+    )
 
 
 def save_sense_candidates(candidates: SenseCandidates) -> None:
-    """LLM 의미 후보를 저장한다. 같은 (검색어, 이름)이 있으면 내용을 갱신한다."""
+    """LLM 의미 후보를 저장한다. 같은 (검색어, 이름)이 있으면 내용을 갱신한다 (고른 횟수는 그대로)."""
     with connect() as conn:
         for rank, s in enumerate(candidates.senses, start=1):
-            _upsert_sense(conn, candidates.query, s, rank, candidates.model)
+            if not s.is_custom:
+                _upsert_sense(conn, candidates.query, s, rank, candidates.model)
+
+
+def record_sense_use(query: str, sense: Sense, includes: Iterable[str] = ()) -> None:
+    """사용자가 이 의미를 골랐다고 기록한다 (use_count + 1).
+    직접 입력한 의미는 처음이면 저장한다 → 다음부터 이 검색어의 후보로 나온다 (LLM 다시 안 부름)."""
+    with connect() as conn:
+        if sense.is_custom:
+            # 같은 이름의 LLM 후보가 있으면 덮어쓰지 않는다 (WHERE query_senses.is_custom)
+            conn.execute(
+                """INSERT INTO query_senses (query, rank, name, definition, aliases, related_terms, is_custom, includes)
+                   VALUES (%s, NULL, %s, %s, %s, %s, TRUE, %s)
+                   ON CONFLICT (query, name) DO UPDATE SET
+                       definition = EXCLUDED.definition, aliases = EXCLUDED.aliases,
+                       related_terms = EXCLUDED.related_terms, includes = EXCLUDED.includes
+                   WHERE query_senses.is_custom""",
+                (query, sense.name, sense.definition, sense.aliases, sense.related_terms, list(includes)),
+            )
+        conn.execute(
+            "UPDATE query_senses SET use_count = use_count + 1, last_used_at = now() WHERE query = %s AND name = %s",
+            (query, sense.name),
+        )
 
 
 def _upsert_sense(conn: psycopg.Connection, query: str, s: Sense, rank: Optional[int], model: str) -> int:
@@ -242,39 +301,51 @@ def link_known_articles(topic_id: int, metas: list[NewsMeta]) -> list[NewsMeta]:
 
 
 def save_articles(topic_id: int, articles: list[Article]) -> dict[str, int]:
-    """기사·이미지를 저장하고 topic에 연결한다. 이미 있는 기사는 본문 등을 갱신한다. {link: id}를 돌려준다."""
-    ids: dict[str, int] = {}
-    with connect() as conn:
-        for a in articles:
-            row = conn.execute(
-                """INSERT INTO articles (link, title, press, pub_date, description, content, collected_at,
-                                         embedding, embedding_model)
-                   VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, now()), %s, %s)
-                   ON CONFLICT (link) DO UPDATE SET
-                       title = EXCLUDED.title, press = COALESCE(EXCLUDED.press, articles.press),
-                       pub_date = COALESCE(EXCLUDED.pub_date, articles.pub_date),
-                       description = EXCLUDED.description, content = EXCLUDED.content,
-                       collected_at = EXCLUDED.collected_at,
-                       embedding = COALESCE(EXCLUDED.embedding, articles.embedding),
-                       embedding_model = COALESCE(EXCLUDED.embedding_model, articles.embedding_model)
-                   RETURNING id""",
-                (a.link, a.title, a.press, a.pub_date, a.description, a.content, a.collected_at,
-                 _vec(a.embedding), settings.embedding_model if a.embedding is not None else None),
-            ).fetchone()
-            article_id = row["id"]
-            ids[a.link] = article_id
-            with conn.cursor() as cur:
-                cur.executemany(
-                    """INSERT INTO article_images (article_id, position, url, caption) VALUES (%s, %s, %s, %s)
-                       ON CONFLICT (article_id, url) DO UPDATE SET
-                           position = EXCLUDED.position, caption = EXCLUDED.caption""",
-                    [(article_id, i, img.url, img.caption) for i, img in enumerate(a.images)],
-                )
-            conn.execute(
-                """INSERT INTO article_topics (article_id, topic_id, search_term) VALUES (%s, %s, %s)
-                   ON CONFLICT (article_id, topic_id) DO NOTHING""",
-                (article_id, topic_id, a.search_term),
-            )
+    """기사·이미지를 저장하고 topic에 연결한다. 이미 있는 기사는 본문 등을 갱신한다. {link: id}를 돌려준다.
+
+    기사 전체를 한꺼번에 보낸다 (executemany: 여러 행을 묶어 한 번에 전송). 예전에는 기사마다 쿼리 3번
+    (기사 · 이미지 · topic 연결)을 따로 보내서, 기사 86건이면 왕복 약 260번(× 약 80ms ≈ 20초)이었다.
+    지금은 기사 전체 → 이미지 전체 → topic 연결 전체 순서로 3묶음. 행마다 하는 일(SQL)은 예전과 같아서
+    저장되는 내용도 같다.
+    """
+    if not articles:
+        return {}
+    with connect() as conn, conn.cursor() as cur:
+        cur.executemany(
+            """INSERT INTO articles (link, title, press, pub_date, description, content, collected_at,
+                                     embedding, embedding_model)
+               VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, now()), %s, %s)
+               ON CONFLICT (link) DO UPDATE SET
+                   title = EXCLUDED.title, press = COALESCE(EXCLUDED.press, articles.press),
+                   pub_date = COALESCE(EXCLUDED.pub_date, articles.pub_date),
+                   description = EXCLUDED.description, content = EXCLUDED.content,
+                   collected_at = EXCLUDED.collected_at,
+                   embedding = COALESCE(EXCLUDED.embedding, articles.embedding),
+                   embedding_model = COALESCE(EXCLUDED.embedding_model, articles.embedding_model)
+               RETURNING id""",
+            [(a.link, a.title, a.press, a.pub_date, a.description, a.content, a.collected_at,
+              _vec(a.embedding), settings.embedding_model if a.embedding is not None else None)
+             for a in articles],
+            returning=True,
+        )
+        article_ids = []                     # 넣은 순서대로 기사 id (RETURNING 결과가 행마다 하나씩 온다)
+        while True:
+            article_ids.append(cur.fetchone()["id"])
+            if not cur.nextset():
+                break
+        ids = {a.link: article_id for a, article_id in zip(articles, article_ids)}
+        cur.executemany(
+            """INSERT INTO article_images (article_id, position, url, caption) VALUES (%s, %s, %s, %s)
+               ON CONFLICT (article_id, url) DO UPDATE SET
+                   position = EXCLUDED.position, caption = EXCLUDED.caption""",
+            [(article_id, i, img.url, img.caption)
+             for a, article_id in zip(articles, article_ids) for i, img in enumerate(a.images)],
+        )
+        cur.executemany(
+            """INSERT INTO article_topics (article_id, topic_id, search_term) VALUES (%s, %s, %s)
+               ON CONFLICT (article_id, topic_id) DO NOTHING""",
+            [(article_id, topic_id, a.search_term) for a, article_id in zip(articles, article_ids)],
+        )
     return ids
 
 
@@ -300,7 +371,7 @@ def get_topic_articles(
         where.append("a.pub_date BETWEEN %(since)s AND %(until)s")
         params.update(since=since, until=until)
     if statuses is not None:
-        where.append("at.status = ANY(%(statuses)s)")
+        where.append("at.status = ANY(%(statuses)s) AND at.duplicate_of IS NULL")
         params["statuses"] = list(statuses)
     if not include_duplicates:
         where.append("at.duplicate_of IS NULL")
@@ -356,16 +427,14 @@ def reset_topic_filter(topic_id: int) -> None:
 
 
 def save_duplicates(topic_id: int, duplicates: dict[str, str]) -> None:
-    """2단계 결과 저장. duplicates = {중복 기사 link: 대표 기사 link}. 중복 기사는 판정을 비운다."""
+    """2단계 결과 저장. duplicates = {중복 기사 link: 대표 기사 link}. 판정은 copy_duplicate_judgments가 채운다."""
     with connect() as conn:
         ids = _article_ids(conn, [*duplicates.keys(), *duplicates.values()])
         rows = [(ids[rep], ids[dup], topic_id) for dup, rep in duplicates.items()
                 if dup in ids and rep in ids and dup != rep]
         with conn.cursor() as cur:
             cur.executemany(
-                """UPDATE article_topics SET duplicate_of = %s, status = NULL, stage = NULL, reason = NULL,
-                       judged_model = NULL, judged_at = NULL
-                   WHERE article_id = %s AND topic_id = %s""",
+                "UPDATE article_topics SET duplicate_of = %s WHERE article_id = %s AND topic_id = %s",
                 rows,
             )
 
@@ -389,11 +458,27 @@ def save_judgments(topic_id: int, judgments: list[Judgment]) -> None:
         with conn.cursor() as cur:
             cur.executemany(
                 """UPDATE article_topics SET status = %s, stage = %s, reason = %s, judged_model = %s,
-                       judged_at = now(), duplicate_of = NULL
+                       judged_at = now()
                    WHERE article_id = %s AND topic_id = %s""",
                 [(j.status, j.stage, j.reason, j.model, ids[j.link], topic_id)
                  for j in judgments if j.link in ids],
             )
+
+
+def copy_duplicate_judgments(topic_id: int) -> int:
+    """중복 기사에 대표 기사의 판정(관련/무관)을 복사한다. 판정이 끝난 뒤 부른다. 바꾼 행 수를 돌려준다."""
+    with connect() as conn:
+        cur = conn.execute(
+            """UPDATE article_topics d
+               SET status = r.status, stage = r.stage, judged_model = r.judged_model, judged_at = now(),
+                   reason = '중복: 대표 기사 판정을 따름'
+               FROM article_topics r
+               WHERE d.topic_id = %(t)s AND r.topic_id = %(t)s
+                 AND d.duplicate_of = r.article_id AND r.status IS NOT NULL
+                 AND d.status IS DISTINCT FROM r.status""",
+            {"t": topic_id},
+        )
+        return cur.rowcount
 
 
 def save_labels(topic_id: int, labels: dict[str, str]) -> None:
@@ -427,7 +512,8 @@ def get_images_to_describe(topic_id: int, statuses: Iterable[str] = ("관련",))
             """SELECT i.id, a.link, i.url, i.caption FROM article_images i
                JOIN articles a ON a.id = i.article_id
                JOIN article_topics at ON at.article_id = a.id
-               WHERE at.topic_id = %s AND at.status = ANY(%s) AND i.llm_description IS NULL
+               WHERE at.topic_id = %s AND at.status = ANY(%s) AND at.duplicate_of IS NULL
+                 AND i.llm_description IS NULL
                ORDER BY a.id, i.position""",
             (topic_id, list(statuses)),
         ).fetchall()
@@ -435,11 +521,18 @@ def get_images_to_describe(topic_id: int, statuses: Iterable[str] = ("관련",))
 
 
 def save_image_description(image_id: int, description: str, model: Optional[str] = None) -> None:
-    with connect() as conn:
-        conn.execute(
+    save_image_descriptions([(image_id, description)], model)
+
+
+def save_image_descriptions(items: list[tuple[int, str]], model: Optional[str] = None) -> None:
+    """여러 이미지의 LLM 설명을 한 번에 저장한다. items = [(image_id, 설명)]"""
+    if not items:
+        return
+    with connect() as conn, conn.cursor() as cur:
+        cur.executemany(
             """UPDATE article_images SET llm_description = %s, described_model = %s, described_at = now()
                WHERE id = %s""",
-            (description, model or settings.chat_model, image_id),
+            [(description, model or settings.chat_model, image_id) for image_id, description in items],
         )
 
 
@@ -448,7 +541,7 @@ def get_articles_without_chunks(topic_id: int, statuses: Iterable[str] = ("관�
     with connect() as conn:
         links = [r["link"] for r in conn.execute(
             """SELECT a.link FROM articles a JOIN article_topics at ON at.article_id = a.id
-               WHERE at.topic_id = %s AND at.status = ANY(%s)
+               WHERE at.topic_id = %s AND at.status = ANY(%s) AND at.duplicate_of IS NULL
                  AND NOT EXISTS (SELECT 1 FROM article_chunks c WHERE c.article_id = a.id)""",
             (topic_id, list(statuses)),
         ).fetchall()]
@@ -466,19 +559,31 @@ class Chunk:
 
 def save_chunks(article_link: str, chunks: list[Chunk], model: Optional[str] = None) -> None:
     """기사 하나의 청크를 통째로 교체 저장한다 (청크 규칙을 바꿔 다시 돌려도 안전)."""
+    save_chunks_many([(article_link, chunks)], model)
+
+
+def save_chunks_many(items: list[tuple[str, list[Chunk]]], model: Optional[str] = None) -> None:
+    """여러 기사의 청크를 한 번에 통째로 교체 저장한다. items = [(기사 link, 청크 목록)]
+
+    예전에는 기사마다 save_chunks(연결 1번 + 쿼리 3번)를 불렀다. 여기서는 연결 1번에
+    기사 id 조회 1번 · 이전 청크 지우기 1번 · 새 청크 넣기 1묶음으로 끝낸다. 저장되는 내용은 같다.
+    DB에 없는 기사가 있으면 아무것도 저장하지 않고 ValueError를 낸다.
+    """
+    if not items:
+        return
     with connect() as conn:
-        ids = _article_ids(conn, [article_link])
-        if article_link not in ids:
-            raise ValueError(f"DB에 없는 기사입니다: {article_link}")
-        article_id = ids[article_link]
-        conn.execute("DELETE FROM article_chunks WHERE article_id = %s", (article_id,))
+        ids = _article_ids(conn, [link for link, _ in items])
+        missing = [link for link, _ in items if link not in ids]
+        if missing:
+            raise ValueError(f"DB에 없는 기사입니다: {missing[0]}" + (f" 외 {len(missing) - 1}건" if len(missing) > 1 else ""))
+        conn.execute("DELETE FROM article_chunks WHERE article_id = ANY(%s)", ([ids[link] for link, _ in items],))
         with conn.cursor() as cur:
             cur.executemany(
                 """INSERT INTO article_chunks (article_id, chunk_index, source, image_id, content,
                                                embedding, embedding_model)
                    VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-                [(article_id, i, c.source, c.image_id, c.content, _vec(c.embedding),
-                  model or settings.embedding_model) for i, c in enumerate(chunks)],
+                [(ids[link], i, c.source, c.image_id, c.content, _vec(c.embedding),
+                  model or settings.embedding_model) for link, chunks in items for i, c in enumerate(chunks)],
             )
 
 
@@ -509,7 +614,7 @@ def search_chunks(
                FROM article_chunks c
                JOIN articles a ON a.id = c.article_id
                JOIN article_topics at ON at.article_id = a.id
-               WHERE at.topic_id = %(topic_id)s AND at.status = ANY(%(statuses)s)
+               WHERE at.topic_id = %(topic_id)s AND at.status = ANY(%(statuses)s) AND at.duplicate_of IS NULL
                  AND c.embedding IS NOT NULL
                  AND (%(since)s::timestamptz IS NULL
                       OR a.pub_date BETWEEN %(since)s::timestamptz AND %(until)s::timestamptz)
