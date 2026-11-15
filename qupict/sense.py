@@ -11,7 +11,7 @@
       (generate_sense_candidates = DB 없이 LLM만 부르는 함수)
   후보가 2개 이상  → 사용자가 하나 선택       → select_sense(...)
   후보가 1개       → 자동 선택               → select_sense(..., 0)
-  후보가 0개 / "기타" → 사용자가 직접 설명 입력 → build_custom_sense(...) → select_custom_sense(...)
+  후보가 0개 / "기타" → 사용자가 직접 설명 입력 → select_described_sense(...) (이름은 설명 그대로, 기준은 설명)
   DB에 저장된 topic 다시 처리 → 의미 이름으로 후보 찾기 → select_sense_by_name(...)
 
 의미·별칭·연관어는 LLM이 만든 후보만 쓴다 (사람이 적은 값으로 덮어쓰지 않는다).
@@ -223,13 +223,34 @@ def load_sense_candidates(query: str) -> tuple[SenseCandidates, str]:
 
 _CUSTOM_SYSTEM_PROMPT = """\
 사용자가 뉴스 검색어와, 그 검색어로 찾고 싶은 대상을 직접 설명했습니다.
-사용자의 설명을 그대로 존중해서 의미 하나를 정리하세요.
+사용자의 설명을 그대로 존중해서 의미 하나를 정리하세요. 기준은 검색어가 아니라 사용자의 설명입니다.
+(예: 검색어 "서울여대" + 설명 "서울 소재 여자대학교" → 찾는 대상은 서울여자대학교 한 곳이 아니라 서울에 있는 여자대학교 전체)
 
-- name: 사용자의 설명을 줄인 짧은 이름
 - definition: 사용자의 설명을 한 줄로 정리 (사용자가 말하지 않은 사실을 지어내지 마세요)
-- aliases: 사용자가 언급했거나 확실히 아는 다른 표기만. 검색어 원문은 넣지 마세요.
-- related_terms: 이 대상을 다룬 기사에 나올 만한 단어 3~8개. 설명에서 근거를 찾을 수 없으면 적게 넣으세요.
+- aliases: 이 대상을 가리키는 다른 표기. 검색어 원문은 넣지 마세요.
+  대상이 여러 개를 묶은 것이면(예: "서울 소재 여자대학교", "국내 이동통신 3사") 그 각각의 이름을
+  기사에 흔히 쓰는 표기로 넣으세요 (예: 이화여대, 숙명여대, 성신여대 …). 확실히 아는 것만, 최대 8개.
+- related_terms: 이 대상을 다룬 기사에 나올 만한 단어 3~8개. aliases에 넣은 이름은 빼세요.
+  설명에서 근거를 찾을 수 없으면 적게 넣으세요.
+- includes: 아래 [검색어의 다른 뜻 후보] 중 사용자가 찾는 대상과 같거나 그 안에 포함되는 후보의 이름 (그대로 복사).
+  예: 설명이 "서울 소재 여자대학교"면 후보 "서울여자대학교"는 포함됩니다. 해당 없으면 빈 목록.
 """
+
+# 직접 입력한 의미의 이름 = 사용자가 쓴 설명 그대로 (이 길이까지).
+# 예전에는 LLM이 줄인 이름을 써서, "서울 소재 여자대학교"가 "서울여자대학교"로 바뀌어 LLM 후보와 이름이 같아졌다
+# → 같은 topic(검색어, 의미 이름)으로 합쳐져 예전 서울여자대학교 수집·판정을 그대로 쓰고 topic 기준까지 덮어썼다
+# (확인 2026-11-15, topic 9). 이름이 같아지는 건 사용자가 후보 이름을 그대로 입력했을 때뿐이다.
+CUSTOM_NAME_MAX_CHARS = 30
+
+
+class _CustomSense(BaseModel):
+    """직접 입력 → LLM이 정리한 의미 (이름은 사용자 설명을 그대로 쓰므로 묻지 않는다)."""
+    definition: str = Field(description="사용자의 설명을 한 줄로 정리")
+    aliases: list[str] = Field(default_factory=list, description="대상을 가리키는 표기. 여러 개를 묶은 대상이면 각각의 이름")
+    related_terms: list[str] = Field(default_factory=list, description="기사에 나올 만한 단어 3~8개")
+    includes: list[str] = Field(default_factory=list,
+                                description="[검색어의 다른 뜻 후보] 중 찾는 대상과 같거나 그 안에 포함되는 후보 이름")
+
 
 _custom_llm = None
 
@@ -237,26 +258,48 @@ _custom_llm = None
 def _get_custom_llm():
     global _custom_llm
     if _custom_llm is None:
-        _custom_llm = get_structured_model(Sense)
+        _custom_llm = get_structured_model(_CustomSense)
     return _custom_llm
 
 
-def build_custom_sense(query: str, description: str) -> Sense:
-    """사용자가 직접 입력한 설명 → Sense. LLM이 실패해도 사용자 설명을 그대로 의미로 쓴다."""
+def _custom_name(description: str) -> str:
+    name = " ".join(description.split())
+    return name if len(name) <= CUSTOM_NAME_MAX_CHARS else name[:CUSTOM_NAME_MAX_CHARS - 1].rstrip() + "…"
+
+
+def describe_custom_sense(query: str, description: str,
+                          candidates: list[Sense] = ()) -> tuple[Sense, list[str]]:
+    """사용자가 직접 입력한 설명 → (Sense, 그 대상에 포함되는 LLM 후보 이름들).
+    candidates: 이 검색어의 LLM 의미 후보. 찾는 대상에 포함되는 후보는 '다른 의미'로 두지 않는다 (select_described_sense).
+    LLM이 실패해도 사용자 설명을 그대로 의미로 쓴다."""
     query, description = query.strip(), description.strip()
+    listing = "\n".join(f"- {s.name}: {s.definition}" for s in candidates) or "- (없음)"
+    includes: list[str] = []
     try:
-        sense: Sense = _get_custom_llm().invoke(
+        out: _CustomSense = _get_custom_llm().invoke(
             [("system", _CUSTOM_SYSTEM_PROMPT),
-             ("human", f"검색어: {query}\n찾고 싶은 대상: {description}")]
+             ("human", f"검색어: {query}\n찾고 싶은 대상: {description}\n\n[검색어의 다른 뜻 후보]\n{listing}")]
         )
-        sense = _clean_sense(sense, query)
+        sense = _clean_sense(Sense(name=_custom_name(description), definition=out.definition,
+                                   aliases=out.aliases[:MAX_RELATED_TERMS], related_terms=out.related_terms), query)
+        known = {s.name for s in candidates}
+        includes = [n.strip() for n in out.includes if n.strip() in known]
     except Exception:
-        sense = Sense(name=description[:30], definition=description)
+        sense = Sense(name=_custom_name(description), definition=description)
 
     # 직접 입력은 사용자의 말이 기준이므로 정의가 비면 원문을 넣는다
     if not sense.definition:
         sense = sense.model_copy(update={"definition": description})
-    return sense.model_copy(update={"is_custom": True})
+    # 포함되는 후보의 이름·별칭도 이 대상의 표기로 쓴다 (예: "서울여자대학교" 전체 이름으로 쓴 기사도 찾게)
+    included = [s for s in candidates if s.name in includes]
+    aliases = unique_terms([*sense.aliases, *(t for s in included for t in [s.name, *s.aliases])])
+    aliases = [a for a in aliases if a != query and _custom_name(a) != sense.name]
+    return sense.model_copy(update={"is_custom": True, "aliases": aliases}), includes
+
+
+def build_custom_sense(query: str, description: str) -> Sense:
+    """사용자가 직접 입력한 설명 → Sense (LLM 후보와 견주지 않는 예전 방식. 새 코드는 select_described_sense)."""
+    return describe_custom_sense(query, description)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -292,9 +335,27 @@ def select_sense(candidates: SenseCandidates, index: int) -> SelectedSense:
     return _make_selection(candidates.query, chosen, others)
 
 
-def select_custom_sense(candidates: SenseCandidates, custom: Sense) -> SelectedSense:
-    """직접 입력한 의미를 고른다. LLM 후보는 전부 '고르지 않은 의미'가 되어 배제어로 쓰인다."""
-    return _make_selection(candidates.query, custom, list(candidates.senses))
+def select_custom_sense(candidates: SenseCandidates, custom: Sense,
+                        includes: list[str] = ()) -> SelectedSense:
+    """직접 입력한 의미를 고른다. LLM 후보는 '고르지 않은 의미'가 되어 배제어 · LLM 검증의 대조 기준으로 쓰인다.
+    includes: 찾는 대상에 포함되는 후보 이름 → 다른 의미로 두지 않는다
+    (예: "서울 소재 여자대학교"를 찾는데 후보 "서울여자대학교"를 다른 의미로 두면 그 기사가 무관이 된다)."""
+    others = [s for s in candidates.senses if s.name not in set(includes)]
+    return _make_selection(candidates.query, custom, others)
+
+
+def select_described_sense(candidates: SenseCandidates, description: str) -> SelectedSense:
+    """사용자가 직접 설명한 대상으로 의미를 고른다 ("기타 (직접 입력)"). 웹 · 터미널이 이 함수를 쓴다.
+
+    설명이 LLM 후보의 이름과 같으면(예: "서울여자대학교") 그 후보를 고른 것으로 본다.
+    직접 입력으로 만들면 같은 topic(검색어, 의미 이름)에 직접 입력 값이 덮어써져
+    그 후보 topic의 정의 · 연관어가 바뀌기 때문이다 (topic은 수집 · 판정 · 라벨이 쌓인 공용 데이터)."""
+    wanted = _normalize(description)
+    for i, s in enumerate(candidates.senses):
+        if wanted and _normalize(s.name) == wanted:
+            return select_sense(candidates, i)
+    custom, includes = describe_custom_sense(candidates.query, description, candidates.senses)
+    return select_custom_sense(candidates, custom, includes)
 
 
 def _normalize(text: str) -> str:
@@ -334,7 +395,7 @@ def choose_sense_interactively(candidates: SenseCandidates) -> SelectedSense:
     if not candidates.senses:
         print("의미 후보를 만들지 못했습니다. 찾고 싶은 대상을 직접 설명해 주세요.")
         desc = input("설명> ").strip()
-        return select_custom_sense(candidates, build_custom_sense(candidates.query, desc))
+        return select_described_sense(candidates, desc)
 
     if not candidates.needs_selection:
         print(f"의미가 하나뿐이라 자동으로 선택합니다: {candidates.senses[0].name}")
@@ -347,7 +408,7 @@ def choose_sense_interactively(candidates: SenseCandidates) -> SelectedSense:
         choice = input("번호> ").strip()
         if choice == "0":
             desc = input("찾고 싶은 대상을 설명해 주세요> ").strip()
-            return select_custom_sense(candidates, build_custom_sense(candidates.query, desc))
+            return select_described_sense(candidates, desc)
         if choice.isdigit() and 1 <= int(choice) <= len(candidates.senses):
             return select_sense(candidates, int(choice) - 1)
         print(f"0~{len(candidates.senses)} 사이 번호를 입력하세요.")

@@ -26,7 +26,7 @@ import asyncio
 import sys
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 from qupict import timing
@@ -112,35 +112,62 @@ def _choose_sense(topic: str) -> SelectedSense:
 # DB 버전 (기본)
 # ---------------------------------------------------------------------------
 
+@dataclass
+class PrepareResult:
+    """prepare_topic 결과."""
+    topic_id: int
+    collected: object          # collect.CollectResult (DB 재사용 · 새로 저장한 기사 수)
+    wrote: bool                # 이번 준비에서 판정·청크를 새로 저장했나 (False면 DB에 있던 것만 썼다)
+
+
 async def prepare_topic(selected: SelectedSense, period_days: int, max_articles: int = 100,
-                        log: Callable[[str], None] = print) -> int:
-    """[1~4단계] 수집 → 필터 → 인덱싱을 DB에 쌓고 topic id를 돌려준다. 이미 한 일은 건너뛴다.
-    log: 진행 상황을 한 줄씩 받을 함수 (기본 = 터미널에 출력. web.py는 화면에 보여 줄 목록에 쌓는다)"""
+                        log: Callable[[str], None] = print) -> PrepareResult:
+    """[1~4단계] 수집 → 필터 → 인덱싱을 DB에 쌓는다. 이미 한 일은 건너뛴다.
+    log: 진행 상황을 한 줄씩 받을 함수 (기본 = 터미널에 출력. web.py는 화면에 보여 줄 목록에 쌓는다)
+
+    수집 뒤 판정·인덱싱할 기사가 남았는지 먼저 센다 (pipeline.count_pending, 약 0.2초).
+    0건인 단계는 부르지 않는다: 할 일이 없어도 각 단계가 topic 기사 전체를 DB에서 불러와 1.5초씩 걸렸기 때문.
+    같은 검색어를 다시 준비할 때 DB에 쌓인 판정·청크를 그대로 쓰는 것이 로그에 그대로 보인다."""
     from qupict import db
     from qupict.collect import build_search_terms, collect_to_db
     from qupict.filtering import filter_topic
-    from qupict.indexing import index_topic
+    from qupict.indexing import INDEX_STATUSES, index_topic
+    from qupict.pipeline import count_pending
 
     timing.reset()
     log(f"[1단계] 검색어 → {build_search_terms(selected)} (최근 {period_days}일)")
     with timing.timed("[1단계] 수집"):
         collected = await collect_to_db(selected, period_days, max_articles)
     log(f"[1단계] 수집 → {collected.summary()}")
-    with timing.timed("[2·3단계] 필터링"):
-        filtered = await filter_topic(collected.topic_id, selected)
-    log(f"[2·3단계] 필터링 (새 기사만) → {filtered.summary()}")
-    # 질문 가능 기사 세기는 판정만 보므로(인덱싱 결과와 무관) 인덱싱하는 동안 동시에 해 둔다
+    topic_id = collected.topic_id
+    with timing.timed("남은 일 세기(DB)") as t:
+        pending = await asyncio.to_thread(count_pending, topic_id, INDEX_STATUSES)
+        t.note = f"판정할 기사 {pending.unjudged}건, 인덱싱할 기사 {pending.unindexed}건"
+    # 질문 가능 기사 세기는 판정만 보므로(인덱싱 결과와 무관) 판정 뒤 인덱싱하는 동안 동시에 해 둔다
+    wrote = False
+    if pending.unjudged:
+        with timing.timed("[2·3단계] 필터링"):
+            filtered = await filter_topic(topic_id, selected)
+        log(f"[2·3단계] 필터링 (새 기사만) → {filtered.summary()}")
+        wrote = True
+    else:
+        log("[2·3단계] 필터링 → 새로 판정할 기사 없음 (DB에 저장된 판정 그대로 사용)")
     usable_task = asyncio.create_task(asyncio.to_thread(
-        db.get_topic_articles, collected.topic_id, period_days=period_days, statuses=("관련", "보류")))
-    # 준비 단계는 본문만. 이미지 → 글(OCR·VLM)은 "준비 완료" 뒤 add_image_text가 백그라운드에서 한다
-    with timing.timed("[4단계] 인덱싱 (본문)"):
-        indexed = await index_topic(collected.topic_id, describe_images=False)
-    log(f"[4단계] 인덱싱 (새 기사만) → {indexed.summary()}")
+        db.get_topic_articles, topic_id, period_days=period_days, statuses=("관련", "보류")))
+    # 판정을 새로 했으면 청크가 필요한 기사가 생겼을 수 있으므로 인덱싱도 한다 (할 일이 없으면 index_topic이 0건으로 끝남)
+    if pending.unjudged or pending.unindexed:
+        # 준비 단계는 본문만. 이미지 → 글(OCR·VLM)은 "준비 완료" 뒤 add_image_text가 백그라운드에서 한다
+        with timing.timed("[4단계] 인덱싱 (본문)"):
+            indexed = await index_topic(topic_id, describe_images=False)
+        log(f"[4단계] 인덱싱 (새 기사만) → {indexed.summary()}")
+        wrote = wrote or indexed.articles > 0
+    else:
+        log("[4단계] 인덱싱 → 새로 인덱싱할 기사 없음 (DB에 저장된 청크 그대로 사용)")
     with timing.timed("질문 가능 기사 세기(DB, 인덱싱과 동시)"):
         usable = await usable_task
     log(f"→ 최근 {period_days}일 기사 중 질문에 쓸 수 있는 기사(관련·보류): {len(usable)}건")
     timing.report("수집 → 필터링 → 인덱싱")
-    return collected.topic_id
+    return PrepareResult(topic_id, collected, wrote or collected.crawled > 0)
 
 
 IMAGE_TEXT_NAMES = {"ocr": "이미지 속 글자 읽기(OCR)", "vlm": "이미지 설명(VLM)"}
@@ -196,9 +223,11 @@ def start_image_text_in_background(topic_id: int, log: Callable[[str], None] = p
 PREPARE_SETTLE_SECONDS = 3
 
 
-def wait_after_prepare(log: Callable[[str], None] = print) -> None:
-    """준비가 끝난 뒤 PREPARE_SETTLE_SECONDS초 기다린다 (0이면 바로 돌아온다)."""
-    if PREPARE_SETTLE_SECONDS > 0:
+def wait_after_prepare(log: Callable[[str], None] = print, wrote: bool = True) -> None:
+    """준비가 끝난 뒤 PREPARE_SETTLE_SECONDS초 기다린다 (0이면 바로 돌아온다).
+    wrote=False(이번 준비에서 새로 저장한 것이 없음)면 기다리지 않는다: 이 대기는 "방금 저장한 내용을
+    첫 질문에서 못 찾을까 봐" 둔 것이라, DB에 예전부터 있던 내용만 쓸 때는 기다릴 이유가 없다."""
+    if PREPARE_SETTLE_SECONDS > 0 and wrote:
         log(f"저장 내용을 정리하는 중… ({PREPARE_SETTLE_SECONDS}초)")
         time.sleep(PREPARE_SETTLE_SECONDS)
 
@@ -215,25 +244,32 @@ def oldest_searchable_or_none(topic_id: int, period_days: int | None):
 
 
 def run_ask_db(selected: SelectedSense, period_days: int, max_articles: int = 100) -> None:
-    from qupict.qa import answer_period, answer_subject, first_question, generate_answer_from_chunks
+    from qupict.qa import (NO_HISTORY, answer_period, answer_subject, first_question,
+                           generate_answer_from_chunks, history_text)
     from qupict.retrieval import search_topic
 
-    topic_id = asyncio.run(prepare_topic(selected, period_days, max_articles))
-    wait_after_prepare()
+    prepared = asyncio.run(prepare_topic(selected, period_days, max_articles))
+    topic_id = prepared.topic_id
+    wait_after_prepare(wrote=prepared.wrote)
     oldest = oldest_searchable_or_none(topic_id, period_days)
     if image_text_mode():
         # 질문 입력 줄과 섞이지 않게 한 줄 띄우고 찍는다
         start_image_text_in_background(topic_id, log=lambda s: print(f"\n{s}"))
+    turns: list[tuple[str, str]] = []      # 앞서 한 질문·답변 ("그 사람 직업은?" 같은 질문을 알아듣는 데 씀)
 
     def answer(question: str) -> Answer:
+        history = history_text(turns)
         with timing.timed("[5단계] 근거 검색") as t:
-            hits = search_topic(topic_id, question, selected, period_days=period_days)
+            hits = search_topic(topic_id, question, selected, period_days=period_days,
+                                history="" if history == NO_HISTORY else history)
             t.note = f"기준 통과 청크 {len(hits)}개"
         # 답변은 스트리밍: 만들어지는 글자를 바로 화면에 찍는다 (첫 글자가 빨리 보임, 완성된 답변은 같음)
         print_answer_header(question)
         result = generate_answer_from_chunks(question, hits, on_token=lambda s: print(s, end="", flush=True),
-                                             subject=answer_subject(selected), period=answer_period(oldest))
+                                             subject=answer_subject(selected), period=answer_period(oldest),
+                                             history=history)
         print()
+        turns.append((question, result.answer))
         return result
 
     run_qa_loop(f"{selected.query} ({selected.sense.name})", answer, streamed=True,
@@ -253,6 +289,10 @@ class NewsSession:
     topic: str
     articles: list[Article]
     store: object  # FAISS
+    # {중복 기사 link: 대표 기사 link} — 웹 화면의 "많이 보도된 기사"(qupict/hot.py)가 센다
+    duplicates: dict[str, str] = field(default_factory=dict)
+    # 중복 기사까지 포함한 수집 기사 전체 — "많이 보도된 기사" 한 줄 요약이 묶인 기사들의 본문을 볼 때 쓴다
+    pool: list[Article] = field(default_factory=list)
 
 
 async def collect_news(selected: SelectedSense, period_days: int, max_articles: int = 100,
@@ -284,7 +324,8 @@ async def collect_news(selected: SelectedSense, period_days: int, max_articles: 
         store = build_in_memory_store(filtered)
     log(f"[4/4] 인메모리 벡터스토어 구축 완료 → {len(filtered)}건(관련·보류)")
     timing.report("수집 → 필터링 → 벡터스토어 (메모리 버전)")
-    return NewsSession(topic=selected.query, articles=filtered, store=store)
+    return NewsSession(topic=selected.query, articles=filtered, store=store, duplicates=outcome.duplicates,
+                       pool=articles)
 
 
 def run_ask_memory(selected: SelectedSense, period_days: int, max_articles: int = 100) -> None:

@@ -17,6 +17,17 @@ assert collect.build_search_terms(g) == ["강남 이상화"]                    
 empty = SelectedSense(query="베라", sense=Sense(name="x", definition="d"))
 assert collect.build_search_terms(empty) == ["베라"]                          # 좁힐 단어가 없을 때만 단독
 print("1 ok: 검색어", collect.build_search_terms(sel))
+# 직접 입력한 의미에 별칭이 있으면(예: "서울 소재 여자대학교" → 학교 이름들) 별칭 위주로, "검색어 + 연관어"는 하나만
+swu = SelectedSense(query="서울여대", sense=Sense(name="서울 소재 여자대학교", definition="d", is_custom=True,
+                                                aliases=["이화여대", "숙명여대"], related_terms=["입시", "총장"]))
+assert collect.build_search_terms(swu) == ["이화여대", "숙명여대", "서울여대 입시"], collect.build_search_terms(swu)
+plain = SelectedSense(query="서울여대", sense=Sense(name="서울여자대학교", definition="d", aliases=["SWU"],
+                                                  related_terms=["입시", "총장"]))
+assert collect.build_search_terms(plain) == ["서울여대 입시", "서울여대 총장", "SWU"]   # LLM 후보는 예전과 같음
+no_alias = SelectedSense(query="후드", sense=Sense(name="힙합 래퍼 후드", definition="d", is_custom=True,
+                                                 related_terms=["앨범", "공연"]))
+assert collect.build_search_terms(no_alias) == ["후드 앨범", "후드 공연"]                # 별칭 없는 직접 입력도 예전과 같음
+print("1-1 ok: 직접 입력 의미의 검색어")
 
 # 2) 섞기: 돌아가며, 중복 링크 제거, 상한
 m = lambda link: NewsMeta(title=link, link=link)
@@ -75,8 +86,16 @@ async def _sim_fails(session, keyword, cutoff=None, pages=None, sort="date"):
     return _results[(keyword, sort)]
 collect._fetch_one_keyword = _sim_fails
 assert links(10) == ["d1", "s1", "d2", "d3"]                  # 관련도순 검색이 실패하면 최신순만으로
+_timeouts = []
+async def _record_timeout(session, keyword, cutoff=None, pages=None, sort="date"):
+    _timeouts.append(session.timeout.total)
+    return _results[(keyword, sort)]
+collect._fetch_one_keyword = _record_timeout
+links(10)
+# 네이버가 답하지 않을 때 aiohttp 기본값(300초)만큼 1단계가 멈추지 않게, 검색 요청마다 제한 시간이 있어야 한다
+assert _timeouts and set(_timeouts) == {collect.SEARCH_TIMEOUT_SECONDS} and collect.SEARCH_TIMEOUT_SECONDS <= 30, _timeouts
 collect._fetch_one_keyword = _real_keyword
-print("2-2 ok: 관련도순 우선, 최신순으로 채움")
+print("2-2 ok: 관련도순 우선, 최신순으로 채움, 검색 제한 시간", collect.SEARCH_TIMEOUT_SECONDS, "초")
 
 # 3) API 결과 → NewsMeta: 기간 밖 제외, 네이버 링크 구분, HTML 태그 제거
 now = datetime.now(timezone(timedelta(hours=9)))
