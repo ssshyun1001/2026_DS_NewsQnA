@@ -11,13 +11,17 @@
       (질문 세트에 있는 질문이면 정답 근거 기사에 ★ 표시)
 
   python evaluate.py sim [--target 강남]
-      질문 세트(qa_set.yaml) 전체: 질문마다 "정답 근거 기사 청크의 최고 유사도"
+      질문 세트(qa_set.csv, --qa로 다른 CSV) 전체: 질문마다 "정답 근거 기사 청크의 최고 유사도"
       → 기준값 후보(0.40 / 0.45 / 0.50)마다 정답 근거가 살아남는 질문 수 (회의에서 기준값 정할 때)
 
 비용: 질문 1개당 LLM 2번(HyDE 1 + Multi-Query 1) + 임베딩. 검색 방식 4가지가 같은 결과를 나눠 쓴다.
 DB는 읽기만 한다.
 """
 from __future__ import annotations
+
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))   # 이 파일을 바로 실행할 때도 프로젝트 폴더를 찾게
 
 from qupict.config import settings
 from qupict.llm import get_embeddings
@@ -127,14 +131,16 @@ def main_question(query: str, sense_name: str, question: str) -> None:
 # 질문 세트 전체 → 기준값 후보 비교
 # ---------------------------------------------------------------------------
 
-def qa_report(query: str | None = None) -> tuple[list[dict], list[dict]]:
+def qa_report(query: str | None = None, qa_path=None) -> tuple[list[dict], list[dict]]:
     """(요약 행, 질문별 행). 질문별: 방식마다 정답 근거 최고 유사도·순위."""
     from experiments.qa_set import load_qa
     from qupict import db
 
     per_question: list[dict] = []
     topics: dict[tuple[str, str], object] = {}
-    for item in load_qa(query=query):
+    for item in load_qa(qa_path, query=query):
+        if not item.evidence:                # 근거 기사 link가 없으면 볼 대상이 없다
+            continue
         key = (item.query, item.sense)
         if key not in topics:
             topics[key] = db.get_topic(item.query, item.sense)
@@ -165,14 +171,14 @@ def qa_report(query: str | None = None) -> tuple[list[dict], list[dict]]:
     return summary, per_question
 
 
-def main_qa(query: str | None = None) -> None:
+def main_qa(query: str | None = None, qa_path=None) -> None:
     from experiments.common import print_table, save_results
     from experiments.qa_set import load_qa
 
-    if not load_qa(query=query):
-        print("질문 세트가 없습니다. 먼저 python evaluate.py make-qa 로 질문을 만드세요.")
+    if not load_qa(qa_path, query=query):
+        print("질문 세트가 없습니다. experiments/qa_set.csv에 질문을 넣거나 python evaluate.py make-qa 로 만드세요.")
         return
-    summary, per_question = qa_report(query)
+    summary, per_question = qa_report(query, qa_path)
     if not per_question:
         return
 
@@ -194,3 +200,9 @@ def main_qa(query: str | None = None) -> None:
 
 def _fmt(value: float | None) -> str:
     return "없음" if value is None else f"{value:.3f}"
+
+
+if __name__ == "__main__":   # PyCharm 등에서 이 파일을 바로 실행해도 python evaluate.py sim 와 같게
+    import sys
+    import evaluate
+    evaluate.main(["sim", *sys.argv[1:]])
