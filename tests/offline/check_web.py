@@ -156,10 +156,11 @@ def main() -> None:
     assert calls["collect"] == ("방송인 강남", 30, 20)
     assert remembered == ["방송인 강남"]               # 고른 의미는 DB에 기록 (고른 횟수 · 직접 입력 저장)
     assert waited == [True]                           # 새로 저장한 것이 있으면 준비 완료 전에 한 번 기다린다
-    assert status["early"] == 0 and calls["filter"] == 1  # 처음 검색하는 대상: 저장된 기사로 먼저 답하지 않음
+    assert "early" not in status and calls["filter"] == 1   # 저장된 기사로 먼저 답하는 기능은 없앴다
     assert run.PREPARE_SETTLE_SECONDS == 3
     assert calls["index"][0] == (False, False)        # 준비 단계: 본문만 (이미지는 준비 완료 뒤)
     assert status["images"] == "running", status      # 준비 완료 직후: 이미지 글자 읽기가 뒤에서 도는 중
+    assert status["session_id"] is None, status        # 이미지 글자 읽기까지 끝나야 질문을 받는다 (아직 답하지 않음)
     assert status["hot"] == "running" and status["hot_articles"] == [], status   # 많이 보도된 기사도 준비 완료 뒤에
     for _ in range(100):
         later = client.get(f"/api/jobs/{job['job_id']}").json()
@@ -180,61 +181,66 @@ def main() -> None:
             break
         time.sleep(0.05)
     assert later["images"] == "done" and calls["index"][1] == (False, True), (later, calls)
-    assert any("[이미지] 이미지 속 글자 읽기(OCR) 끝" in line for line in later["logs"]), later["logs"]
+    assert later["session_id"], later                                      # 이미지까지 끝난 뒤에 세션이 열린다
+    ocr_end = next(i for i, line in enumerate(later["logs"]) if "[이미지] 이미지 속 글자 읽기(OCR) 끝" in line)
+    asked = next(i for i, line in enumerate(later["logs"]) if line.endswith("이제 질문할 수 있습니다."))
+    assert ocr_end < asked, later["logs"]                                  # "이제 질문할 수 있습니다"는 OCR 끝 다음 줄
+    assert any("OCR)를 뒤에서 진행합니다. 끝나면 질문에 답합니다." in line for line in later["logs"]), later["logs"]
+    sid = later["session_id"]
     logs = "\n".join(status["logs"])
     assert "[1단계] 수집" in logs and "[4단계] 인덱싱" in logs and "질문에 쓸 수 있는 기사(관련·보류): 4건" in logs, logs
     assert status["logs"][1].startswith("[  0.0초] [1단계] 검색어") and status["elapsed"] > 0   # 줄마다 걸린 시간
-    assert f"준비 완료! 이제 질문할 수 있습니다. (총 {status['elapsed']:.1f}초)" in logs, logs
-    print("2 ok: 준비 (run.prepare_topic이 log로 진행 상황을 넘김)")
+    assert f"준비 완료! (총 {status['elapsed']:.1f}초) 이미지 속 글자 읽기가 끝나면 질문에 답합니다." in logs, logs
+    print("2 ok: 준비 (run.prepare_topic이 log로 진행 상황을 넘김) · 이미지 글자 읽기 뒤에 질문 열림")
 
-    ans = client.post("/api/ask", json={"session_id": status["session_id"], "question": "강남 근황?"}).json()
+    ans = client.post("/api/ask", json={"session_id": sid, "question": "강남 근황?"}).json()
     assert calls["search"] == (19, "강남 근황?") and ans["sources"][0]["press"] == "연합뉴스", ans
     assert calls["subject"].startswith("강남 (방송인 강남"), calls["subject"]    # 고른 의미가 답변의 검색 대상으로
     assert calls["period"].startswith("2026-10-14 ~ "), calls["period"]         # 가장 오래된 기사 날짜 ~ 오늘
     assert client.post("/api/ask", json={"session_id": "없음", "question": "q"}).status_code == 404
     assert calls["history"] == qa.NO_HISTORY and calls["search_history"] == ""     # 첫 질문: 이전 대화 없음
-    client.post("/api/ask", json={"session_id": status["session_id"], "question": "그 사람 직업은?"})
+    client.post("/api/ask", json={"session_id": sid, "question": "그 사람 직업은?"})
     assert calls["history"].startswith("사용자: 강남 근황?\n답변: 강남은 예능에 나왔다") and "(기사" not in calls["history"]
     assert calls["search_history"] == calls["history"]                             # 검색(HyDE 맥락)에도 같은 대화
     print("3 ok: 질문 · 답변 · 이전 대화 기억")
 
     # 4) 스트리밍: 글 조각이 차례로 오고, 마지막(done)은 /api/ask와 같은 내용
     import json
-    res = client.post("/api/ask/stream", json={"session_id": status["session_id"], "question": "강남 근황?"})
+    res = client.post("/api/ask/stream", json={"session_id": sid, "question": "강남 근황?"})
     assert res.status_code == 200 and res.headers["content-type"].startswith("application/x-ndjson")
     events = [json.loads(line) for line in res.text.splitlines() if line.strip()]
     assert [e["text"] for e in events if e["type"] == "token"] == ["강남은 ", "예능에 나왔다 ", "(기사 1)."]
     done = events[-1]
     assert done["type"] == "done" and {k: v for k, v in done.items() if k != "type"} == ans, (done, ans)
-    err = [json.loads(x) for x in client.post("/api/ask/stream", json={"session_id": status["session_id"],
+    err = [json.loads(x) for x in client.post("/api/ask/stream", json={"session_id": sid,
                                                                        "question": "터짐"}).text.splitlines()]
     assert err == [{"type": "error", "message": "LLM 오류"}]
     assert client.post("/api/ask/stream", json={"session_id": "없음", "question": "q"}).status_code == 404
     print("4 ok: 답변 스트리밍 (조각 → 완성본, 오류, 없는 세션)")
 
-    # 5) 예전에 준비한 대상: 수집이 끝나기 전에 DB에 저장된 기사로 먼저 질문을 받고, 새로 할 일이 없으면 건너뛴다
+    # 5) 예전에 준비한 대상이어도: 준비(수집 · 필터링 · 인덱싱)가 끝나기 전에는 질문을 받지 않는다.
+    #    새로 할 일이 없으면 판정 · 인덱싱 · 대기는 건너뛴다
     known["topic"] = db.TopicRecord(id=19, selected=None, last_collected_at=None)
     pending["now"] = pipeline.PendingWork(unjudged=0, unindexed=0)
     crawled["n"], waited[:], calls["filter"], calls["index"] = 0, [], 0, []
     job2 = client.post("/api/prepare", json={"query": "강남", "period_days": 30, "sense_index": 0}).json()
-    for _ in range(100):
-        early = client.get(f"/api/jobs/{job2['job_id']}").json()
-        if early["session_id"] or early["status"] != "running":
-            break
-        time.sleep(0.02)
-    assert early["status"] == "running" and early["session_id"] and early["early"] == 6, early   # 수집 중인데 질문 가능
-    ans2 = client.post("/api/ask", json={"session_id": early["session_id"], "question": "근황?"}).json()
-    assert calls["search"] == (19, "근황?") and calls["period"].startswith("2026-10-20 ~ "), calls
-    for _ in range(100):
+    seen_before = []                  # 이미지 글자 읽기까지 끝나기 전에 본 (상태, 세션)
+    for _ in range(200):
         final = client.get(f"/api/jobs/{job2['job_id']}").json()
-        if final["status"] != "running":
+        if final["status"] == "error" or final["images"] == "done":
             break
-        time.sleep(0.05)
-    assert final["status"] == "done" and final["session_id"] == early["session_id"]          # 같은 세션을 계속 쓴다
-    assert calls["filter"] == 0 and calls["index"] == [] and waited == [False], calls        # 판정·인덱싱·대기 건너뜀
+        seen_before.append((final["status"], final["session_id"]))
+        time.sleep(0.02)
+    assert all(sid_ is None for _, sid_ in seen_before), seen_before   # 준비 중 · 이미지 읽는 중에는 세션이 없다
+    assert ("done", None) in seen_before, seen_before                   # 준비 완료 뒤에도 이미지가 끝날 때까지 기다림
+    assert final["status"] == "done" and final["session_id"], final     # 모두 끝나야 질문을 받는다
+    ans2 = client.post("/api/ask", json={"session_id": final["session_id"], "question": "근황?"}).json()
+    assert calls["search"] == (19, "근황?") and calls["period"].startswith("2026-10-14 ~ "), calls
+    # 판정 · 본문 인덱싱 · 대기는 건너뜀. 이미지 글자 읽기(OCR)만 돈다 (질문은 그게 끝난 뒤에 열리므로 기록에 남는다)
+    assert calls["filter"] == 0 and calls["index"] == [(False, True)] and waited == [False], calls
     logs2 = "\n".join(final["logs"])
-    assert "DB에 저장된 기사 6건으로 지금 바로 질문할 수 있습니다" in logs2 and "새로 판정할 기사 없음" in logs2, logs2
-    print("5 ok: 저장된 기사로 먼저 답하기 · 할 일 없는 단계 건너뛰기")
+    assert "DB에 저장된 기사" not in logs2 and "새로 판정할 기사 없음" in logs2, logs2
+    print("5 ok: 예전에 준비한 대상도 3번 과정(이미지까지)이 끝난 뒤에 답하기 · 할 일 없는 단계 건너뛰기")
     print("ALL PASS")
 
 
