@@ -165,7 +165,7 @@ label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px
 
 /* 입력칸 한 묶음(이름표 + 칸). 기본은 넓게, small은 좁게(기간) */
 .field { flex: 1 1 160px; }
-.field.small { flex: 0 1 110px; }
+.field.small { flex: 0 1 130px; }
 
 input[type=text], input[type=number], textarea {
   width: 100%;
@@ -202,8 +202,8 @@ button:disabled { background: var(--disabled); cursor: default; }
 /* 테두리만 있는 버튼 (지금은 쓰지 않지만 남겨 둠) */
 button.ghost { background: transparent; color: var(--accent-text); border: 1px solid var(--line-strong); }
 
-/* 검색어 카드 아래의 추가 설정 (최대 수집 기사 수) */
-.opts { margin-top: 10px; font-size: 13px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; }
+/* 카드 맨 아래 버튼 자리 (1번 [의미 찾기], 2번 [이 의미로 뉴스 모으기]) — 입력칸 · 목록과 띄운다 */
+.actions { margin-top: 14px; }
 
 
 /* ---------------------------------------------------------------------------
@@ -358,7 +358,7 @@ a { color: var(--accent-text); }
   /* 검색어 · 기간 · [의미 찾기]를 세로로: 각각 한 줄 전체 너비 */
   .row { flex-direction: column; align-items: stretch; }
   .field, .field.small { flex: none; width: 100%; }
-  .row button, #b-sense { width: 100%; padding: 11px 16px; }
+  .actions button { width: 100%; padding: 11px 16px; }   /* 카드 맨 아래 버튼은 화면 너비 전체 */
 
   /* 질문 칸은 [입력칸 | 질문] 버튼을 나란히 둔다 (대화창처럼) */
   #f-ask { flex-direction: row; align-items: stretch; }

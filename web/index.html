@@ -45,23 +45,28 @@
   </p>
 
   <!-- 1. 검색어
+       다른 카드처럼 입력칸을 위에 모으고 버튼은 맨 아래 (.actions).
+       넓은 화면: [검색어 | 기간 | 최대 수집 기사 수] 한 줄 → 아래 [의미 찾기]
+       휴대폰: 칸마다 한 줄씩 세로로 → 맨 아래 [의미 찾기] (style.css 10번)
        [의미 찾기]를 누르면 app.js가 서버에 의미 후보를 묻고(/api/senses) 2번 카드를 연다.
+       maxn: 네이버 검색으로 모을 최대 기사 수 (준비를 시작할 때 서버에 보낸다)
        s-query: 진행 · 오류 글이 나오는 줄 -->
   <section class="card">
     <h2><span class="step">1</span>검색어와 기간</h2>
-    <form id="f-query" class="row">
-      <div class="field"><label for="query">검색어</label><input id="query" type="text" placeholder="예: 애플, 강남" required></div>
-      <div class="field small">
-        <label for="days">기간 (최근 며칠)</label>
-        <input id="days" type="number" min="1" max="365" value="30" required>
+    <form id="f-query">
+      <div class="row">
+        <div class="field"><label for="query">검색어</label><input id="query" type="text" placeholder="예: 애플, 강남" required></div>
+        <div class="field small">
+          <label for="days">기간 (최근 며칠)</label>
+          <input id="days" type="number" min="1" max="365" value="30" required>
+        </div>
+        <div class="field small">
+          <label for="maxn">최대 수집 기사 수</label>
+          <input id="maxn" type="number" min="1" max="500" value="100">
+        </div>
       </div>
-      <button id="b-query" type="submit">의미 찾기</button>
+      <div class="actions"><button id="b-query" type="submit">의미 찾기</button></div>
     </form>
-    <div class="opts">
-      <!-- 네이버 검색으로 모을 최대 기사 수 (준비를 시작할 때 서버에 보낸다) -->
-      <label>
-        <input id="maxn" type="number" min="1" max="500" value="100" style="width:80px"> 최대 수집 기사 수</label>
-    </div>
     <div id="s-query" class="status"></div>
   </section>
 
@@ -77,7 +82,7 @@
       <div id="custom-box" class="hidden" style="margin-top:8px">
         <textarea id="custom" rows="2" placeholder="찾고 싶은 대상을 설명해 주세요 (예: 2020년대 활동하는 방송인 강남)"></textarea>
       </div>
-      <div style="margin-top:12px"><button id="b-sense" type="submit">이 의미로 뉴스 모으기</button></div>
+      <div class="actions"><button id="b-sense" type="submit">이 의미로 뉴스 모으기</button></div>
     </form>
   </section>
 
