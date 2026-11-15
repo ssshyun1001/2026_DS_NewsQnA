@@ -1,0 +1,19 @@
+# Docker 이미지에 넣지 않을 파일 (Dockerfile의 COPY . . 에서 빠진다)
+
+# 비밀 값 — Cloud Run 환경변수로 넣는다
+.env
+
+# 내 컴퓨터 전용 · 개발 도구
+.venv/
+.git/
+.idea/
+.claude/
+__pycache__/
+**/__pycache__/
+
+# 서비스 실행에 필요 없는 폴더 (실험 · 평가 · 예전 코드 · 문서 · 테스트)
+old/
+experiments/
+evalset/
+docs/
+tests/
