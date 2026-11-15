@@ -6,7 +6,7 @@ articles.link가 UNIQUE라서 link만 알면 된다. id는 이 파일 안에서�
 
 단계별로 쓰는 함수
   초기화       init_db()
-  [0단계]      get_sense_candidates / save_sense_candidates
+  [0단계]      get_sense_candidates / save_sense_candidates / record_sense_use
                save_topic / get_topic / mark_topic_collected
   [1단계]      link_known_articles  → DB에 이미 있는 기사는 topic에 연결만 하고, 새로 크롤링할 것만 돌려준다
                save_articles
@@ -159,25 +159,54 @@ def _article_ids(conn: psycopg.Connection, links: Iterable[str]) -> dict[str, in
 # ---------------------------------------------------------------- [0단계] 의미 후보
 
 def get_sense_candidates(query: str) -> Optional[SenseCandidates]:
-    """저장된 LLM 의미 후보를 돌려준다. 없으면 None (→ LLM을 불러 만들고 save_sense_candidates)."""
+    """저장된 의미 후보를 돌려준다: LLM 후보 + 예전에 "기타"로 직접 입력해 저장된 의미.
+    많이 고른 순(use_count) → LLM 순위 → 직접 입력(먼저 저장한 순). 저장된 게 없으면 None."""
     with connect() as conn:
         rows = conn.execute(
-            """SELECT name, definition, aliases, related_terms, model FROM query_senses
-               WHERE query = %s AND NOT is_custom ORDER BY rank""",
+            """SELECT name, definition, aliases, related_terms, is_custom, includes, use_count, model
+               FROM query_senses WHERE query = %s
+               ORDER BY use_count DESC, is_custom, rank NULLS LAST, created_at, id""",
             (query,),
         ).fetchall()
     if not rows:
         return None
     senses = [Sense(name=r["name"], definition=r["definition"], aliases=r["aliases"],
-                    related_terms=r["related_terms"]) for r in rows]
-    return SenseCandidates(query=query, senses=senses, model=rows[0]["model"])
+                    related_terms=r["related_terms"], is_custom=r["is_custom"]) for r in rows]
+    model = next((r["model"] for r in rows if not r["is_custom"]), "")
+    return SenseCandidates(
+        query=query, senses=senses, model=model,
+        custom_includes={r["name"]: list(r["includes"]) for r in rows if r["is_custom"]},
+        use_counts={r["name"]: r["use_count"] for r in rows},
+    )
 
 
 def save_sense_candidates(candidates: SenseCandidates) -> None:
-    """LLM 의미 후보를 저장한다. 같은 (검색어, 이름)이 있으면 내용을 갱신한다."""
+    """LLM 의미 후보를 저장한다. 같은 (검색어, 이름)이 있으면 내용을 갱신한다 (고른 횟수는 그대로)."""
     with connect() as conn:
         for rank, s in enumerate(candidates.senses, start=1):
-            _upsert_sense(conn, candidates.query, s, rank, candidates.model)
+            if not s.is_custom:
+                _upsert_sense(conn, candidates.query, s, rank, candidates.model)
+
+
+def record_sense_use(query: str, sense: Sense, includes: Iterable[str] = ()) -> None:
+    """사용자가 이 의미를 골랐다고 기록한다 (use_count + 1).
+    직접 입력한 의미는 처음이면 저장한다 → 다음부터 이 검색어의 후보로 나온다 (LLM 다시 안 부름)."""
+    with connect() as conn:
+        if sense.is_custom:
+            # 같은 이름의 LLM 후보가 있으면 덮어쓰지 않는다 (WHERE query_senses.is_custom)
+            conn.execute(
+                """INSERT INTO query_senses (query, rank, name, definition, aliases, related_terms, is_custom, includes)
+                   VALUES (%s, NULL, %s, %s, %s, %s, TRUE, %s)
+                   ON CONFLICT (query, name) DO UPDATE SET
+                       definition = EXCLUDED.definition, aliases = EXCLUDED.aliases,
+                       related_terms = EXCLUDED.related_terms, includes = EXCLUDED.includes
+                   WHERE query_senses.is_custom""",
+                (query, sense.name, sense.definition, sense.aliases, sense.related_terms, list(includes)),
+            )
+        conn.execute(
+            "UPDATE query_senses SET use_count = use_count + 1, last_used_at = now() WHERE query = %s AND name = %s",
+            (query, sense.name),
+        )
 
 
 def _upsert_sense(conn: psycopg.Connection, query: str, s: Sense, rank: Optional[int], model: str) -> int:

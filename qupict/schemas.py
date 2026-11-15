@@ -29,6 +29,10 @@ class SenseCandidates(BaseModel):
     query: str
     senses: list[Sense] = Field(default_factory=list)
     model: str = ""  # 후보를 만든 LLM 모델명 (재현성 기록용)
+    # 예전에 "기타"로 직접 입력해 저장된 의미(is_custom)의 포함 후보 이름: {직접 입력 의미 이름: [LLM 후보 이름]}
+    # 이 후보들은 그 의미를 고를 때 '다른 의미'로 두지 않는다 (sense.select_sense)
+    custom_includes: dict[str, list[str]] = Field(default_factory=dict)
+    use_counts: dict[str, int] = Field(default_factory=dict)  # 의미 이름 → 사용자가 고른 횟수 (DB)
 
     @property
     def needs_selection(self) -> bool:

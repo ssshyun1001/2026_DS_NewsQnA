@@ -9,6 +9,7 @@ sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2]
 import admin, evaluate, run
 from qupict import pipeline as P, db, sense
 from qupict.schemas import Sense, SenseCandidates, SelectedSense
+sense.remember_selection = lambda c, s: None   # 고른 의미를 실제 DB에 기록하지 않게
 
 # 1) 명령 해석: 서비스(run.py) / 서비스 DB 관리(admin.py) / 평가(evaluate.py)
 called = {}
