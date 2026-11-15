@@ -52,12 +52,46 @@ def _open(**kwargs) -> psycopg.Connection:
     return psycopg.connect(settings.database_url, prepare_threshold=None, connect_timeout=10, **kwargs)
 
 
+_shared: Optional[psycopg.Connection] = None   # reuse_connection() 안에서 connect()가 같이 쓰는 연결
+
+
 @contextmanager
 def connect() -> Iterator[psycopg.Connection]:
-    """DB 연결. with 블록이 정상 종료되면 commit, 예외가 나면 rollback 된다."""
+    """DB 연결. with 블록이 정상 종료되면 commit, 예외가 나면 rollback 된다.
+    reuse_connection() 안이면 새로 연결하지 않고 그 연결을 쓴다 (블록마다 commit/rollback은 똑같이)."""
+    global _shared
+    if _shared is not None:
+        if _shared.closed:                       # 오래 돌다 서버가 끊었으면 다시 연결
+            _shared = _open(row_factory=dict_row)
+            register_vector(_shared)
+        try:
+            yield _shared
+        except BaseException:
+            _shared.rollback()
+            raise
+        else:
+            _shared.commit()
+        return
     with _open(row_factory=dict_row) as conn:
         register_vector(conn)
         yield conn
+
+
+@contextmanager
+def reuse_connection() -> Iterator[None]:
+    """이 블록 안의 connect()가 연결 하나를 같이 쓴다. 새 연결은 1번에 1~2초라, 검색을 수백 번 하는
+    실험(exp-b · exp-c · sim)에서 쓴다. 한 스레드에서만 쓸 것 (웹 서버처럼 동시에 부르는 곳에는 쓰지 않는다)."""
+    global _shared
+    if _shared is not None:                      # 이미 안쪽이면 그대로
+        yield
+        return
+    _shared = _open(row_factory=dict_row)
+    register_vector(_shared)
+    try:
+        yield
+    finally:
+        conn, _shared = _shared, None
+        conn.close()
 
 
 def init_db() -> None:

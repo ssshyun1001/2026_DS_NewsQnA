@@ -19,7 +19,7 @@ admin.cmd_index_all = lambda q, img: called.__setitem__("index", (q, img))
 admin.cmd_status = lambda: called.__setitem__("status", True)
 evaluate.cmd_label = lambda q, limit=None: called.__setitem__("label", (q, limit))
 evaluate.cmd_make_qa = lambda q, suggest: called.__setitem__("make-qa", (q, suggest))
-evaluate.cmd_sim = lambda q, question: called.__setitem__("sim", (q, question))
+evaluate.cmd_sim = lambda q, question, qa=None: called.__setitem__("sim", (q, question))
 run.main(["애플", "30"]); assert called["ask"] == (["애플", "30"], False, 100)
 run.main(["ask", "애플", "--memory"]); assert called["ask"] == (["애플"], True, 100)    # 예전 "ask" 단어도 그대로
 run.main(["강남", "30", "--max", "15"]); assert called["ask"] == (["강남", "30"], False, 15)

@@ -1,7 +1,7 @@
 """
 실험 B — RAG 검색 성능 비교 (기획안 7단계)
 
-질문 세트(experiments/qa_set.yaml)의 질문마다, 검색 방식별로 "정답 근거 기사를 위쪽에 찾아오는지" 잰다.
+질문 세트(experiments/qa_set.csv, --qa로 다른 CSV)의 질문마다, 검색 방식별로 "정답 근거 기사를 위쪽에 찾아오는지" 잰다.
 
   방식        검색 문장
   ─────────  ──────────────────────────────────────
@@ -20,9 +20,13 @@
 
 pgvector는 청크를 찾으므로 "청크가 처음 나온 순서"대로 기사 순위를 매긴다.
 
-실행: python evaluate.py exp-b [--target 강남] [--faiss]
+실행: python evaluate.py exp-b [--target 강남] [--faiss] [--qa 골든셋.csv]
 """
 from __future__ import annotations
+
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))   # 이 파일을 바로 실행할 때도 프로젝트 폴더를 찾게
 
 import time
 
@@ -61,13 +65,24 @@ def score(ranking: list[str], evidence: list[str]) -> tuple[bool, float, int | N
     return False, 0.0, None
 
 
-def run(query: str | None = None, with_faiss: bool = False) -> tuple[list[dict], list[dict]]:
-    items = load_qa(query=query)
+def run(query: str | None = None, with_faiss: bool = False, qa_path=None,
+        items: list[QAItem] | None = None) -> tuple[list[dict], list[dict]]:
+    items = load_qa(qa_path, query=query) if items is None else items
     per_question: list[dict] = []
     engines = ["pgvector"] + (["faiss"] if with_faiss else [])
     topics: dict[tuple[str, str], tuple] = {}
 
-    for item in items:
+    no_evidence = [x.id for x in items if not x.evidence]
+    if no_evidence:
+        print(f"- 근거 기사 link가 없는 질문 {len(no_evidence)}개는 건너뜀 (Recall · MRR을 잴 수 없음): {', '.join(no_evidence)}")
+    todo = [x for x in items if x.evidence]
+    run_start = time.time()
+    for done, item in enumerate(todo):
+        if done:
+            left = (time.time() - run_start) / done * (len(todo) - done)
+            print(f"  [{done + 1}/{len(todo)}] {item.id}  (남은 시간 약 {left / 60:.0f}분)", flush=True)
+        else:
+            print(f"  [1/{len(todo)}] {item.id}  (검색 방식 {len(VARIANTS)}가지 × 질문 {len(todo)}개)", flush=True)
         key = (item.query, item.sense)
         if key not in topics:
             record = db.get_topic(item.query, item.sense)
@@ -109,13 +124,21 @@ def run(query: str | None = None, with_faiss: bool = False) -> tuple[list[dict],
     return summary, per_question
 
 
-def main(query: str | None = None, with_faiss: bool = False) -> None:
-    if not load_qa(query=query):
-        print("질문 세트가 없습니다. 먼저 python evaluate.py make-qa 로 질문을 만드세요.")
+def main(query: str | None = None, with_faiss: bool = False, qa_path=None) -> None:
+    items = load_qa(qa_path, query=query)
+    if not items:
+        print("질문 세트가 없습니다. experiments/qa_set.csv에 질문을 넣거나 python evaluate.py make-qa 로 만드세요.")
         return
-    summary, per_question = run(query, with_faiss)
+    with db.reuse_connection():          # DB 연결 하나로 (새 연결은 1번에 1~2초)
+        summary, per_question = run(query, with_faiss, qa_path, items=items)
     print()
     print_table(summary, ["engine", "variant", "questions", "recall@5", "mrr", "avg_seconds"])
     _, csv_path = save_results("exp_b_retrieval", summary + per_question,
                                {"rank_depth": RANK_DEPTH, "chunks_per_search": CHUNKS_PER_SEARCH})
     print(f"\n질문별 결과 저장: {csv_path}")
+
+
+if __name__ == "__main__":   # PyCharm 등에서 이 파일을 바로 실행해도 python evaluate.py exp-b 와 같게
+    import sys
+    import evaluate
+    evaluate.main(["exp-b", *sys.argv[1:]])
