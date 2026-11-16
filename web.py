@@ -21,7 +21,8 @@ QuPicT 웹 서비스 — run.py의 질문 서비스를 브라우저 화면으로
     - Top 5 정리는 따로 돌아서 질문을 막지 않는다. Kiwi(형태소 분석기)는 서버를 켤 때 한 번만 만든다.
     - LLM · 임베딩 요청은 서버 전체 동시 상한(qupict.llm.llm_slot) 안에서 보낸다.
 
-세션(준비한 뉴스)은 서버 메모리에만 있다 → 서버를 끄면 사라진다. DB 버전은 DB에 쌓인 것을 다시 쓰므로
+세션(준비한 뉴스)은 서버 메모리에만 있다 → 서버를 끄면 사라진다. 사용자가 페이지를 나가거나(/api/leave)
+1시간 안 쓰면(_sweep) 그 사용자의 작업 · 대화 기록도 지운다. DB 버전은 DB에 쌓인 것을 다시 쓰므로
 같은 검색어를 다시 준비하면 이미 한 일은 건너뛰어 빠르다. 세션은 앞서 한 질문·답변을 기억해서
 "그 사람 직업은?"처럼 앞 답변을 가리키는 질문도 알아듣는다 (qa.history_text).
 """
@@ -57,6 +58,17 @@ app = FastAPI(title="QuPicT 뉴스 Q&A")
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 
+@app.middleware("http")
+async def _always_check_for_new_screen(request, call_next):
+    """화면 파일(/, /static/…)은 브라우저가 쓸 때마다 새 버전이 있는지 서버에 물어보게 한다 (Cache-Control: no-cache).
+    없으면 브라우저가 예전 app.js · style.css · 로고를 한동안 그대로 써서, 배포한 수정이 바로 보이지 않았다.
+    바뀐 게 없으면 서버는 "그대로"(304)만 답하므로 파일을 다시 받지 않는다 → 느려지지 않는다."""
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 # ---------------------------------------------------------------------------
 # 서버 메모리 상태: 의미 후보 · 준비 작업 · 질문 세션
 # ---------------------------------------------------------------------------
@@ -73,6 +85,8 @@ class Job:
     hot: str = ""                      # 준비 완료 뒤 많이 보도된 기사 Top 5: "" 아직 / running / done / error
     hot_articles: list[dict] = field(default_factory=list)   # 중복이 많이 묶인 대표 기사 (한 줄 요약 · 링크)
     elapsed: float = 0.0               # 준비에 걸린 시간(초). 준비 완료 때 채운다
+    last_seen: float = field(default_factory=time.time)      # 화면이 마지막으로 확인한 시각 (오래되면 지운다, _sweep)
+    left: bool = False                 # 사용자가 페이지를 나갔다 → 준비가 끝나도 질문 세션을 만들지 않는다
 
 
 @dataclass
@@ -84,11 +98,13 @@ class Session:
     mode: str                          # "DB" / "메모리"
     answer_fn: Callable[[str, Optional[Callable[[str], None]], str], Answer]
     turns: list[tuple[str, str]] = field(default_factory=list)
+    last_used: float = field(default_factory=time.time)      # 마지막으로 질문한 시각 (오래되면 지운다, _sweep)
 
     def ask(self, question: str, on_token: Optional[Callable[[str], None]] = None) -> Answer:
         from qupict.qa import history_text
 
         with _lock:
+            self.last_used = time.time()
             history = history_text(self.turns)
         answer = self.answer_fn(question, on_token, history)
         with _lock:
@@ -135,6 +151,41 @@ def _query_lock(query: str) -> threading.Lock:
 
 
 # ---------------------------------------------------------------------------
+# 사용자가 나가면 서버 메모리에서 지운다
+#   작업(진행 로그 · Top 5)과 질문 세션(대화 기록)은 사용자마다 서버 메모리에 있다. 지우지 않으면 사용자가 늘수록 쌓인다.
+#   1) 페이지를 나가거나 새로 검색하면 화면(app.js)이 /api/leave를 보낸다 → 그 사용자의 작업 · 세션을 바로 지운다
+#   2) 그 신호가 못 오는 경우(브라우저 강제 종료 · 휴대폰 앱 전환 등)를 위해, 오래 안 쓴 것은 _sweep이 지운다
+#   DB에 모은 기사 · 판정 · 청크는 지우지 않는다 (다음 사람이 같은 검색어를 준비할 때 다시 써서 빠르다)
+# ---------------------------------------------------------------------------
+
+IDLE_SECONDS = 60 * 60      # 이만큼(1시간) 화면이 확인하지 않은 작업 · 질문하지 않은 세션은 지운다
+
+
+def _forget(job_id: str = "", session_id: str = "") -> None:
+    """작업과 그 작업의 질문 세션을 서버 메모리에서 지운다. 준비가 아직 돌고 있으면 끝나도 세션을 만들지 않는다
+    (준비 자체는 끝까지 돈다: DB에 저장되는 결과는 같은 검색어를 찾는 다른 사람도 쓰고, 기다리는 사람이 있을 수 있다)."""
+    with _lock:
+        job = _jobs.pop(job_id, None) if job_id else None
+        if job is not None:
+            job.left = True
+            if job.session_id:
+                _sessions.pop(job.session_id, None)
+        if session_id:
+            _sessions.pop(session_id, None)
+
+
+def _sweep(now: Optional[float] = None) -> None:
+    """오래 안 쓴 작업 · 세션을 지운다 (새 요청이 올 때 같이 부른다. 따로 도는 스레드 없음)."""
+    now = time.time() if now is None else now
+    with _lock:
+        # 작업과 세션은 따로 본다: 준비가 끝나면 화면이 작업 확인을 멈추지만, 사용자는 세션으로 계속 질문할 수 있다
+        for jid in [jid for jid, j in _jobs.items() if now - j.last_seen > IDLE_SECONDS]:
+            _jobs.pop(jid).left = True
+        for sid in [sid for sid, s in _sessions.items() if now - s.last_used > IDLE_SECONDS]:
+            _sessions.pop(sid)
+
+
+# ---------------------------------------------------------------------------
 # 요청 · 응답 형식
 # ---------------------------------------------------------------------------
 
@@ -150,6 +201,11 @@ class PrepareRequest(BaseModel):
     custom_description: str = ""            # "기타 (직접 입력)" 설명
     max_articles: int = Field(default=100, ge=1, le=500)
     memory: bool = False                    # DB 없이 메모리(FAISS) 버전
+
+
+class LeaveRequest(BaseModel):
+    job_id: str = ""
+    session_id: str = ""
 
 
 class AskRequest(BaseModel):
@@ -265,8 +321,10 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
         그 전에 화면에서 적은 질문은 app.js가 기다렸다가 이 세션이 열리면 차례로 보낸다."""
         session_id = uuid.uuid4().hex
         with _lock:
+            if job.left:                   # 준비하는 동안 사용자가 나갔다 → 세션을 만들지 않는다 (_forget)
+                return
             _sessions[session_id] = Session(job.label, "메모리" if memory else "DB", answer_fn)
-        job.session_id = session_id
+            job.session_id = session_id
 
     try:
         if memory:
@@ -394,16 +452,27 @@ def prepare(req: PrepareRequest) -> dict:
     job.logs.append(f"[0단계] 선택한 의미 → {selected.sense.name}: {selected.sense.definition}")
     if memory and not req.memory:
         job.logs.append("FIRESTORE_PROJECT가 없어 DB 없이(메모리 버전으로) 실행합니다.")
-    _jobs[job_id] = job
+    _sweep()                                   # 새 작업을 받을 때 오래 안 쓴 작업 · 세션을 같이 정리한다
+    with _lock:
+        _jobs[job_id] = job
     threading.Thread(target=_run_job, args=(job_id, selected, req, memory), daemon=True).start()
     return {"job_id": job_id, "label": label}
+
+
+@app.post("/api/leave")
+def leave(req: LeaveRequest) -> dict:
+    """사용자가 페이지를 나갔거나 새로 검색한다 → 그 사용자의 작업 · 질문 세션을 서버 메모리에서 지운다 (_forget).
+    화면(app.js)이 navigator.sendBeacon으로 보낸다: 페이지가 닫히는 중에도 전송되는 방법이다."""
+    _forget(req.job_id, req.session_id)
+    return {"ok": True}
 
 
 @app.get("/api/jobs/{job_id}")
 def job_status(job_id: str) -> dict:
     job = _jobs.get(job_id)
     if job is None:
-        raise HTTPException(404, "작업을 찾을 수 없습니다 (서버를 다시 켰다면 처음부터 다시 해 주세요).")
+        raise HTTPException(404, "작업을 찾을 수 없습니다 (오래 쓰지 않았거나 서버가 다시 켜졌습니다. 처음부터 다시 해 주세요).")
+    job.last_seen = time.time()                # 화면이 아직 보고 있다 (_sweep이 지우지 않게)
     return {"status": job.status, "logs": job.logs, "session_id": job.session_id,
             "error": job.error, "label": job.label, "images": job.images,
             "hot": job.hot, "hot_articles": job.hot_articles, "elapsed": round(job.elapsed, 1)}
@@ -416,7 +485,7 @@ def job_status(job_id: str) -> dict:
 def _get_session(session_id: str) -> Session:
     session = _sessions.get(session_id)
     if session is None:
-        raise HTTPException(404, "세션이 없습니다 (서버를 다시 켰다면 뉴스를 다시 준비해 주세요).")
+        raise HTTPException(404, "세션이 없습니다 (오래 쓰지 않았거나 서버가 다시 켜졌습니다. 뉴스를 다시 준비해 주세요).")
     return session
 
 
