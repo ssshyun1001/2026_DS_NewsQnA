@@ -5,13 +5,16 @@
   build_in_memory_store / retrieve_relevant_articles
                                                FAISS 메모리 버전: 기존 방식, 실험 B의 비교 대상으로 남겨 둠
 
-## DB 버전 (Firestore 벡터 검색)
+## DB 버전 (하이브리드: Firestore 벡터 검색 + BM25 키워드 검색)
 
-  1) 검색 문장 만들기   원 질문 + HyDE 가상 기사 문장, Multi-Query 변형 질문들
+  1) 검색 문장 만들기   원 질문 (검색어가 없으면 앞에 붙임). 서비스는 LLM 없이 이것만 쓴다
+                        (HyDE 가상 문장 · Multi-Query 변형 질문은 실험 비교용으로만 남겨 둠)
   2) 조건 + 벡터 검색       topic(검색어 × 고른 의미) · 판정(관련·보류) · 발행일 기간으로 먼저 좁히고,
                             그 안에서 청크 임베딩 유사도로 찾는다 (db.search_chunks)
   3) 합치기             같은 청크는 여러 검색 문장 중 가장 높은 유사도를 쓴다 (max-pooling)
-  4) 기준 미달 버리기   유사도가 RELEVANCE_SIMILARITY_THRESHOLD 미만이면 근거로 쓰지 않는다
+  4) 기준 미달 버리기   유사도가 RELEVANCE_SIMILARITY_THRESHOLD 미만이면 벡터 쪽 후보에서 뺀다
+  5) 키워드 검색        같은 조건의 청크에서 질문 키워드로 BM25 점수 상위 청크 (qupict/bm25.py)
+  6) RRF로 합치기       벡터 순위 + BM25 순위 → 상위 k개 (use_hybrid=False면 4)까지만, 예전 방식)
 
   기사 전체가 아니라 약 500자 청크를 찾으므로, 답변에 넣는 글이 훨씬 짧아진다
   (예전: 기사 최대 10건 × 6,000자 → 지금: 청크 5개 × 약 500자). 답변 LLM 비용도 그만큼 준다.
@@ -39,6 +42,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.vectorstores import FAISS
 
 from qupict import timing
+from qupict.bm25 import rrf_fuse
 from qupict.concurrency import map_parallel, run_parallel, timed_call
 from qupict.llm import get_chat_model, get_embeddings
 from qupict.config import settings
@@ -193,17 +197,25 @@ def search_topic(
     selected: SelectedSense,
     k: int = DEFAULT_TOP_K_CHUNKS,
     period_days: int | None = None,
-    use_hyde: bool = True,
-    use_multi_query: bool = True,
+    use_hyde: bool = False,
+    use_multi_query: bool = False,
+    use_hybrid: bool = True,
     similarity_threshold: float | None = None,
     statuses: tuple[str, ...] = SEARCH_STATUSES,
     history: str = "",
 ) -> list:
-    """topic 안에서 질문과 가까운 청크를 최대 k개 찾는다. (db.ChunkHit 목록, 유사도 높은 순)
+    """topic 안에서 질문에 답할 청크를 최대 k개 찾는다. (db.ChunkHit 목록)
 
+    서비스(web.py · run.py) = Hybrid만 (실험 exp_b_hyde_hybrid의 "hybrid"가 가장 좋았음, qupict/bm25.py 참고):
+      질문 그대로 벡터 검색(유사도 기준값 통과 청크) + 키워드 검색(BM25)을 RRF로 합쳐 상위 k개.
+      검색에 LLM을 쓰지 않는다 (HyDE · Multi-Query 끔).
+      use_hybrid=False면 예전처럼 벡터 검색만 (유사도 높은 순). 실험 B는 방식을 직접 넘긴다.
+
+    use_hyde · use_multi_query: 서비스에서는 끔. 실험 비교(exp_b_retrieval · exp_b_hyde_hybrid)용으로만 남겨 둠
+              (HyDE는 hybrid에 더해도 나아지지 않고 1.4초 느렸다, Multi-Query는 시간 대비 효과가 작았다)
     period_days: 질문하는 시점 기준 최근 며칠 안에 발행된 기사만 (기획안: "SQL로 최근 30일 기사만 가져온 뒤 벡터 검색")
     history: 앞서 한 질문·답변 (qa.history_text). HyDE · Multi-Query의 주제 맥락에 붙여서
-             "그 사람 직업은?"처럼 앞 답변을 가리키는 질문도 그 대상으로 검색 문장을 만들게 한다 (LLM 호출 수는 같음)
+             "그 사람 직업은?"처럼 앞 답변을 가리키는 질문도 그 대상으로 검색 문장을 만들게 한다
     """
     threshold = settings.relevance_similarity_threshold if similarity_threshold is None else similarity_threshold
     context = topic_context(selected)
@@ -221,7 +233,36 @@ def search_topic(
     with timing.timed("벡터 검색(DB)") as t:
         hits = search_vectors(topic_id, vectors, k * 3, period_days, statuses)
         t.note = f"DB 쿼리 {len(vectors)}번(동시에), 후보 {len(hits)}개"
-    return [h for h in hits if h.similarity >= threshold][:k]
+    dense = [h for h in hits if h.similarity >= threshold]
+    if not use_hybrid:
+        return dense[:k]
+    with timing.timed("키워드 검색(BM25)") as t:
+        try:
+            lexical = lexical_search(topic_id, search_question, k * 3, period_days, statuses)
+        except Exception as e:                       # 키워드 검색이 실패해도 벡터 검색 결과로 답한다
+            print(f"  [경고] 키워드 검색(BM25) 실패 ({type(e).__name__}) — 벡터 검색 결과만 쓴다")
+            lexical = []
+        t.note = f"후보 {len(lexical)}개"
+    return rrf_fuse(dense, lexical)[:k]
+
+
+def warm_up_search(topic_id: int, statuses: tuple[str, ...] = SEARCH_STATUSES) -> None:
+    """질문을 받기 전에 BM25 인덱스를 미리 만들어 둔다 (web.py가 준비를 마친 뒤 따로 돌린다).
+    처음 만들 때 topic 크기에 따라 몇 초 걸리므로, 첫 질문이 그만큼 늦어지지 않게 한다. 실패해도 질문 때 다시 만든다."""
+    from qupict import bm25
+
+    try:
+        bm25.topic_index(topic_id, statuses)
+    except Exception as e:
+        print(f"  [경고] 키워드 검색(BM25) 인덱스 미리 만들기 실패 ({type(e).__name__}) — 첫 질문 때 다시 만든다")
+
+
+def lexical_search(topic_id: int, question: str, limit: int, period_days: int | None = None,
+                   statuses: tuple[str, ...] = SEARCH_STATUSES) -> list:
+    """하이브리드 검색의 키워드(BM25) 쪽 (qupict/bm25.py). 테스트에서 바꿔 끼우기 쉽게 따로 둔다."""
+    from qupict import bm25
+
+    return bm25.search(topic_id, question, limit, period_days, statuses)
 
 
 def oldest_searchable_date(topic_id: int, period_days: int | None = None,

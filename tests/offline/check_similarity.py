@@ -72,6 +72,7 @@ print("3 ok: 정답 근거 유사도·순위")
 R._build_search_text = lambda q, c, use_hyde=True: q
 R._generate_query_variants = lambda q, c: []
 R.get_embeddings = lambda: FakeEmb()
+R.lexical_search = lambda *a, **kw: []        # 키워드 쪽이 없으면 벡터 결과 그대로 (기준값 확인용)
 assert [h.similarity for h in R.search_topic(7, "질문", sel, use_multi_query=False, similarity_threshold=0.4)] == [0.42]
 assert R.search_topic(7, "질문", sel, use_multi_query=False) == []          # 기본 0.5: 0.42도 빠짐
 print("4 ok: search_topic 기준값 유지")

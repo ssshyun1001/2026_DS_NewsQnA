@@ -118,6 +118,14 @@ class Query:
     def stream(self):
         return [Snap(ref, doc, self.fields) for ref, doc in self._docs()]
 
+    def count(self):
+        n = sum(1 for _ in self._docs())
+
+        class Count:                     # 실제 Firestore와 같은 모양: get() → [[결과(value=개수)]]
+            def get(self_inner):
+                return [[type("AggregationResult", (), {"value": n})()]]
+        return Count()
+
     def find_nearest(self, vector_field, query_vector, limit, distance_measure, distance_result_field=None):
         query = self
 

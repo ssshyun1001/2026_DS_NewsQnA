@@ -118,8 +118,13 @@ assert hits[0].article.title == "제목1" and hits[0].article.press == "뉴스1"
 assert db.search_chunks(tid, vec(10), period_days=7, now=now - timedelta(days=30)) == []      # 기간 밖
 assert db.search_chunks(2, vec(10)) == []                  # topic 2에서는 아직 판정 없음
 assert db.searchable_stats(tid, 30) == (1, arts[0].pub_date)
+assert db.count_search_chunks(tid) == 2 and db.count_search_chunks(2) == 0             # BM25 인덱스용 (판정 기준 같음)
+rows = db.search_chunk_rows(tid)
+assert [(h.content, h.source, h.similarity) for h in rows] == [("본문 청크", "body", 0.0), ("이미지", "image", 0.0)]
+assert rows[0].article.title == "제목1" and rows[0].article.pub_date == arts[0].pub_date
 db.save_judgments(tid, [db.Judgment(link(1), "무관", "llm")])
 assert db.search_chunks(tid, vec(10), statuses=("관련", "보류")) == []      # 판정이 바뀌면 바로 검색에서 빠진다
+assert db.count_search_chunks(tid) == 0 and db.search_chunk_rows(tid) == []
 db.save_judgments(2, [db.Judgment(link(1), "보류", "llm")])
 assert len(db.search_chunks(2, vec(10), statuses=("관련", "보류"))) == 2     # 다른 topic 판정은 따로
 db.save_judgments(tid, [db.Judgment(link(1), "관련", "llm")])
@@ -128,7 +133,7 @@ try:
     raise AssertionError("예외 없음")
 except ValueError as e:
     assert "없는기사" in str(e)
-print("6 ok: 청크 (교체 · 삭제 · 검색 · 기간 · topic별 판정 · 없는 기사)")
+print("6 ok: 청크 (교체 · 삭제 · 검색 · 기간 · topic별 판정 · 없는 기사 · BM25용 조회)")
 
 # 7) 현황 · 평가용 조회
 groups = db.duplicate_groups(tid, period_days=30)

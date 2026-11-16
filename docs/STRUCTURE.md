@@ -22,7 +22,8 @@
 │   ├── collect.py        [1단계] 네이버 API 수집 + 본문·이미지 크롤링
 │   ├── filtering.py      [2·3단계] 중복 제거 → 규칙 필터 → LLM 검증(관련/무관/보류)
 │   ├── indexing.py       [4단계] 이미지 설명 → 청크 → 임베딩
-│   ├── retrieval.py      [5단계] SQL 조건 + 벡터 검색, HyDE, Multi-Query
+│   ├── retrieval.py      [5단계] 하이브리드 검색 (조건 + 벡터 검색 + BM25, RRF). HyDE · Multi-Query는 실험용
+│   ├── bm25.py           [5단계] 하이브리드의 키워드(BM25) 검색 · RRF 합치기
 │   └── qa.py             [5단계] 근거 기반 답변 + 출처
 │
 ├── old/                  예전 평가·라벨링 스크립트 (지금 구조에 맞게 고침, 아래 표)

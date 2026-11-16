@@ -233,7 +233,7 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
                                        period=answer_period(oldest), history=history)
         else:
             from qupict.qa import NO_HISTORY, answer_period, answer_subject, generate_answer_from_chunks
-            from qupict.retrieval import search_topic
+            from qupict.retrieval import search_topic, warm_up_search
             from run import oldest_searchable_or_none, prepare_topic, wait_after_prepare
 
             # 수집 · 필터링 · 인덱싱을 모두 끝낸 뒤에야 질문을 받는다 (예전에 준비한 검색어여도 먼저 답하지 않는다)
@@ -241,6 +241,8 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
             topic_id = prepared.topic_id
             # "준비 완료" 전에 잠깐 기다린다 (run.PREPARE_SETTLE_SECONDS). 새로 저장한 것이 없으면 기다리지 않는다
             wait_after_prepare(log=log, wrote=prepared.wrote)
+            # 하이브리드 검색의 키워드(BM25) 인덱스를 미리 만든다 (첫 질문이 인덱스 만드는 시간만큼 늦어지지 않게)
+            threading.Thread(target=warm_up_search, args=(topic_id,), daemon=True).start()
             oldest = oldest_searchable_or_none(topic_id, req.period_days)    # 답변에 적는 기사 기간의 시작
             find_hot = lambda: hot.top_duplicated_db(topic_id, req.period_days)
 
