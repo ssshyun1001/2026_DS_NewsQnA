@@ -67,6 +67,19 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<"
 const busy = (el, text) => { el.className = "status"; el.innerHTML = `<span class="spinner"></span> ${esc(text)}`; };
 const setStatus = (el, text, kind = "") => { el.className = "status " + kind; el.textContent = text; };
 
+// 지금 작업 · 질문 세션을 서버 메모리에서 지워 달라고 알린다 (POST /api/leave).
+// 페이지를 나갈 때와, 새 검색어 · 새 준비로 바꿔서 이전 것을 더 쓰지 않을 때 부른다.
+// sendBeacon: 페이지가 닫히는 중에도 끝까지 보내 주는 방법 (fetch는 페이지가 닫히면 끊길 수 있다).
+// DB에 모은 기사는 지우지 않는다 → 다음에 같은 검색어를 찾으면 빨리 준비된다.
+function release() {
+  if (!state.jobId && !state.sessionId) return;
+  const body = JSON.stringify({ job_id: state.jobId || "", session_id: state.sessionId || "" });
+  navigator.sendBeacon("/api/leave", new Blob([body], { type: "application/json" }));
+  state.jobId = null; state.sessionId = null;
+}
+// 탭을 닫거나 · 다른 주소로 가거나 · 새로고침할 때 (pagehide). 다른 탭으로 잠깐 옮기는 것은 나간 것이 아니다
+window.addEventListener("pagehide", release);
+
 // 페이지를 열면 바로: 서버가 쓰는 LLM 모델 이름을 제목 아래에 보여 준다 (실패해도 화면은 그대로)
 api("/api/info").then(i => {
   $("info").textContent = `LLM 모델: ${i.chat_model}`;
@@ -82,7 +95,8 @@ $("f-query").addEventListener("submit", async (e) => {
   e.preventDefault();                 // 폼 기본 동작(페이지 새로고침) 막기
   const query = $("query").value.trim();
   if (!query) return;
-  state.query = query; state.sessionId = null; state.jobId = null;   // 진행 중이던 작업 확인은 멈춘다
+  release();                          // 이전 검색어의 작업 · 대화는 서버에서 지운다 (jobId도 비워서 확인을 멈춘다)
+  state.query = query; state.sessionId = null; state.jobId = null;
   // 아래 카드(2 · 3 · ★ · 4)는 새 검색어로 다시 시작하므로 모두 숨긴다
   ["c-sense", "c-job", "c-hot", "c-qa"].forEach(id => $(id).classList.add("hidden"));
   $("b-query").disabled = true;       // 기다리는 동안 버튼을 두 번 누르지 않게
@@ -139,6 +153,7 @@ $("f-sense").addEventListener("submit", async (e) => {
   $("c-job").classList.remove("hidden");
   $("log").textContent = "";
   busy($("s-job"), "작업을 시작하는 중…");
+  release();                          // 같은 검색어로 다시 준비하면 이전 작업 · 대화는 서버에서 지운다
   // 질문 칸은 준비가 끝나기 전부터 연다: 그동안 질문을 적어 두면 3번 과정(이미지 글자 읽기까지)이 끝나는 대로 차례로 답한다
   newReady();
   $("chat").innerHTML = "";

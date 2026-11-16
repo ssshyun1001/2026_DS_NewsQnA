@@ -112,6 +112,10 @@ def main() -> None:
     page = client.get("/").text
     # 화면은 세 파일: 뼈대(index.html) · 모양(style.css) · 동작(app.js). 둘 다 /static/에서 받을 수 있어야 한다
     assert '/static/style.css' in page and '/static/app.js' in page
+    # 화면 파일은 쓸 때마다 새 버전인지 확인하게 (예전 app.js를 계속 쓰면 배포한 수정이 안 보인다)
+    for path in ("/", "/static/app.js", "/static/style.css", "/static/QuPicT_logo.svg"):
+        assert client.get(path).headers.get("cache-control") == "no-cache", path
+    assert "cache-control" not in client.get("/api/info").headers
     css, js = client.get("/static/style.css"), client.get("/static/app.js")
     assert css.status_code == js.status_code == 200 and ".hot" in css.text and "function poll" in js.text
     assert "enqueueQuestion(`" not in js.text and "전체적인 요약을 제공해줘" not in page + js.text
@@ -241,6 +245,139 @@ def main() -> None:
     logs2 = "\n".join(final["logs"])
     assert "DB에 저장된 기사" not in logs2 and "새로 판정할 기사 없음" in logs2, logs2
     print("5 ok: 예전에 준비한 대상도 3번 과정(이미지까지)이 끝난 뒤에 답하기 · 할 일 없는 단계 건너뛰기")
+
+    def wait_job(job_id, until, tries=300):
+        for _ in range(tries):
+            j = client.get(f"/api/jobs/{job_id}").json()
+            if until(j):
+                return j
+            time.sleep(0.02)
+        raise AssertionError(f"기다리던 상태가 오지 않음: {j}")
+
+    # 6) 질문은 Top 5 정리를 기다리지 않는다 (Top 5는 따로 돈다. 여러 사용자가 몰리면 Top 5 요약이 10초 넘게 걸림)
+    gate = threading.Event()
+    _summarize = hot.summarize
+    hot.summarize = lambda items: (gate.wait(5), _summarize(items))[1]   # Top 5가 끝나지 않고 붙잡혀 있게
+    job3 = client.post("/api/prepare", json={"query": "강남", "period_days": 30, "sense_index": 0}).json()
+    opened = wait_job(job3["job_id"], lambda j: j["session_id"] or j["status"] == "error")
+    assert opened["session_id"] and opened["hot"] == "running", opened     # Top 5가 아직인데 질문은 열림
+    gate.set()
+    assert wait_job(job3["job_id"], lambda j: j["hot"] != "running")["hot"] == "done"
+    hot.summarize = _summarize
+    print("6 ok: 질문은 Top 5 정리를 기다리지 않음")
+
+    # 7) 같은 검색어 · 의미를 사용자 셋이 동시에 준비하면: 한 명만 수집 · 판정 · 인덱싱하고,
+    #    나머지는 기다렸다가 그 결과를 그대로 쓴다 (다시 수집하지 않음). 의미가 다르면(다른 topic) 서로 기다리지 않고 동시에 돈다
+    active = {"now": 0, "max": 0, "calls": 0}
+    _collect = collect.collect_to_db
+
+    async def counting_collect(*a, **k):
+        active["now"] += 1
+        active["calls"] += 1
+        active["max"] = max(active["max"], active["now"])
+        try:
+            return await _collect(*a, **k)
+        finally:
+            active["now"] -= 1
+
+    collect.collect_to_db = counting_collect
+    same = [client.post("/api/prepare", json={"query": "강남", "period_days": 30, "sense_index": 0}).json()
+            for _ in range(3)]
+    done = [wait_job(j["job_id"], lambda s: s["session_id"] or s["status"] == "error") for j in same]
+    assert all(d["status"] == "done" for d in done), done
+    assert active["calls"] == 1 and active["max"] == 1, active              # 수집은 한 번뿐
+    has = lambda d, text: any(text in line for line in d["logs"])
+    reused = [d for d in done if has(d, "다른 사용자가 방금 준비를 마쳐서, 그 결과를 그대로 씁니다")]
+    assert len(reused) == 2 and all(has(d, "끝나기를 기다립니다") for d in reused), [d["logs"] for d in done]
+    assert all(not has(d, "[1단계] 수집") for d in reused)                  # 기다린 두 명은 수집 단계가 없음
+    sids = {d["session_id"] for d in done}
+    assert len(sids) == 3                                                   # 질문 세션(대화 기록)은 사람마다 따로
+    # 짧은 기간 · 적은 기사 수로 준비한 것을 기다렸으면 그대로 쓰지 않고 직접 준비한다
+    web._recent_prepared[web._topic_key(SimpleNamespace(query="강남", sense=SimpleNamespace(name="방송인 강남")))] = \
+        web._Prepared(topic_id=19, period_days=7, max_articles=20)
+    lock = web._topic_lock(SimpleNamespace(query="강남", sense=SimpleNamespace(name="방송인 강남")))
+    lock.acquire()                                                          # 누가 준비 중인 것처럼
+    longer = client.post("/api/prepare", json={"query": "강남", "period_days": 30, "sense_index": 0}).json()
+    time.sleep(0.1)
+    lock.release()
+    longer_done = wait_job(longer["job_id"], lambda s: s["session_id"] or s["status"] == "error")
+    assert has(longer_done, "끝나기를 기다립니다") and has(longer_done, "[1단계] 수집"), longer_done["logs"]
+    assert active["calls"] == 2, active
+    active.update(now=0, max=0)
+    other = [client.post("/api/prepare", json={"query": "강남", "period_days": 30, "sense_index": i}).json()
+             for i in (0, 1)]
+    for j in other:
+        wait_job(j["job_id"], lambda s: s["session_id"] or s["status"] == "error")
+    assert active["max"] == 2, active                                       # 다른 의미는 동시에 돈다
+    collect.collect_to_db = _collect
+    print("7 ok: 같은 검색어 · 의미는 한 명만 준비하고 나머지는 결과를 같이 씀, 다른 의미는 동시에")
+
+    # 8) 처음 보는 검색어를 셋이 동시에 찾아도 의미 후보는 한 번만 만든다 (LLM은 부를 때마다 이름이 조금씩 달라서,
+    #    따로 만들면 같은 대상이 다른 이름으로 DB에 따로 저장 · 준비됐다)
+    made = []
+
+    def slow_new_candidates(q):
+        made.append(q)
+        time.sleep(0.3)                                  # LLM이 후보를 만드는 동안
+        return SenseCandidates(query=q, senses=[Sense(name=f"기업 MS {len(made)}", definition="d")]), "LLM → DB 저장"
+
+    sense.load_sense_candidates = slow_new_candidates
+    got = []
+    users = [threading.Thread(target=lambda: got.append(client.post("/api/senses", json={"query": "MS"}).json()))
+             for _ in range(3)]
+    for t in users: t.start()
+    for t in users: t.join()
+    assert made == ["MS"], made                                             # 후보는 한 번만 만듦
+    assert {g["senses"][0]["name"] for g in got} == {"기업 MS 1"}, got      # 셋 다 같은 이름
+    assert sorted(g["source"] for g in got).count("다른 사용자가 방금 만든 후보") == 2, got
+    client.post("/api/senses", json={"query": "MS"})                        # 나중에(기다리지 않고) 찾으면 평소처럼 다시 읽는다
+    assert len(made) == 2
+    print("8 ok: 처음 보는 검색어를 동시에 찾아도 의미 후보는 한 번만 만든다")
+
+    # 9) 페이지를 나가면(/api/leave) 그 사용자의 작업 · 질문 세션을 서버 메모리에서 지운다. DB 쪽 함수는 부르지 않는다
+    sense.load_sense_candidates = lambda q: (cands, "DB 캐시")
+    j = client.post("/api/prepare", json={"query": "강남", "period_days": 30, "sense_index": 0}).json()
+    s = wait_job(j["job_id"], lambda x: x["session_id"] or x["status"] == "error")
+    assert s["session_id"] in web._sessions and j["job_id"] in web._jobs
+    assert client.post("/api/leave", json={"job_id": j["job_id"], "session_id": s["session_id"]}).json() == {"ok": True}
+    assert j["job_id"] not in web._jobs and s["session_id"] not in web._sessions
+    assert client.get(f"/api/jobs/{j['job_id']}").status_code == 404
+    assert client.post("/api/ask", json={"session_id": s["session_id"], "question": "q"}).status_code == 404
+    assert client.post("/api/leave", json={"job_id": "없음"}).status_code == 200      # 이미 지운 것 · 없는 것도 괜찮음
+    # 준비 중에 나가면: 준비는 끝까지 돌지만(다른 사람이 같이 쓸 수 있음) 질문 세션은 만들지 않는다
+    gate2 = threading.Event()
+    _collect2 = collect.collect_to_db
+
+    async def held_collect(*a, **k):
+        await asyncio.to_thread(gate2.wait, 5)
+        return await _collect2(*a, **k)
+
+    collect.collect_to_db = held_collect
+    before = set(web._sessions)
+    j2 = client.post("/api/prepare", json={"query": "강남", "period_days": 30, "sense_index": 1}).json()
+    job_obj = web._jobs[j2["job_id"]]
+    client.post("/api/leave", json={"job_id": j2["job_id"]})
+    gate2.set()
+    for _ in range(300):
+        if job_obj.status != "running" and job_obj.images != "running":
+            break
+        time.sleep(0.02)
+    time.sleep(0.1)
+    assert job_obj.status == "done" and job_obj.session_id is None, job_obj   # 준비는 끝났지만 세션 없음
+    assert set(web._sessions) == before
+    collect.collect_to_db = _collect2
+    # 신호 없이 사라진 사용자: 1시간 넘게 안 쓴 작업 · 세션은 _sweep이 지운다. 최근에 쓴 것은 남긴다
+    j3 = client.post("/api/prepare", json={"query": "강남", "period_days": 30, "sense_index": 0}).json()
+    s3 = wait_job(j3["job_id"], lambda x: x["session_id"] or x["status"] == "error")
+    client.post("/api/ask", json={"session_id": s3["session_id"], "question": "q"})          # 세션은 방금 씀
+    web._sweep(now=time.time() + web.IDLE_SECONDS / 2)
+    assert j3["job_id"] in web._jobs and s3["session_id"] in web._sessions                # 30분: 그대로
+    web._jobs[j3["job_id"]].last_seen -= web.IDLE_SECONDS                                  # 작업 확인만 오래 멈춤
+    web._sweep()
+    assert j3["job_id"] not in web._jobs and s3["session_id"] in web._sessions            # 작업만 지우고 대화는 계속
+    web._sweep(now=time.time() + web.IDLE_SECONDS + 1)
+    assert s3["session_id"] not in web._sessions                                           # 1시간 넘게 질문 없음 → 지움
+    print("9 ok: 나가면 작업 · 대화를 서버에서 지움 (준비 중에 나가도), 오래 안 쓴 것은 자동 정리")
     print("ALL PASS")
 
 

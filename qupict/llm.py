@@ -8,19 +8,47 @@ LLM·임베딩 클라이언트를 만드는 곳 (프로젝트 전체에서 여�
   OPENAI_BASE_URL 지정       → 그 주소의 OpenAI 호환 API
                                (예: 학교 팩트챗 Gateway https://factchat-cloud.mindlogic.ai/v1/gateway)
 
-임베딩 클라이언트는 하나만 만들어 공유한다
-(중복 제거와 관련성 필터가 같은 기사를 두 번 임베딩하지 않도록).
+임베딩 클라이언트는 이벤트 루프마다 하나씩 만들어 그 안에서 공유한다 (아래 get_embeddings).
+
+여러 사용자가 동시에 쓸 때 (웹 서버)
+  - 준비 작업마다 자기 이벤트 루프(asyncio.run)에서 돈다. 비동기 클라이언트(내부 httpx 연결)는 만든 루프에 묶여 있어서,
+    다른 루프가 같이 쓰면 OpenAI 라이브러리가 "Connection error."를 낸다 → 루프마다 따로 만든다.
+  - 서버 전체에서 동시에 보내는 LLM · 임베딩 요청 수에 상한을 둔다 (llm_slot). 사용자가 몰려도 게이트웨이에
+    요청이 한꺼번에 쏟아지지 않는다. 사용자 한 명일 때는 상한에 닿지 않아 속도가 그대로다.
 """
 from __future__ import annotations
 
 import asyncio
+import threading
 import warnings
+import weakref
+from contextlib import asynccontextmanager
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from qupict.config import settings
 
-_embeddings: OpenAIEmbeddings | None = None
+_embeddings: OpenAIEmbeddings | None = None      # 이벤트 루프 밖(동기 호출)에서 쓰는 것
+_embeddings_by_loop: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, OpenAIEmbeddings]" = weakref.WeakKeyDictionary()
+_embeddings_lock = threading.Lock()
+
+# 서버 전체(모든 사용자 · 모든 작업)에서 동시에 보내는 LLM · 임베딩 요청 수 상한.
+# 작업 하나의 LLM 판정은 filtering.LLM_CONCURRENCY(8)개까지 동시에 보내므로, 그보다 넉넉하게 잡아
+# 사용자 한 명일 때는 느려지지 않게 했다. 여러 명이면 넘는 요청은 차례를 기다린다.
+LLM_GLOBAL_CONCURRENCY = 12
+_llm_slots = threading.BoundedSemaphore(LLM_GLOBAL_CONCURRENCY)
+
+
+@asynccontextmanager
+async def llm_slot():
+    """async with llm_slot(): … — 서버 전체의 동시 요청 상한(LLM_GLOBAL_CONCURRENCY) 안에서 요청 하나를 보낸다.
+    작업마다 이벤트 루프가 달라서 asyncio.Semaphore로는 루프끼리 나눠 쓸 수 없다 → 스레드용 세마포어를
+    다른 스레드에서 기다려(asyncio.to_thread) 이벤트 루프를 막지 않는다."""
+    await asyncio.to_thread(_llm_slots.acquire)
+    try:
+        yield
+    finally:
+        _llm_slots.release()
 
 # 임베딩 요청 한 번에 보내는 텍스트 수. 기본값(1000)이면 기사 300건(본문 2000자씩)이 한 요청에 들어가
 # 게이트웨이 한도(요청당 30만 토큰)를 넘는다. 100건이면 기사 기준 약 13만 토큰.
@@ -72,20 +100,44 @@ async def aembed_in_batches(embeddings, texts: list[str], batch_size: int = EMBE
     if not texts:
         return []
     batches = [texts[i:i + batch_size] for i in range(0, len(texts), batch_size)]
-    results = await asyncio.gather(*(embeddings.aembed_documents(b) for b in batches))
+
+    async def one(batch: list[str]) -> list[list[float]]:
+        async with llm_slot():                     # 서버 전체 동시 요청 상한 안에서
+            return await embeddings.aembed_documents(batch)
+
+    results = await asyncio.gather(*(one(b) for b in batches))
     return [vec for batch in results for vec in batch]
 
 
+def _new_embeddings() -> OpenAIEmbeddings:
+    return OpenAIEmbeddings(
+        model=settings.embedding_model,
+        api_key=settings.openai_api_key,
+        base_url=_base_url(),
+        chunk_size=EMBED_BATCH_SIZE,
+        timeout=settings.embed_timeout_seconds,   # 답이 없으면 끊는다 (예전: 제한 없음 = 10분)
+        max_retries=MAX_RETRIES,
+    )
+
+
 def get_embeddings() -> OpenAIEmbeddings:
-    """임베딩 클라이언트 (공유 인스턴스). 모델 이름은 .env의 OPENAI_EMBEDDING_MODEL."""
+    """임베딩 클라이언트. 모델 이름은 .env의 OPENAI_EMBEDDING_MODEL.
+
+    - 이벤트 루프 안(async 함수)에서 부르면: 그 루프 전용 클라이언트 (같은 루프 안에서는 하나를 공유)
+      → 동시에 도는 다른 작업(다른 루프)과 연결을 나눠 쓰지 않는다. 루프가 끝나면 클라이언트도 같이 사라진다.
+    - 루프 밖(동기 함수: 질문할 때 검색 등)에서 부르면: 서버 전체가 공유하는 하나 (동기 연결은 여러 스레드가 같이 써도 된다)
+    """
     global _embeddings
-    if _embeddings is None:
-        _embeddings = OpenAIEmbeddings(
-            model=settings.embedding_model,
-            api_key=settings.openai_api_key,
-            base_url=_base_url(),
-            chunk_size=EMBED_BATCH_SIZE,
-            timeout=settings.embed_timeout_seconds,   # 답이 없으면 끊는다 (예전: 제한 없음 = 10분)
-            max_retries=MAX_RETRIES,
-        )
-    return _embeddings
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    with _embeddings_lock:
+        if loop is None:
+            if _embeddings is None:
+                _embeddings = _new_embeddings()
+            return _embeddings
+        client = _embeddings_by_loop.get(loop)
+        if client is None:
+            client = _embeddings_by_loop[loop] = _new_embeddings()
+        return client
