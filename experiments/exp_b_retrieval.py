@@ -8,11 +8,13 @@
   base        질문 그대로
   hyde        질문 + HyDE 가상 기사 문장
   multi       질문 + Multi-Query 변형 질문 2개
-  both        HyDE + Multi-Query  (실제 서비스 설정)
+  both        HyDE + Multi-Query
+  hybrid      질문 그대로 벡터 검색 + BM25 키워드 검색, RRF로 합침  (실제 서비스 설정, qupict/bm25.py)
+              위 4가지는 벡터 검색만 (use_hybrid=False). HyDE + hybrid 비교는 experiments/exp_b_hyde_hybrid.py
 
   검색 엔진: db (Firestore 벡터 검색: topic · 관련/보류 · 기간 조건 안에서 청크 검색, 실제 서비스.
              2026-11-16 이전 결과 파일에는 예전 이름 pgvector로 적혀 있다)
-            --faiss를 주면 예전 FAISS 메모리 검색(기사 단위, 관련/보류 기사)도 같은 4가지로 비교
+            --faiss를 주면 예전 FAISS 메모리 검색(기사 단위, 관련/보류 기사)도 base~both 4가지로 비교 (hybrid는 DB만)
 
 지표
   Recall@5   정답 근거 기사가 위에서 5개 기사 안에 있는 질문의 비율
@@ -35,15 +37,19 @@ from experiments.common import print_table, save_results
 from experiments.qa_set import QAItem, load_qa
 from qupict import db
 
-VARIANTS = {"base": (False, False), "hyde": (True, False), "multi": (False, True), "both": (True, True)}
+# 방식 이름 → (HyDE, Multi-Query, 하이브리드)
+VARIANTS = {"base": (False, False, False), "hyde": (True, False, False), "multi": (False, True, False),
+            "both": (True, True, False), "hybrid": (False, False, True)}
 RANK_DEPTH = 10            # MRR을 볼 기사 순위 깊이
 CHUNKS_PER_SEARCH = 20     # DB 벡터 검색에서 가져올 청크 수 (기사 10개 순위를 만들기에 충분하게)
 
 
-def article_ranking_db(topic_id: int, item: QAItem, selected, hyde: bool, multi: bool) -> list[str]:
+def article_ranking_db(topic_id: int, item: QAItem, selected, hyde: bool, multi: bool,
+                       hybrid: bool = False) -> list[str]:
+    """hybrid=False(기본)면 벡터 검색만. experiments/exp_b_hyde_hybrid.py도 벡터 쪽 순위를 이걸로 만든다."""
     from qupict.retrieval import search_topic
     hits = search_topic(topic_id, item.question, selected, k=CHUNKS_PER_SEARCH,
-                        use_hyde=hyde, use_multi_query=multi)
+                        use_hyde=hyde, use_multi_query=multi, use_hybrid=hybrid)
     ranking: list[str] = []
     for h in hits:                              # 유사도 높은 청크 순서 → 기사가 처음 나온 순서
         if h.article.link not in ranking:
@@ -102,10 +108,12 @@ def run(query: str | None = None, with_faiss: bool = False, qa_path=None,
         record, store, articles = topics[key]
 
         for engine in engines:
-            for name, (hyde, multi) in VARIANTS.items():
+            for name, (hyde, multi, hybrid) in VARIANTS.items():
+                if engine == "faiss" and hybrid:
+                    continue                        # 하이브리드는 DB 검색에만 있다
                 start = time.time()
                 if engine == "db":
-                    ranking = article_ranking_db(record.id, item, record.selected, hyde, multi)
+                    ranking = article_ranking_db(record.id, item, record.selected, hyde, multi, hybrid)
                 else:
                     ranking = article_ranking_faiss(store, articles, item, record.selected, hyde, multi) if store else []
                 elapsed = time.time() - start

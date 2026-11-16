@@ -52,7 +52,7 @@ QuPicT는 이 문제를 **수집 이전 단계에서** 풉니다.
  [4] 인덱싱         indexing.py   500자 청크 + 이미지 속 글자(OCR) → 임베딩 → Firestore
    │
    ▼
- [5] 검색·답변      retrieval.py  원 질문 + HyDE 가상 문장 → 청크 검색 → 근거 인용 답변
+ [5] 검색·답변      retrieval.py  하이브리드 검색(벡터 + BM25 키워드, RRF) → 청크 → 근거 인용 답변
                     qa.py          최근 대화 2턴을 기억해 "그 사람 직업은?" 같은 후속 질문 처리
 ```
 
@@ -130,6 +130,7 @@ Google Cloud Run 배포용 `Dockerfile`이 포함되어 있습니다 (CPU판 tor
 
 - **HyDE 효과가 가장 큽니다**: +1.2초로 Recall@5 0.53 → 0.68.
 - Multi-Query를 더하면 0.68 → 0.70이지만 시간이 2배 이상 → 시간 대비 효율은 HyDE 단독이 가장 좋습니다.
+- **최종 서비스 검색 = Hybrid** (`experiments/exp_b_hyde_hybrid.py`, 골든셋 87문항): 벡터 검색 + BM25 키워드 검색을 RRF로 합치는 방식이 Recall@5 0.609 / MRR 0.508 / 0.93초로 가장 정확하고 빠릅니다 (같은 측정에서 HyDE 0.402, HyDE + Hybrid 0.598 · 2.39초). 그래서 웹·`run.py`는 HyDE · Multi-Query 없이 Hybrid만 씁니다 (`qupict/bm25.py`).
 - 87문항 전체(수집 + 검색 종합) 기준 Recall@5는 base 0.345 → both 0.460.
 
 ---
@@ -190,7 +191,8 @@ python tests/run_offline.py   # 단계별 오프라인 테스트 18묶음 — AP
 │   ├── collect.py          [1] 의미 기반 검색 + 본문·언론사·이미지 수집
 │   ├── filtering.py        [2·3] 중복 제거 → 규칙 점수 → LLM 판정
 │   ├── indexing.py         [4] 청크 · 이미지 글자(OCR) · 임베딩
-│   ├── retrieval.py        [5] Firestore 벡터 검색 + HyDE · Multi-Query
+│   ├── retrieval.py        [5] 하이브리드 검색 (Firestore 벡터 + BM25, RRF)
+│   ├── bm25.py             [5] 하이브리드의 키워드(BM25) 검색 · RRF 합치기
 │   ├── qa.py               [5] 근거 인용 답변, 대화 기억
 │   ├── hot.py              많이 보도된 기사 Top 5 + 한 줄 요약 (LLM 없음)
 │   ├── pipeline.py         단계 묶음, 할 일 없는 단계 건너뛰기

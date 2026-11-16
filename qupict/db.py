@@ -798,6 +798,34 @@ def search_chunks(
     return sorted(hits, key=lambda h: -h.similarity)
 
 
+def _search_chunk_query(topic_id: int, statuses: Iterable[str], fields: Optional[list[str]] = None):
+    """검색 대상 청크 (search_chunks와 같은 topic · 판정 조건, 발행일 기간은 없음)."""
+    return _query(CHUNKS, ("search_keys", "array_contains_any", [f"{topic_id}:{s}" for s in statuses]),
+                  fields=fields)
+
+
+def count_search_chunks(topic_id: int, statuses: Iterable[str] = ("관련", "보류")) -> int:
+    """검색 대상 청크 수 (집계 쿼리라 문서를 읽지 않는다). BM25 인덱스를 다시 만들지 정할 때 쓴다."""
+    result = _search_chunk_query(topic_id, statuses).count().get()
+    return int(result[0][0].value)
+
+
+def search_chunk_rows(topic_id: int, statuses: Iterable[str] = ("관련", "보류")) -> list[ChunkHit]:
+    """검색 대상 청크 전부 (임베딩 없이). 하이브리드 검색의 BM25 인덱스를 만들 때 쓴다 (qupict/bm25.py).
+    similarity는 0 (키워드 검색에는 유사도가 없다)."""
+    fields = ["link", "title", "press", "pub_date", "content", "source", "chunk_index"]
+    rows = sorted((d for _, d in _stream_query(_search_chunk_query(topic_id, statuses, fields))),
+                  key=lambda d: (d["link"], d.get("chunk_index", 0)))       # 순서를 고정해 결과가 매번 같게
+    return [ChunkHit(content=d["content"], source=d.get("source", "body"), similarity=0.0,
+                     article=Article(title=d.get("title", ""), link=d["link"], press=d.get("press"),
+                                     pub_date=d.get("pub_date")))
+            for d in rows]
+
+
+def _stream_query(q) -> list[tuple[str, dict]]:
+    return [(s.id, s.to_dict()) for s in q.stream()]
+
+
 def searchable_stats(topic_id: int, period_days: Optional[int] = None,
                      statuses: Iterable[str] = ("관련", "보류")) -> tuple[int, Optional[datetime]]:
     """질문할 때 검색되는 기사(search_chunks와 같은 조건: topic · 판정 · 발행일 기간 · 청크 있음)의

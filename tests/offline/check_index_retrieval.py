@@ -3,7 +3,7 @@
 
 LLM·네이버·DB를 실제로 부르지 않는다 (크레딧 0). 실행: python tests/run_offline.py
 """
-import asyncio, sys
+import asyncio, contextlib, io, sys
 from datetime import datetime, timezone
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2]))
 from qupict import indexing as I, retrieval as R, qa as Q, db
@@ -83,6 +83,7 @@ print("3 ok: 재실행·설명 상한·다시 만들기·설명 끄기")
 sel = SelectedSense(query="강남", sense=Sense(name="방송인 강남", definition="M.I.B 출신"))
 R.get_embeddings = lambda: fake_emb
 R.build_search_texts = lambda q, ctx, h, m: ["q", "hyde", "variant"]
+R.lexical_search = lambda *a, **kw: []        # 키워드(BM25) 쪽은 4-1에서 따로 본다 (비어 있으면 벡터 결과 그대로)
 art = lambda l: Article(title=l, link=l)
 calls = []
 def fake_search(tid, vec, k=5, period_days=None, statuses=("관련",)):
@@ -100,6 +101,58 @@ calls.clear()
 strict = R.search_topic(3, "질문", sel, k=2)                          # 기본 기준 0.5: 0.4 청크는 빠짐
 assert [(h.content, h.similarity) for h in strict] == [("c1", 0.7)]
 print("4 ok: 검색 합치기", [(h.content, h.similarity) for h in hits])
+
+# 4-1) 하이브리드: 벡터(기준 통과) + BM25를 RRF로 합침, BM25 실패 시 벡터만, 끄면 예전 방식
+from qupict import bm25 as BM
+mk = lambda c, s=0.0, l=None: db.ChunkHit(c, "body", s, art(l or c))
+dense_list = [mk("d1", 0.9), mk("both", 0.8), mk("d3", 0.7)]
+lex_list = [mk("both"), mk("x1")]
+fused = BM.rrf_fuse(dense_list, lex_list)
+assert [h.content for h in fused] == ["both", "d1", "x1", "d3"]          # 둘 다 나온 청크가 1위
+assert fused[0].similarity == 0.8                                         # 벡터 쪽 hit(유사도)을 쓴다
+assert [h.content for h in BM.rrf_fuse(dense_list, [])] == ["d1", "both", "d3"]   # 한쪽만이면 그 순서 그대로
+db.search_chunks = lambda tid, vec, k=5, period_days=None, statuses=("관련",): [*dense_list, mk("low", 0.1)]
+R.build_search_texts = lambda q, ctx, h, m: ["q"]
+seen_lex = []
+R.lexical_search = lambda tid, q, limit, period_days=None, statuses=(): seen_lex.append((tid, q, limit, period_days)) or lex_list
+got = R.search_topic(3, "강남 근황", sel, k=3, period_days=30)
+assert [h.content for h in got] == ["both", "d1", "x1"] and seen_lex == [(3, "강남 근황", 9, 30)]
+assert "low" not in [h.content for h in R.search_topic(3, "강남 근황", sel, k=10)]   # 기준 미달은 벡터 쪽에서 빠짐
+assert [h.content for h in R.search_topic(3, "강남 근황", sel, k=3, use_hybrid=False)] == ["d1", "both", "d3"]
+def broken(*a, **kw): raise RuntimeError("DB 오류")
+R.lexical_search = broken
+with contextlib.redirect_stdout(io.StringIO()):
+    assert [h.content for h in R.search_topic(3, "강남 근황", sel, k=3)] == ["d1", "both", "d3"]  # BM25 실패 → 벡터만
+# 서비스 기본 = Hybrid만: 이전 대화가 있어도 HyDE · Multi-Query는 끔 (실험에서 직접 켤 때만)
+hyde_flags = []
+R.build_search_texts = lambda q, ctx, h, m: hyde_flags.append((h, m)) or ["q"]
+R.lexical_search = lambda *a, **kw: []
+R.search_topic(3, "강남 근황", sel); R.search_topic(3, "그 사람 직업은?", sel, history="사용자: 와이프?\n답변: 이상화")
+R.search_topic(3, "강남 근황", sel, use_hyde=True, use_multi_query=True)
+assert hyde_flags == [(False, False), (False, False), (True, True)]
+
+# BM25 점수: 키워드가 많이 · 드물게 나온 청크가 위, 기간 밖 · 발행일 없는 청크는 기간 조건에서 빠짐
+d0, d1 = datetime(2026, 11, 1, tzinfo=timezone.utc), datetime(2026, 11, 10, tzinfo=timezone.utc)
+rows = [db.ChunkHit("강남이 괌에서 관광객을 구조했다. 괌 동굴 구조 영상", "body", 0.0, Article(title="괌 구조", link="A", pub_date=d1)),
+        db.ChunkHit("강남이 예능에 출연했다.", "body", 0.0, Article(title="예능", link="B", pub_date=d1)),
+        db.ChunkHit("괌 여행 이야기", "body", 0.0, Article(title="여행", link="C", pub_date=d0)),
+        db.ChunkHit("괌 바다 사진", "body", 0.0, Article(title="옛 사진", link="D", pub_date=None))]
+index = BM.BM25Index(rows)
+assert "괌" in BM.tokens("강남이 괌에서 무슨 일을 했어?")
+ranked = index.rank("강남이 괌에서 구조한 사람은?", 10)
+assert ranked[0].article.link == "A" and {"A", "B", "C"} <= {h.article.link for h in ranked}   # 키워드 하나라도 겹치면 후보
+assert [h.article.link for h in index.rank("괌", 10, since=datetime(2026, 11, 5, tzinfo=timezone.utc), until=d1)] == ["A"]
+assert index.rank("전혀없는단어", 10) == [] and len(index.rank("괌", 1)) == 1
+# topic 인덱스 캐시: 청크 수가 그대로면 다시 만들지 않고, 바뀌면 다시 만든다
+built = []
+count = {"n": 4}
+db.count_search_chunks = lambda tid, statuses: count["n"]
+db.search_chunk_rows = lambda tid, statuses: built.append(tid) or rows[:count["n"]]
+BM._cache.clear()
+assert BM.search(5, "괌", 10)[0].article.link == "A" and BM.search(5, "괌", 10) and built == [5]
+count["n"] = 2
+assert {h.article.link for h in BM.search(5, "괌", 10)} == {"A"} and built == [5, 5]
+print("4-1 ok: 하이브리드 (RRF · 기준값 · BM25 실패 폴백 · 끄기 · 기본은 HyDE 끔 · BM25 점수 · 기간 · 캐시)")
 
 # 5) 청크로 답변: 기사별 번호, 근거 종류
 d = datetime(2026, 11, 6, tzinfo=timezone.utc)
@@ -149,6 +202,7 @@ assert FakeChain.history == Q.NO_HISTORY                                   # 안
 FakeChain.invoke = _plain_invoke
 seen_ctx = []
 R.build_search_texts = lambda q, ctx, hy, m: seen_ctx.append((q, ctx)) or ["q"]
+R.lexical_search = lambda *a, **kw: []
 R.search_topic(3, "그 사람 직업은?", sel, history=h)
 assert seen_ctx[-1][0] == "그 사람 직업은?"                               # 이전 대화가 있으면 검색어를 붙이지 않는다
 assert seen_ctx[-1][1].startswith(R.topic_context(sel)) and "이상화" in seen_ctx[-1][1]   # HyDE·변형 질문 맥락에 이전 대화
