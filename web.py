@@ -13,8 +13,13 @@ QuPicT 웹 서비스 — run.py의 질문 서비스를 브라우저 화면으로
     4) 질문하기                     → POST /api/ask/stream    [5단계] 검색 · 답변 (만들어지는 대로 한 줄씩 보냄)
                                        POST /api/ask           같은 답변을 다 만든 뒤 한 번에 (예전 방식)
 
-준비하는 동안에도 질문 칸이 열려 있다. 미리 적은 질문은 화면이 기억해 두었다가 준비가 끝나면 차례로 보낸다.
-예전에 준비한 검색어·의미(DB 버전)는 준비가 끝나기를 기다리지 않고, DB에 저장된 기사로 바로 답하기 시작한다.
+준비하는 동안에도 질문 칸이 열려 있다. 미리 적은 질문은 화면이 기억해 두었다가 준비(이미지 글자 읽기까지)가 끝나면 차례로 보낸다.
+
+여러 사용자가 동시에 쓸 때
+    - 준비 작업은 사용자마다 따로 백그라운드 스레드에서 돈다.
+    - 같은 검색어 · 의미는 한 번에 한 작업만 준비한다 (_topic_lock). 두 번째 사용자는 기다렸다가 저장된 결과를 그대로 쓴다.
+    - Top 5 정리는 따로 돌아서 질문을 막지 않는다. Kiwi(형태소 분석기)는 서버를 켤 때 한 번만 만든다.
+    - LLM · 임베딩 요청은 서버 전체 동시 상한(qupict.llm.llm_slot) 안에서 보낸다.
 
 세션(준비한 뉴스)은 서버 메모리에만 있다 → 서버를 끄면 사라진다. DB 버전은 DB에 쌓인 것을 다시 쓰므로
 같은 검색어를 다시 준비하면 이미 한 일은 건너뛰어 빠르다. 세션은 앞서 한 질문·답변을 기억해서
@@ -95,6 +100,38 @@ _candidates: dict[str, SenseCandidates] = {}   # 검색어 → 의미 후보 (�
 _jobs: dict[str, Job] = {}
 _sessions: dict[str, Session] = {}
 _lock = threading.Lock()
+# (검색어, 의미 이름) → 잠금. 같은 대상(DB의 같은 topic)은 한 번에 한 작업만 수집 · 판정 · 인덱싱한다.
+# 두 사용자가 동시에 같은 검색어 · 의미를 준비하면 두 번째는 첫 번째가 끝나기를 기다렸다가 이어서 하고,
+# 그때는 이미 DB에 저장된 기사 · 판정 · 청크를 그대로 써서 거의 바로 끝난다 (같은 기사를 두 번 판정 · 임베딩하지 않음).
+_topic_locks: dict[tuple[str, str], threading.Lock] = {}
+
+
+@dataclass
+class _Prepared:
+    """같은 검색어 · 의미를 마지막으로 준비한 결과. 그 준비를 기다린 사용자가 다시 수집하지 않고 그대로 쓴다."""
+    topic_id: int
+    period_days: int
+    max_articles: int
+
+
+_recent_prepared: dict[tuple[str, str], _Prepared] = {}
+
+
+def _topic_key(selected: SelectedSense) -> tuple[str, str]:
+    return (selected.query, selected.sense.name)
+
+
+def _topic_lock(selected: SelectedSense) -> threading.Lock:
+    with _lock:
+        return _topic_locks.setdefault(_topic_key(selected), threading.Lock())
+
+
+_query_locks: dict[str, threading.Lock] = {}     # 검색어 → 잠금 (의미 후보를 한 번에 한 명만 만들게)
+
+
+def _query_lock(query: str) -> threading.Lock:
+    with _lock:
+        return _query_locks.setdefault(query, threading.Lock())
 
 
 # ---------------------------------------------------------------------------
@@ -143,9 +180,24 @@ def senses(req: SensesRequest) -> dict:
     from qupict.sense import load_sense_candidates
 
     query = req.query.strip()
-    candidates, source = load_sense_candidates(query)
-    with _lock:
-        _candidates[query] = candidates
+    # 같은 검색어의 의미 후보는 한 번에 한 명만 만든다 (_query_lock).
+    # 처음 보는 검색어를 여러 명이 동시에 찾으면 각자 LLM에 물어 이름이 조금씩 다른 후보("기업 마이크로소프트" ·
+    # "기업 Microsoft")가 생기고, 같은 대상이 DB에 따로 저장 · 준비됐다. 기다린 사람은 방금 만든 후보를 그대로 쓴다.
+    query_lock = _query_lock(query)
+    waited = not query_lock.acquire(blocking=False)
+    if waited:
+        query_lock.acquire()
+    try:
+        with _lock:
+            just_made = _candidates.get(query) if waited else None
+        if just_made is not None:
+            candidates, source = just_made, "다른 사용자가 방금 만든 후보"
+        else:
+            candidates, source = load_sense_candidates(query)
+            with _lock:
+                _candidates[query] = candidates
+    finally:
+        query_lock.release()
     return {
         "query": query,
         "source": source,
@@ -209,6 +261,7 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
 
     def open_session(answer_fn) -> None:
         """질문을 받기 시작한다. 3번 카드의 과정(수집 · 필터링 · 인덱싱 · 이미지 글자 읽기)이 모두 끝난 뒤에 한 번만 부른다.
+        많이 보도된 기사 Top 5는 기다리지 않는다 (따로 돈다).
         그 전에 화면에서 적은 질문은 app.js가 기다렸다가 이 세션이 열리면 차례로 보낸다."""
         session_id = uuid.uuid4().hex
         with _lock:
@@ -236,11 +289,30 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
             from qupict.retrieval import search_topic
             from run import oldest_searchable_or_none, prepare_topic, wait_after_prepare
 
-            # 수집 · 필터링 · 인덱싱을 모두 끝낸 뒤에야 질문을 받는다 (예전에 준비한 검색어여도 먼저 답하지 않는다)
-            prepared = asyncio.run(prepare_topic(selected, req.period_days, req.max_articles, log=log))
-            topic_id = prepared.topic_id
-            # "준비 완료" 전에 잠깐 기다린다 (run.PREPARE_SETTLE_SECONDS). 새로 저장한 것이 없으면 기다리지 않는다
-            wait_after_prepare(log=log, wrote=prepared.wrote)
+            # 수집 · 필터링 · 인덱싱을 모두 끝낸 뒤에야 질문을 받는다 (예전에 준비한 검색어여도 먼저 답하지 않는다).
+            # 같은 검색어 · 의미를 다른 사용자가 준비하는 중이면 (_topic_lock):
+            #   끝나기를 기다렸다가 그 결과를 그대로 쓴다 → 같은 기사를 다시 수집 · 판정 · 임베딩하지 않고, 거의 같이 끝난다.
+            #   (다시 수집하면 그새 네이버 결과가 조금 바뀌어 몇 건을 또 판정하느라 10초 넘게 더 걸렸다. 측정: 3명 동시 25 · 38 · 40초)
+            #   단, 그 준비가 이번 요청보다 짧은 기간 · 적은 기사 수였으면 이어서 직접 준비한다.
+            key = _topic_key(selected)
+            topic_lock = _topic_lock(selected)
+            waited = not topic_lock.acquire(blocking=False)
+            if waited:
+                log("같은 검색어 · 의미를 다른 사용자가 준비하고 있어서, 끝나기를 기다립니다.")
+                topic_lock.acquire()
+            try:
+                recent = _recent_prepared.get(key) if waited else None
+                if recent and recent.period_days >= req.period_days and recent.max_articles >= req.max_articles:
+                    topic_id = recent.topic_id
+                    log("다른 사용자가 방금 준비를 마쳐서, 그 결과를 그대로 씁니다 (수집 · 판정 · 인덱싱 건너뜀).")
+                else:
+                    prepared = asyncio.run(prepare_topic(selected, req.period_days, req.max_articles, log=log))
+                    # "준비 완료" 전에 잠깐 기다린다 (run.PREPARE_SETTLE_SECONDS). 새로 저장한 것이 없으면 기다리지 않는다
+                    wait_after_prepare(log=log, wrote=prepared.wrote)
+                    topic_id = prepared.topic_id
+                    _recent_prepared[key] = _Prepared(topic_id, req.period_days, req.max_articles)
+            finally:
+                topic_lock.release()
             oldest = oldest_searchable_or_none(topic_id, req.period_days)    # 답변에 적는 기사 기간의 시작
             find_hot = lambda: hot.top_duplicated_db(topic_id, req.period_days)
 
@@ -266,14 +338,19 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
         return
 
     # 준비 완료 뒤: 많이 보도된 기사 Top 5 (중복이 많이 묶인 대표 기사 + 한 줄 요약. LLM 없이 묶음이 공통으로 쓴 문장을 고른다).
+    # 다른 스레드에서 따로 돌린다 → 질문은 Top 5를 기다리지 않는다.
+    # (Top 5 요약은 형태소 분석이라 CPU를 많이 써서, 여러 사용자가 몰리면 10초 넘게 걸린다. 측정: 3명 동시 약 12초)
     # 실패해도 질문 답변에는 영향이 없다.
-    try:
-        job.hot_articles = [_hot_payload(h) for h in hot.summarize(find_hot())]
-        job.hot = "done"
-    except Exception as e:
-        traceback.print_exc()
-        log(f"[많이 보도된 기사] 실패해서 건너뜁니다 ({type(e).__name__}: {e})")
-        job.hot = "error"
+    def make_hot() -> None:
+        try:
+            job.hot_articles = [_hot_payload(h) for h in hot.summarize(find_hot())]
+            job.hot = "done"
+        except Exception as e:
+            traceback.print_exc()
+            log(f"[많이 보도된 기사] 실패해서 건너뜁니다 ({type(e).__name__}: {e})")
+            job.hot = "error"
+
+    threading.Thread(target=make_hot, daemon=True).start()
 
     # 준비 완료 뒤: 이미지 → 글(OCR·VLM)을 이 스레드에서 이어서 한다.
     # 3번 카드의 과정(이미지 글자 읽기까지)이 모두 끝나야 질문에 답한다 → 첫 답변부터 이미지 속 내용도 검색된다.
@@ -417,9 +494,10 @@ def main() -> None:
     p.add_argument("--port", type=int, default=8000)
     args = p.parse_args()
     print(f"브라우저에서 http://{'localhost' if args.host in ('127.0.0.1', '0.0.0.0') else args.host}:{args.port} 을 여세요.")
-    from qupict import collect, db
+    from qupict import collect, db, filtering
     db.warm_up()                # DB 클라이언트 · 인증 토큰을 서버를 켤 때 미리 준비해 둔다 → 첫 요청이 빨라짐
     collect.warm_up_parser()    # 크롤링 해석용 프로세스(띄우는 데 약 2초)도 미리 띄워 둔다
+    filtering.warm_up_kiwi()    # 형태소 분석기 Kiwi(약 500MB, 몇 초)도 뒤에서 미리 만든다 → 첫 사용자가 기다리지 않고, 한 번만 만든다
     uvicorn.run(app, host=args.host, port=args.port)
 
 

@@ -241,6 +241,94 @@ def main() -> None:
     logs2 = "\n".join(final["logs"])
     assert "DB에 저장된 기사" not in logs2 and "새로 판정할 기사 없음" in logs2, logs2
     print("5 ok: 예전에 준비한 대상도 3번 과정(이미지까지)이 끝난 뒤에 답하기 · 할 일 없는 단계 건너뛰기")
+
+    def wait_job(job_id, until, tries=300):
+        for _ in range(tries):
+            j = client.get(f"/api/jobs/{job_id}").json()
+            if until(j):
+                return j
+            time.sleep(0.02)
+        raise AssertionError(f"기다리던 상태가 오지 않음: {j}")
+
+    # 6) 질문은 Top 5 정리를 기다리지 않는다 (Top 5는 따로 돈다. 여러 사용자가 몰리면 Top 5 요약이 10초 넘게 걸림)
+    gate = threading.Event()
+    _summarize = hot.summarize
+    hot.summarize = lambda items: (gate.wait(5), _summarize(items))[1]   # Top 5가 끝나지 않고 붙잡혀 있게
+    job3 = client.post("/api/prepare", json={"query": "강남", "period_days": 30, "sense_index": 0}).json()
+    opened = wait_job(job3["job_id"], lambda j: j["session_id"] or j["status"] == "error")
+    assert opened["session_id"] and opened["hot"] == "running", opened     # Top 5가 아직인데 질문은 열림
+    gate.set()
+    assert wait_job(job3["job_id"], lambda j: j["hot"] != "running")["hot"] == "done"
+    hot.summarize = _summarize
+    print("6 ok: 질문은 Top 5 정리를 기다리지 않음")
+
+    # 7) 같은 검색어 · 의미를 사용자 셋이 동시에 준비하면: 한 명만 수집 · 판정 · 인덱싱하고,
+    #    나머지는 기다렸다가 그 결과를 그대로 쓴다 (다시 수집하지 않음). 의미가 다르면(다른 topic) 서로 기다리지 않고 동시에 돈다
+    active = {"now": 0, "max": 0, "calls": 0}
+    _collect = collect.collect_to_db
+
+    async def counting_collect(*a, **k):
+        active["now"] += 1
+        active["calls"] += 1
+        active["max"] = max(active["max"], active["now"])
+        try:
+            return await _collect(*a, **k)
+        finally:
+            active["now"] -= 1
+
+    collect.collect_to_db = counting_collect
+    same = [client.post("/api/prepare", json={"query": "강남", "period_days": 30, "sense_index": 0}).json()
+            for _ in range(3)]
+    done = [wait_job(j["job_id"], lambda s: s["session_id"] or s["status"] == "error") for j in same]
+    assert all(d["status"] == "done" for d in done), done
+    assert active["calls"] == 1 and active["max"] == 1, active              # 수집은 한 번뿐
+    has = lambda d, text: any(text in line for line in d["logs"])
+    reused = [d for d in done if has(d, "다른 사용자가 방금 준비를 마쳐서, 그 결과를 그대로 씁니다")]
+    assert len(reused) == 2 and all(has(d, "끝나기를 기다립니다") for d in reused), [d["logs"] for d in done]
+    assert all(not has(d, "[1단계] 수집") for d in reused)                  # 기다린 두 명은 수집 단계가 없음
+    sids = {d["session_id"] for d in done}
+    assert len(sids) == 3                                                   # 질문 세션(대화 기록)은 사람마다 따로
+    # 짧은 기간 · 적은 기사 수로 준비한 것을 기다렸으면 그대로 쓰지 않고 직접 준비한다
+    web._recent_prepared[web._topic_key(SimpleNamespace(query="강남", sense=SimpleNamespace(name="방송인 강남")))] = \
+        web._Prepared(topic_id=19, period_days=7, max_articles=20)
+    lock = web._topic_lock(SimpleNamespace(query="강남", sense=SimpleNamespace(name="방송인 강남")))
+    lock.acquire()                                                          # 누가 준비 중인 것처럼
+    longer = client.post("/api/prepare", json={"query": "강남", "period_days": 30, "sense_index": 0}).json()
+    time.sleep(0.1)
+    lock.release()
+    longer_done = wait_job(longer["job_id"], lambda s: s["session_id"] or s["status"] == "error")
+    assert has(longer_done, "끝나기를 기다립니다") and has(longer_done, "[1단계] 수집"), longer_done["logs"]
+    assert active["calls"] == 2, active
+    active.update(now=0, max=0)
+    other = [client.post("/api/prepare", json={"query": "강남", "period_days": 30, "sense_index": i}).json()
+             for i in (0, 1)]
+    for j in other:
+        wait_job(j["job_id"], lambda s: s["session_id"] or s["status"] == "error")
+    assert active["max"] == 2, active                                       # 다른 의미는 동시에 돈다
+    collect.collect_to_db = _collect
+    print("7 ok: 같은 검색어 · 의미는 한 명만 준비하고 나머지는 결과를 같이 씀, 다른 의미는 동시에")
+
+    # 8) 처음 보는 검색어를 셋이 동시에 찾아도 의미 후보는 한 번만 만든다 (LLM은 부를 때마다 이름이 조금씩 달라서,
+    #    따로 만들면 같은 대상이 다른 이름으로 DB에 따로 저장 · 준비됐다)
+    made = []
+
+    def slow_new_candidates(q):
+        made.append(q)
+        time.sleep(0.3)                                  # LLM이 후보를 만드는 동안
+        return SenseCandidates(query=q, senses=[Sense(name=f"기업 MS {len(made)}", definition="d")]), "LLM → DB 저장"
+
+    sense.load_sense_candidates = slow_new_candidates
+    got = []
+    users = [threading.Thread(target=lambda: got.append(client.post("/api/senses", json={"query": "MS"}).json()))
+             for _ in range(3)]
+    for t in users: t.start()
+    for t in users: t.join()
+    assert made == ["MS"], made                                             # 후보는 한 번만 만듦
+    assert {g["senses"][0]["name"] for g in got} == {"기업 MS 1"}, got      # 셋 다 같은 이름
+    assert sorted(g["source"] for g in got).count("다른 사용자가 방금 만든 후보") == 2, got
+    client.post("/api/senses", json={"query": "MS"})                        # 나중에(기다리지 않고) 찾으면 평소처럼 다시 읽는다
+    assert len(made) == 2
+    print("8 ok: 처음 보는 검색어를 동시에 찾아도 의미 후보는 한 번만 만든다")
     print("ALL PASS")
 
 
