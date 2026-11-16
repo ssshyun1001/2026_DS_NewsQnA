@@ -19,7 +19,7 @@
 | 4·5단계 인덱싱·검색·답변 | `indexing.py`, `retrieval.py`, `qa.py` | ✅ 청크·이미지 설명·임베딩 저장, Firestore 벡터 검색, 청크 기반 답변 |
 | 실행 파일 | `run.py` · `admin.py` · `evaluate.py` | ✅ 용도별로 분리: 서비스(질문하기) / 서비스 DB 관리(일괄 수집·판정·인덱싱·현황) / 평가(라벨·실험) |
 | 정답 평가셋 (JSON) | `evalset/` | ✅ 라벨링 도구(`build_labeled_set.py`) + **실험 A를 정답 JSON으로 평가** (`exp_a_filtering.py`, DB 안 씀) |
-| 실험 코드 (7단계) | `experiments/` | ✅ 실험 B·C + 질문 세트 도구 (`make-qa` · `exp-b` · `exp-c`), 강남으로 시험 실행 |
+| 실험 코드 (7단계) | `experiments/` | ✅ 실험 B + 질문 세트 도구 (`make-qa` · `exp-b`), 강남으로 시험 실행 |
 | 웹 서비스 | `web.py`, `web/` (index.html · style.css · app.js) | ✅ 브라우저에서 검색어 → 의미 고르기 → 수집·필터링·인덱싱 → 질문 (`python web.py`). 질문은 3번 과정이 모두 끝난 뒤에 답함, 앞 대화 기억, SWU BLUE 디자인 (아래 최신 · 1-0) |
 | 배포 | `Dockerfile` | ✅ Google Cloud Run: main에 merge하면 자동 배포 (아래 최신) |
 | 많이 보도된 기사 Top 5 | `qupict/hot.py` | ✅ 중복이 많이 묶인 기사 5건 + 한 줄 요약. **LLM 없이** 묶음이 공통으로 쓴 기사 속 문장을 고름 (아래 1-0) |
@@ -176,7 +176,7 @@
 - 남은 한계: LLM이 지어낸 별칭(예: 방송인 강남 → "전형수")도 그대로 쓰입니다.
 
 **고친 버그**
-- **LLM 형식 응답이 전부 실패하던 문제**: 지금 채팅 모델(`claude-fable-5-1`)은 게이트웨이에서 도구 호출 강제(`tool_choice`)를 지원하지 않아 400 에러가 났고, 코드가 에러를 삼켜 "의미 후보 없음"·"판정 못 함"이 됐습니다 (DB에 후보가 캐시된 강남·애플만 정상이었음). → `qupict/llm.py`의 `get_structured_model()`(`json_schema` 방식)로 통일 (의미 후보, 직접 입력 의미, LLM 판정, 실험 C 채점, 질문 세트). **이전에 `filter-all`을 돌렸다면 판정 못 한 기사가 남아 있을 수 있으니 다시 실행하세요.**
+- **LLM 형식 응답이 전부 실패하던 문제**: 지금 채팅 모델(`claude-fable-5-1`)은 게이트웨이에서 도구 호출 강제(`tool_choice`)를 지원하지 않아 400 에러가 났고, 코드가 에러를 삼켜 "의미 후보 없음"·"판정 못 함"이 됐습니다 (DB에 후보가 캐시된 강남·애플만 정상이었음). → `qupict/llm.py`의 `get_structured_model()`(`json_schema` 방식)로 통일 (의미 후보, 직접 입력 의미, LLM 판정, 질문 세트). **이전에 `filter-all`을 돌렸다면 판정 못 한 기사가 남아 있을 수 있으니 다시 실행하세요.**
 - **임베딩 토큰 한도 초과**: 기사 279건을 한 요청에 보내 `Requested 351651 tokens, max 300000` 에러 → 한 요청에 100건씩 나눠 보냄 (`EMBED_BATCH_SIZE`).
 - **Windows `WinError 10054` 로그**: 크롤링 중 언론사 서버가 연결을 끊으면 `Exception in callback _ProactorBasePipeTransport...`가 찍히던 문제 → `setup_console()`에서 Windows asyncio 루프를 Selector 방식으로 바꿈 (동작에는 영향 없던 로그).
 
@@ -189,7 +189,7 @@
 ├── run.py              서비스 실행 파일: python run.py 강남 30 (질문하기만)
 ├── web.py              웹 서비스: python web.py → 브라우저에서 http://localhost:8000 (화면은 web/)
 ├── admin.py            서비스 DB 관리: collect · collect-all · filter-all · index-all · status · init-db
-├── evaluate.py         평가: label · make-qa · exp-a · exp-b · exp-c · sim
+├── evaluate.py         평가: label · make-qa · exp-a · exp-b · sim
 ├── Dockerfile          배포 이미지 (Google Cloud Run이 main merge마다 이걸로 만들어 배포). .dockerignore로 .env 등 제외
 ├── requirements.txt
 ├── tools/              일회성 도구: migrate_supabase_to_firestore.py (Supabase → Firestore 데이터 이전)
@@ -215,7 +215,7 @@
 │   ├── build_labeled_set.py  라벨링 → labeled_set_N.json (검색어 단위로 나눠 누적)
 │   ├── exp_a_filtering.py    [7단계] 실험 A: labeled_set_*.json으로 필터링 방법 비교
 │   └── results/              실험 A 결과 + LLM 판정 캐시(llm_cache.json)
-├── experiments/        [7단계] 실험 B·C, 질문 세트(qa_set.csv), 유사도 확인, 결과(results/)
+├── experiments/        [7단계] 실험 B, 질문 세트(qa_set.csv), 유사도 확인, 결과(results/)
 ├── tests/
 │   ├── check_db.py     DB 점검 (python tests/check_db.py, 실제 DB 사용)
 │   ├── run_offline.py  오프라인 테스트 전체 실행 (크레딧 0)
@@ -318,7 +318,7 @@ DB 안을 직접 보고 싶으면 GCP 콘솔 → **Firestore → Firestore Studi
 | `run.py` | **서비스** 사용자 (질문하고 답 받기, 터미널) | 서비스 DB |
 | `web.py` | **서비스** 사용자 (같은 기능을 브라우저 화면으로) | 서비스 DB |
 | `admin.py` | 서비스 DB 관리 (12개 대상 미리 채우기, 현황) | 서비스 DB |
-| `evaluate.py` | 평가 (정답 라벨, 질문 세트, 실험 A·B·C) | 실험 A는 **정답 JSON**(`evalset/labeled_set_*.json`), 나머지는 아직 서비스 DB |
+| `evaluate.py` | 평가 (정답 라벨, 질문 세트, 실험 A·B) | 실험 A는 **정답 JSON**(`evalset/labeled_set_*.json`), 나머지는 아직 서비스 DB |
 | `evalset/build_labeled_set.py` | 정답 라벨링 (JSON) | 정답 JSON |
 
 **서비스 (`run.py`)**
@@ -346,7 +346,7 @@ DB 안을 직접 보고 싶으면 GCP 콘솔 → **Firestore → Firestore Studi
 - **의미·별칭·연관어는 LLM이 만든 의미 후보만 씁니다** (사람이 적은 값으로 덮어쓰지 않음). 일괄 명령은 시작할 때 topic의 기준을 LLM 후보 값으로 다시 맞춥니다.
 - 일괄 명령은 모두 `--target 강남`처럼 **검색어 하나만** 할 수 있습니다.
 - 모든 명령은 **아직 안 한 것만** 처리합니다 → 중간에 끊겨도 다시 실행하면 이어서 하고, 비용이 다시 들지 않습니다.
-- 답변의 출처에는 **답변이 실제로 인용한 기사만** 보여 줍니다 (`Answer.cited`, 실험 C의 출처 정확도용).
+- 답변의 출처에는 **답변이 실제로 인용한 기사만** 보여 줍니다 (`Answer.cited`).
 - **라벨 기준: 대상당 중복 제거 후 최신 대표 기사 150건.** `label`은 이미 붙인 라벨 수를 빼고 최신 기사부터 남은 개수만 보여 주고, 150건을 채운 대상은 목록에서 빠집니다. 건너뛴(s) 기사는 다음 실행 때 다시 나오니, 판단이 어려운 기사는 3(보류)으로 표시하세요.
 - 150건이 남도록 `collect-all`은 대상당 **최대 300건**을 모읍니다 (검색어마다 최신순 최대 300건까지 쪽을 넘겨 받음, 강남 30일 기준 후보 약 700건). 수집 결과에 "⚠ 라벨 목표 150건보다 N건 적음"이 나오면 안내대로 `--max` 또는 `--days`를 늘려 다시 실행하세요 (이미 있는 기사는 다시 크롤링하지 않음).
 - `label`은 시작할 때 **중복 기사부터 표시**합니다 (2단계와 같은 기준, 1-1 참고). 비슷한 기사는 대표 기사 하나만 보여 주므로 같은 내용을 여러 번 라벨링하지 않습니다. LLM 판정은 하지 않아서 `filter-all` 없이 바로 라벨링할 수 있습니다.
@@ -364,7 +364,7 @@ python evalset/build_labeled_set.py   # 검색어마다 의미 고르기 → 150
 python evaluate.py exp-a              # 라벨이 쌓이는 중간에 돌려도 됨 (LLM 판정은 캐시)
 ```
 
-서비스 DB 채우기 (질문 답변·실험 B·C용):
+서비스 DB 채우기 (질문 답변·실험 B용):
 
 ```bash
 python admin.py collect 강남      # 대상마다 한 번 (의미를 골라 추가). 같은 검색어의 다른 의미도 다시 실행해 추가
@@ -381,8 +381,8 @@ python admin.py status
 2. **label**: 대상당 최신 대표 기사 150건을 사람이 나눠서 라벨링 (12개 × 150 = 1,800건) — topic마다 번호를 골라서 하므로 **사람마다 다른 topic**을 맡으면 됩니다. 중복 제거는 LLM 비용이 없고, 시스템 판정 없이 라벨을 붙이므로 정답이 시스템에 끌려가지 않습니다
 3. **filter-all**: 중복이 아닌 대표 기사 전부를 규칙·LLM으로 판정 (100건당 약 10~15 크레딧 → 대상당 대표 기사 약 200~250건이면 12개 합쳐 약 250~450 크레딧 예상). 라벨과 판정은 따로 저장되므로 label과 순서를 바꿔도 됩니다
 4. **status**로 남은 라벨 수 확인
-5. (나중에) **index-all**: 질문 답변·실험 B·C용. 이미지 설명 때문에 크레딧이 가장 많이 드는 단계라 따로 실행
-6. **make-qa**: 라벨을 붙이며 기사를 읽은 김에 실험 B·C용 질문을 만든다 (`--suggest`면 LLM 초안). 대상마다 5~10개 정도
+5. (나중에) **index-all**: 질문 답변·실험 B용. 이미지 설명 때문에 크레딧이 가장 많이 드는 단계라 따로 실행
+6. **make-qa**: 라벨을 붙이며 기사를 읽은 김에 실험 B용 질문을 만든다 (`--suggest`면 LLM 초안). 대상마다 5~10개 정도
 
 ---
 
@@ -733,14 +733,13 @@ DB는 팀 공용 하나(GCP 프로젝트 `qupict`의 Firestore `(default)`, 서�
 
 ---
 
-## 10. 7단계: 실험 (`evalset/` 실험 A, `experiments/` 실험 B·C)
+## 10. 7단계: 실험 (`evalset/` 실험 A, `experiments/` 실험 B)
 
 | 명령 | 실험 | 비교 | 지표 | 필요한 것 |
 | --- | --- | --- | --- | --- |
 | `python evaluate.py exp-a` (= `python evalset/exp_a_filtering.py`) | A. 필터링 | baseline / 1-a 별칭 / 1-b 검증어 / 1-c 규칙 점수 / 2-b LLM만 / **제안(규칙+LLM)** | Precision·Recall·F1·Accuracy·무관 유입률·LLM 호출 수 | **정답 JSON** (`evalset/labeled_set_*.json`, DB 안 씀) |
-| `python evaluate.py make-qa` | B·C 질문 세트 | — | — | 관련 기사 |
+| `python evaluate.py make-qa` | B 질문 세트 | — | — | 관련 기사 |
 | `python evaluate.py exp-b` | B. 검색 | base / HyDE / Multi-Query / both (`--faiss`: 예전 FAISS도) | Recall@5·MRR·검색 시간 | 질문 세트 + `index-all` |
-| `python evaluate.py exp-c` | C. 답변 | LLM 단독 / 기본 RAG(필터 없음) / **QuPicT** | 정답률·근거 일치율·환각 비율·출처 정확도 (LLM 채점) | 질문 세트 + `index-all` |
 | `python evaluate.py sim` | 유사도 확인 | 기준값 0.40 / 0.45 / 0.50 | 정답 근거 기사의 최고 유사도, 기준값별로 살아남는 질문 수 | 질문 세트 + `index-all` |
 
 - 모두 `--target 강남`처럼 검색어 하나만 할 수 있고, 결과는 `experiments/results/`에 `실험_날짜시각.json/.csv`로 저장됩니다 (CSV는 엑셀에서 바로 열림).
@@ -748,8 +747,6 @@ DB는 팀 공용 하나(GCP 프로젝트 `qupict`의 Firestore `(default)`, 서�
 - **실험 A는 `evalset/`으로 옮겼고 정답 JSON으로 평가합니다.** 기준(의미·연관어·배제어)은 라벨링 때 JSON에 저장한 값을 쓰고, 규칙·LLM 판정을 그 자리에서 다시 계산합니다. LLM 판정은 `evalset/results/llm_cache.json`에 캐시 (다시 돌려도 비용 0), 결과는 `evalset/results/`.
 - **1-b 검증어**: `evalset/exp_a_filtering.py`의 `VALIDATION_TERMS` (키: 검색어 × 라벨링 때 고른 의미 이름, 예: 강남 → "방송인"). 예전 방식 재현에만 쓰고 의미 기준에는 쓰지 않습니다. 의미 이름이 다르면 그 topic은 1-b를 건너뜁니다. **팀 확인 필요**.
 - **질문 세트**: `experiments/qa_set.csv` 하나만 봅니다 (git에 올려 팀이 같이 씀, 엑셀로 편집 가능). 아래 "질문 세트(골든셋) CSV" 참고.
-- **실험 C 채점**: LLM이 정답 근거 기사만 보고 주장별로 판정 (근거를 먼저 쓰고 판정). 결과 JSON에 주장별 판정이 남아 있어 **일부를 사람이 검수**하면 됩니다. 출처 정확도는 "정답 근거로 지정한 기사"만 맞다고 보므로 같은 내용의 다른 기사를 인용하면 낮게 나올 수 있습니다.
-- **비용**: 실험 C는 질문 1개당 LLM 약 10번 → `--limit`로 나눠 돌리기.
 
 ### 강남으로 시험 실행한 결과 (질문 3개, 참고용)
 
@@ -757,7 +754,6 @@ DB는 팀 공용 하나(GCP 프로젝트 `qupict`의 Firestore `(default)`, 서�
 | --- | --- |
 | A | 임시 라벨(시스템 판정 복사)로 흐름만 확인 — 1-b(검증어 "방송인")는 관련 8건 중 3건만 찾음 (Recall 0.375) |
 | B | 유사도 기준 0.2일 때 모든 방식 Recall@5 = 1.0 → **0.5로 올리니 일부 방식에서 0.667** (OST 질문의 최고 유사도가 0.53이라 아슬아슬) |
-| C | LLM 단독은 3개 모두 "확인 불가"(정답 0), 기본 RAG 2/2 정답(1개 채점 실패 → 재시도 추가), **QuPicT 2/3** — OST 질문은 0.5 기준 때문에 근거가 하나도 안 남아 "확인 불가" |
 
 ### 유사도 기준 0.5 (팀 결정)
 
@@ -771,7 +767,7 @@ DB는 팀 공용 하나(GCP 프로젝트 `qupict`의 Firestore `(default)`, 서�
 
 - **`experiments/qa_set.yaml`은 지웠습니다.** 예전 강남 질문 3개는 근거 기사가 맞지 않아 같이 지웠고, 따로 가져오는 단계(`import-qa`) 없이 실험이 CSV를 바로 읽습니다.
 - **열**: `query`, `question` 필수 / `sense`, `answer`, `evidence`(근거 기사 link, 여러 개면 `;`), `id` 선택. 한글 열 이름(검색어 · 의미 · 질문 · 정답 · 근거 기사)과 엑셀 CSV(cp949)도 읽습니다.
-- **다른 파일로 돌리기**: `python evaluate.py exp-b --qa 골든셋.csv` (exp-c · sim도 같음). `make-qa`는 이 CSV 끝에 질문을 추가합니다.
+- **다른 파일로 돌리기**: `python evaluate.py exp-b --qa 골든셋.csv` (sim도 같음). `make-qa`는 이 CSV 끝에 질문을 추가합니다.
 - **읽을 때 DB로 확인** (DB는 읽기만, CSV 파일은 안 고침):
   - `sense`가 비었거나 DB 의미 이름과 다르면 (예: `기업 애플` ↔ DB `기업 Apple`, `삼성전자(기업)` ↔ `기업 삼성전자`) 이름에 같은 단어가 가장 많은 의미 → 근거 기사가 '관련' · '보류'로 든 topic → 하나뿐인 topic 순으로 정합니다
   - 근거에 **기사 대신 이미지 주소**를 적었으면 그 이미지가 실린 기사 link로 바꿉니다 (기사 문서의 `image_bases`)
@@ -855,8 +851,8 @@ DB는 팀 공용 하나(GCP 프로젝트 `qupict`의 Firestore `(default)`, 서�
 2. **12개 대상 정답 라벨링** (`evalset/build_labeled_set.py`, 팀이 같이 모여서)
 3. ~~`indexing.py`, `retrieval.py`~~ ✅
 4. ~~`run.py` DB 버전 + 일괄 명령~~ ✅ → 실행 파일 3개로 분리 ✅ (`run.py` 서비스 / `admin.py` DB 관리 / `evaluate.py` 평가)
-5. ~~실험 코드~~ ✅ (A·B·C + 질문 세트 도구), ~~테스트 저장소로 옮기기~~ ✅
+5. ~~실험 코드~~ ✅ (A·B + 질문 세트 도구), ~~테스트 저장소로 옮기기~~ ✅
 6. **(모여서)** `evalset/build_labeled_set.py`로 라벨링 → `exp-a` / 서비스 DB: `collect 검색어` (대상마다) → `filter-all` → `make-qa` → `index-all`
-7. 실험 B·C도 정답 JSON 기준으로 옮길지 결정
-8. **실험 실행** `exp-a` → ~~`exp-b`~~ ✅ (골든셋 87문항, 10-실험 B 결과) → `exp-c` → 결과 정리 (README 성능 평가 갱신)
+7. 실험 B도 정답 JSON 기준으로 옮길지 결정
+8. **실험 실행** `exp-a` → ~~`exp-b`~~ ✅ (골든셋 87문항, 10-실험 B 결과) → 결과 정리 (README 성능 평가 갱신)
 9. ~~웹사이트~~ ✅ (`python web.py`, 1-0), ~~배포~~ ✅ (Google Cloud Run, 위 최신) — 대시보드는 아직

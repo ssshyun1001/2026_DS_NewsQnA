@@ -19,7 +19,7 @@ QuPicT 서비스 DB 관리 실행 파일 — 서비스 DB를 미리 채우고 �
 
 다른 용도의 실행 파일
     python run.py ...         서비스: 검색어로 질문하기
-    python evaluate.py ...    평가: 정답 라벨, 질문 세트, 실험 A·B·C, 유사도 확인
+    python evaluate.py ...    평가: 정답 라벨, 질문 세트, 실험 A·B, 유사도 확인
 """
 from __future__ import annotations
 

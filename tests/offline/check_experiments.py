@@ -1,5 +1,5 @@
 """
-실험 코드: 지표 계산, 실험 A(정답 JSON) 방법별 예측, 실험 B 순위 점수, 실험 C 요약, 질문 세트 만들기 (가짜 DB·LLM)
+실험 코드: 지표 계산, 실험 A(정답 JSON) 방법별 예측, 실험 B 순위 점수, 질문 세트 만들기 (가짜 DB·LLM)
 
 LLM·네이버·DB를 실제로 부르지 않는다 (크레딧 0). 실행: python tests/run_offline.py
 """
@@ -13,10 +13,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import experiments.common as C
 import evalset.exp_a_filtering as A
 import experiments.exp_b_retrieval as B
-import experiments.exp_c_answers as X
 import experiments.qa_set as Q
 from qupict import db
-from qupict.schemas import Answer, Article, SelectedSense, Sense
+from qupict.schemas import Article, SelectedSense, Sense
 
 tmp = Path(tempfile.mkdtemp())
 
@@ -107,31 +106,15 @@ R.search_topic = lambda tid, q, s, k=5, use_hyde=True, use_multi_query=True: [
 assert B.article_ranking_db(1, Q.QAItem("i", "q", "s", "질문", "답"), sel, True, True) == ["A", "B"]
 print("4 ok: 실험 B 순위·점수")
 
-# 5) 실험 C: 인용 링크, 요약 계산
-ans = Answer(question="q", answer="x(기사 2)", sources=[art("A", ""), art("B", "")], cited=[2])
-assert X.cited_links(ans) == ["B"]
+# 5) 질문 세트 파일 준비 (6·8에서 쓴다)
 Q.QA_PATH = tmp / "qa.csv"
 Q.save_qa([Q.QAItem("강남-001", "강남", "방송인 강남", "질문", "정답", ["B"])])
-X.load_qa = lambda path=None, query=None: Q.load_qa(Q.QA_PATH, query, resolve=False)
 class Rec:
     id = 3
     selected = sel
 db.get_topic = lambda q, s: Rec()
 db.get_topic_articles = lambda tid, **k: []
-X._evidence_texts = lambda links: ["근거"]
-X.answer_llm_only = lambda item: Answer(question="q", answer="모름", sources=[])
-X.answer_basic_rag = lambda item, store, arts: Answer(question="q", answer="x(기사 1)", sources=[art("A", "")])
-X.answer_qupict = lambda item, tid, s: Answer(question="q", answer="y(기사 1)", sources=[art("B", "")], cited=[1])
-grades = {"모름": X._Grade(claims=[], reasoning="r", correct=False, hallucination=False),
-          "x(기사 1)": X._Grade(claims=[X._Claim(claim="c", evidence="e", supported=False)], reasoning="r", correct=False, hallucination=True),
-          "y(기사 1)": X._Grade(claims=[X._Claim(claim="c", evidence="e", supported=True)], reasoning="r", correct=True, hallucination=False)}
-X.grade = lambda item, text, ev: grades[text]
-summary, per = X.run()
-by = {r["method"]: r for r in summary}
-assert by["llm_only"]["accuracy"] == 0.0 and by["llm_only"]["grounding_rate"] is None
-assert by["basic_rag"]["hallucination_rate"] == 1.0 and by["basic_rag"]["citation_accuracy"] == 0.0   # A는 근거 아님
-assert by["qupict"]["accuracy"] == 1.0 and by["qupict"]["grounding_rate"] == 1.0 and by["qupict"]["citation_accuracy"] == 1.0
-print("5 ok: 실험 C 요약 (정답률·근거 일치율·환각·출처 정확도)")
+print("5 ok: 질문 세트 파일 준비")
 
 # 6) 질문 세트: 번호 매기기, 만들기(직접 입력 / 초안 받기 / 건너뛰기 / 끝내기)
 items_qa = Q.load_qa(Q.QA_PATH, resolve=False)
@@ -198,17 +181,13 @@ assert all(r["query"] and r["question"]                                         
            for r in Q.read_csv_rows(Path(__file__).resolve().parents[2] / "experiments" / "qa_set.csv"))
 print("7 ok: 질문 세트 CSV 읽기 · 저장")
 
-# 8) 정답 · 근거가 비어 있는 질문: 실험 B는 근거 없는 질문을 건너뛰고, 실험 C는 정답 · 근거 둘 다 없을 때만 건너뜀
+# 8) 정답 · 근거가 비어 있는 질문: 실험 B는 근거 없는 질문을 건너뜀
 Q.save_qa([Q.QAItem("강남-001", "강남", "방송인 강남", "질문", "정답", ["B"]),
            Q.QAItem("강남-002", "강남", "방송인 강남", "정답만", "정답", []),
            Q.QAItem("강남-003", "강남", "방송인 강남", "둘 다 없음", "", [])])
-B.load_qa = X.load_qa
+B.load_qa = lambda path=None, query=None: Q.load_qa(Q.QA_PATH, query, resolve=False)
 B.article_ranking_db = lambda tid, item, s, h, m: ["B"]
 _, per_b = B.run()
 assert {r["id"] for r in per_b} == {"강남-001"}
-X.grade = lambda item, text, ev: grades[text]
-_, per_c = X.run()
-assert {r["id"] for r in per_c} == {"강남-001", "강남-002"}
-assert [r["has_evidence"] for r in per_c if r["method"] == "qupict"] == [True, False]
 print("8 ok: 정답 · 근거 빈 질문 처리")
 print("ALL PASS")

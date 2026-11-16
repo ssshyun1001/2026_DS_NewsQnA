@@ -1,12 +1,11 @@
 """
-QuPicT 평가 실행 파일 — 정답 라벨, 질문 세트, 실험 A·B·C (기획안 7단계)
+QuPicT 평가 실행 파일 — 정답 라벨, 질문 세트, 실험 A·B (기획안 7단계)
 
     python evaluate.py label   [--target 강남] [--limit 150]  최신 대표 기사 150건에 정답 라벨 (관련 / 무관 / 보류)
-    python evaluate.py make-qa [--target 강남] [--suggest]    실험 B·C용 질문 세트 만들기 (experiments/qa_set.csv에 추가)
+    python evaluate.py make-qa [--target 강남] [--suggest]    실험 B용 질문 세트 만들기 (experiments/qa_set.csv에 추가)
     python evaluate.py exp-a   [--target 강남]                실험 A: 필터링 방법 비교 (정답 JSON evalset/labeled_set_*.json 기준)
     python evaluate.py exp-b   [--target 강남] [--faiss]      실험 B: 검색 방식 비교 (Recall@5, MRR)
-    python evaluate.py exp-c   [--target 강남] [--limit 10]   실험 C: LLM 단독 vs 기본 RAG vs QuPicT 답변 채점
-        실험 B · C · sim은 질문 세트 experiments/qa_set.csv를 읽는다. --qa 골든셋.csv로 다른 CSV를 줄 수 있다
+        실험 B · sim은 질문 세트 experiments/qa_set.csv를 읽는다. --qa 골든셋.csv로 다른 CSV를 줄 수 있다
     python evaluate.py sim     [--target 강남] ["질문"]       유사도 확인: 기준값 없이 청크 유사도 보기
                                                               (질문 없이 → 질문 세트로 기준값 0.40/0.45/0.50 비교)
 
@@ -170,14 +169,14 @@ def cmd_sim(query: str | None, question: str | None, qa_path=None) -> None:
 # ---------------------------------------------------------------------------
 
 def _parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="python evaluate.py", description="QuPicT 평가 (정답 라벨 · 실험 A·B·C)")
+    p = argparse.ArgumentParser(prog="python evaluate.py", description="QuPicT 평가 (정답 라벨 · 실험 A·B)")
     sub = p.add_subparsers(dest="command", required=True)
 
     lb = sub.add_parser("label", help="정답 라벨 붙이기")
     lb.add_argument("--target")
     lb.add_argument("--limit", type=int, help="대상당 라벨 목표 (기본 150, 최신 대표 기사부터)")
 
-    mq = sub.add_parser("make-qa", help="실험 B·C용 질문 세트 만들기")
+    mq = sub.add_parser("make-qa", help="실험 B용 질문 세트 만들기")
     mq.add_argument("--target")
     mq.add_argument("--suggest", action="store_true", help="LLM이 질문·정답 초안을 써 줌")
 
@@ -187,11 +186,6 @@ def _parser() -> argparse.ArgumentParser:
     eb.add_argument("--target")
     eb.add_argument("--faiss", action="store_true", help="예전 FAISS 검색도 비교")
     eb.add_argument("--qa", type=Path, help="질문 세트 CSV (기본 experiments/qa_set.csv)")
-    ec = sub.add_parser("exp-c", help="실험 C: 답변 신뢰성 비교")
-    ec.add_argument("--target")
-    ec.add_argument("--limit", type=int, help="질문 수 제한 (비용 조절)")
-    ec.add_argument("--qa", type=Path, help="질문 세트 CSV (기본 experiments/qa_set.csv)")
-
     sm = sub.add_parser("sim", help="유사도 확인 (기준값 없이)")
     sm.add_argument("question", nargs="?", help="볼 질문 (없으면 질문 세트 전체)")
     sm.add_argument("--target")
@@ -201,7 +195,6 @@ def _parser() -> argparse.ArgumentParser:
 
 MENU = [
     ("exp-b", "실험 B: 검색 평가 (Recall@5, MRR) — 질문 세트 CSV 기준"),
-    ("exp-c", "실험 C: 답변 평가 (LLM 채점) — 질문 세트 CSV 기준"),
     ("sim", "유사도 확인 — 질문 세트 CSV 기준"),
     ("make-qa", "질문 세트 만들기"),
     ("label", "정답 라벨 붙이기"),
@@ -230,9 +223,6 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "exp-b":
         from experiments.exp_b_retrieval import main as exp_b
         exp_b(args.target, args.faiss, args.qa)
-    elif args.command == "exp-c":
-        from experiments.exp_c_answers import main as exp_c
-        exp_c(args.target, args.limit, args.qa)
     elif args.command == "sim":
         cmd_sim(args.target, args.question, args.qa)
 
