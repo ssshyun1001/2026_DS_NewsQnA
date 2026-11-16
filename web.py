@@ -378,6 +378,9 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
                     _recent_prepared[key] = _Prepared(topic_id, req.period_days, req.max_articles)
             finally:
                 topic_lock.release()
+            # 하이브리드 검색의 키워드(BM25) 인덱스를 미리 만든다 (첫 질문이 인덱스 만드는 시간만큼 늦어지지 않게).
+            # 다른 사용자의 준비 결과를 그대로 쓴 경우에도 부른다 (bm25.topic_index가 같은 topic의 인덱스를 다시 쓴다)
+            threading.Thread(target=warm_up_search, args=(topic_id,), daemon=True).start()
             oldest = oldest_searchable_or_none(topic_id, req.period_days)    # 답변에 적는 기사 기간의 시작
             find_hot = lambda: hot.top_duplicated_db(topic_id, req.period_days)
 
