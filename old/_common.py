@@ -28,7 +28,7 @@ from qupict.schemas import SelectedSense                 # noqa: E402
 
 def get_db_topic(query: str, sense_name: str | None):
     """DB에 저장된 topic (없거나 DB를 못 쓰면 None). 반환값: db.TopicRecord (id, selected)"""
-    if not settings.database_url or not sense_name:
+    if not settings.has_db or not sense_name:
         return None
     try:
         from qupict import db

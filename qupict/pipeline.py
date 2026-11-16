@@ -46,9 +46,7 @@ def choose_topic(query: str) -> tuple[int, SelectedSense]:
 
 def stored_topics(query: str | None = None) -> list[db.TopicRecord]:
     """DB에 저장된 topic 목록. query를 주면 그 검색어만 (예: "눈" → 눈-날씨, 눈-신체)."""
-    with db.connect() as conn:
-        rows = conn.execute("SELECT query, sense_name FROM topics ORDER BY query, sense_name").fetchall()
-    records = [db.get_topic(r["query"], r["sense_name"]) for r in rows if query is None or r["query"] == query]
+    records = db.list_topics(query)
     if query and not records:
         raise ValueError(f"DB에 '{query}' 검색어의 topic이 없습니다. 먼저 python admin.py collect {query} 로 추가하세요.")
     return records
@@ -117,7 +115,7 @@ async def index_target(record: db.TopicRecord, describe_images: bool = True) -> 
 
 # ---------------------------------------------------------------------------
 # 현황 · 라벨링용 조회
-#   db.py에 없는 읽기 전용 조회라 여기에 두었다 (DB 담당이 db.py로 옮겨도 된다)
+#   실제 조회는 db.py가 한다 (topic_status_rows · representative_count · count_pending · label_rows)
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -138,28 +136,9 @@ class TopicStatus:
 
 
 def topic_status() -> list[TopicStatus]:
-    with db.connect() as conn:
-        rows = conn.execute(
-            """SELECT t.id, t.query, t.sense_name,
-                      count(at.article_id) AS articles,
-                      count(at.duplicate_of) AS duplicates,
-                      count(*) FILTER (WHERE at.article_id IS NOT NULL AND at.duplicate_of IS NULL
-                                       AND at.status IS NULL) AS unjudged,
-                      -- 판정 칸은 대표 기사만 센다 (중복 기사는 대표 판정을 복사해 가지므로 "중복" 칸에서만 센다)
-                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.stage = 'rule' AND at.status = '무관') AS rule_irrelevant,
-                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.stage = 'llm' AND at.status = '관련') AS llm_relevant,
-                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.stage = 'llm' AND at.status = '무관') AS llm_irrelevant,
-                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.stage = 'llm' AND at.status = '보류') AS llm_hold,
-                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.label IS NOT NULL) AS labeled,
-                      count(*) FILTER (WHERE at.article_id IS NOT NULL AND at.duplicate_of IS NULL) AS to_label,
-                      count(*) FILTER (WHERE EXISTS (SELECT 1 FROM article_chunks c
-                                                     WHERE c.article_id = at.article_id)) AS chunked
-               FROM topics t LEFT JOIN article_topics at ON at.topic_id = t.id
-               GROUP BY t.id ORDER BY t.query, t.sense_name"""
-        ).fetchall()
-    return [TopicStatus(r["id"], r["query"], r["sense_name"], *(r[k] for k in (
+    return [TopicStatus(r["topic_id"], r["query"], r["sense_name"], *(r[k] for k in (
         "articles", "duplicates", "unjudged", "rule_irrelevant", "llm_relevant", "llm_irrelevant",
-        "llm_hold", "labeled", "to_label", "chunked"))) for r in rows]
+        "llm_hold", "labeled", "to_label", "chunked"))) for r in db.topic_status_rows()]
 
 
 @dataclass
@@ -175,10 +154,7 @@ class LabelItem:
 
 def count_representatives(topic_id: int) -> int:
     """중복이 아닌 기사 수 (= 라벨 붙일 후보)."""
-    with db.connect() as conn:
-        r = conn.execute("SELECT count(*) AS n FROM article_topics WHERE topic_id = %s AND duplicate_of IS NULL",
-                         (topic_id,)).fetchone()
-    return r["n"]
+    return db.representative_count(topic_id)
 
 
 @dataclass
@@ -189,37 +165,18 @@ class PendingWork:
 
 
 def count_pending(topic_id: int, statuses: tuple[str, ...] = ("관련", "보류")) -> PendingWork:
-    """판정·인덱싱할 기사가 남았는지 개수만 센다 (DB 왕복 1번, 약 0.2초).
+    """판정·인덱싱할 기사가 남았는지 개수만 센다 (DB 조회 1번: topic 연결 문서만 읽고 기사 본문은 안 읽는다).
 
     filter_topic · index_topic은 할 일이 0건이어도 topic 기사 전체(임베딩 포함)를 불러와서
     각각 1.5초 안팎이 걸렸다 (측정 2026-11-14, 방송인 강남 기사 55건). 같은 검색어를 다시 준비할 때는
     대부분 새 기사가 없으므로, 먼저 세어 보고 0건인 단계는 부르지 않는다 (run.prepare_topic).
     statuses는 indexing.INDEX_STATUSES와 같게 둔다."""
-    with db.connect() as conn:
-        r = conn.execute(
-            """SELECT count(*) FILTER (WHERE at.status IS NULL) AS unjudged,
-                      count(*) FILTER (WHERE at.duplicate_of IS NULL AND at.status = ANY(%(statuses)s)
-                                         AND NOT EXISTS (SELECT 1 FROM article_chunks c
-                                                         WHERE c.article_id = at.article_id)) AS unindexed
-               FROM article_topics at WHERE at.topic_id = %(topic_id)s""",
-            {"topic_id": topic_id, "statuses": list(statuses)},
-        ).fetchone()
-    return PendingWork(r["unjudged"], r["unindexed"])
+    return PendingWork(*db.count_pending(topic_id, statuses))
 
 
 def articles_to_label(topic_id: int, include_labeled: bool = False,
                       limit: int | None = None) -> list[LabelItem]:
     """정답 라벨을 붙일 기사 (중복으로 표시된 기사는 대표 기사만 보면 되므로 뺀다). 발행일 최신순.
     limit: 최신 기사부터 이 개수만 (라벨 150건 목표에서 남은 개수)"""
-    with db.connect() as conn:
-        rows = conn.execute(
-            f"""SELECT a.link, a.title, a.press, a.pub_date, at.search_term, a.description, a.content
-                FROM article_topics at JOIN articles a ON a.id = at.article_id
-                WHERE at.topic_id = %s AND at.duplicate_of IS NULL
-                      {'' if include_labeled else 'AND at.label IS NULL'}
-                ORDER BY a.pub_date DESC NULLS LAST, a.id
-                {'LIMIT %s' if limit is not None else ''}""",
-            (topic_id, limit) if limit is not None else (topic_id,),
-        ).fetchall()
     return [LabelItem(r["link"], r["title"], r["press"], r["pub_date"], r["search_term"],
-                      r["description"], r["content"]) for r in rows]
+                      r["description"], r["content"]) for r in db.label_rows(topic_id, include_labeled, limit)]

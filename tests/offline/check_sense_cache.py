@@ -19,11 +19,11 @@ db.get_sense_candidates = lambda q: store.get(q)
 def reset(): llm_calls.clear(); saved.clear()
 
 # 1) DB 주소 없음 → LLM만, DB 안 씀
-sense.settings = dataclasses.replace(settings, database_url="")
+sense.settings = dataclasses.replace(settings, firestore_project="")
 c, src = sense.load_sense_candidates("애플")
 assert src == "LLM (DB 없음)" and llm_calls == ["애플"] and saved == []
 
-sense.settings = dataclasses.replace(settings, database_url="postgresql://fake")
+sense.settings = dataclasses.replace(settings, firestore_project="fake-project")
 # 2) DB에 없음 → LLM으로 만들고 저장
 reset(); c, src = sense.load_sense_candidates(" 애플 ")
 assert src == "LLM → DB 저장" and llm_calls == ["애플"] and saved == ["애플"]
@@ -68,6 +68,6 @@ sense.remember_selection(two, sense.select_sense(two, 1))
 my = sense.select_custom_sense(two, cust("애플 주식"), includes=["기업 Apple"])
 sense.remember_selection(two, my)
 assert recorded == [("애플", "과일 사과", []), ("애플", "애플 주식", ["기업 Apple"])]
-sense.settings = dataclasses.replace(settings, database_url="")
+sense.settings = dataclasses.replace(settings, firestore_project="")
 recorded.clear(); sense.remember_selection(two, my); assert recorded == []     # DB 없으면 기록 안 함
 print("ok: DB 캐싱 9가지 (DB 없음 / 저장 / 캐시 사용 / 빈 결과 미저장 / 읽기 실패 / 저장 실패 / 직접 입력 후보 / 직접 입력만 / 선택 기록)")

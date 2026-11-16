@@ -10,7 +10,8 @@
   multi       질문 + Multi-Query 변형 질문 2개
   both        HyDE + Multi-Query  (실제 서비스 설정)
 
-  검색 엔진: pgvector (topic · 관련/보류 · 기간 조건 안에서 청크 검색, 실제 서비스)
+  검색 엔진: db (Firestore 벡터 검색: topic · 관련/보류 · 기간 조건 안에서 청크 검색, 실제 서비스.
+             2026-11-16 이전 결과 파일에는 예전 이름 pgvector로 적혀 있다)
             --faiss를 주면 예전 FAISS 메모리 검색(기사 단위, 관련/보류 기사)도 같은 4가지로 비교
 
 지표
@@ -18,7 +19,7 @@
   MRR        정답 근거 기사가 처음 나온 순위의 역수 평균 (1위 = 1, 2위 = 0.5, 없으면 0, 10위까지 봄)
   검색 시간   질문 1개당 평균 초 (HyDE·Multi-Query LLM 시간 포함)
 
-pgvector는 청크를 찾으므로 "청크가 처음 나온 순서"대로 기사 순위를 매긴다.
+DB 검색은 청크를 찾으므로 "청크가 처음 나온 순서"대로 기사 순위를 매긴다.
 
 실행: python evaluate.py exp-b [--target 강남] [--faiss] [--qa 골든셋.csv]
 """
@@ -36,10 +37,10 @@ from qupict import db
 
 VARIANTS = {"base": (False, False), "hyde": (True, False), "multi": (False, True), "both": (True, True)}
 RANK_DEPTH = 10            # MRR을 볼 기사 순위 깊이
-CHUNKS_PER_SEARCH = 20     # pgvector에서 가져올 청크 수 (기사 10개 순위를 만들기에 충분하게)
+CHUNKS_PER_SEARCH = 20     # DB 벡터 검색에서 가져올 청크 수 (기사 10개 순위를 만들기에 충분하게)
 
 
-def article_ranking_pgvector(topic_id: int, item: QAItem, selected, hyde: bool, multi: bool) -> list[str]:
+def article_ranking_db(topic_id: int, item: QAItem, selected, hyde: bool, multi: bool) -> list[str]:
     from qupict.retrieval import search_topic
     hits = search_topic(topic_id, item.question, selected, k=CHUNKS_PER_SEARCH,
                         use_hyde=hyde, use_multi_query=multi)
@@ -69,7 +70,7 @@ def run(query: str | None = None, with_faiss: bool = False, qa_path=None,
         items: list[QAItem] | None = None) -> tuple[list[dict], list[dict]]:
     items = load_qa(qa_path, query=query) if items is None else items
     per_question: list[dict] = []
-    engines = ["pgvector"] + (["faiss"] if with_faiss else [])
+    engines = ["db"] + (["faiss"] if with_faiss else [])
     topics: dict[tuple[str, str], tuple] = {}
 
     no_evidence = [x.id for x in items if not x.evidence]
@@ -103,8 +104,8 @@ def run(query: str | None = None, with_faiss: bool = False, qa_path=None,
         for engine in engines:
             for name, (hyde, multi) in VARIANTS.items():
                 start = time.time()
-                if engine == "pgvector":
-                    ranking = article_ranking_pgvector(record.id, item, record.selected, hyde, multi)
+                if engine == "db":
+                    ranking = article_ranking_db(record.id, item, record.selected, hyde, multi)
                 else:
                     ranking = article_ranking_faiss(store, articles, item, record.selected, hyde, multi) if store else []
                 elapsed = time.time() - start

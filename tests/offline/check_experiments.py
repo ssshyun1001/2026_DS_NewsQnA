@@ -96,7 +96,7 @@ with contextlib.redirect_stdout(io.StringIO()):
 assert list((tmp / "results").glob("exp_a_filtering_*.csv"))           # 결과는 evalset/results (여기선 임시 폴더)
 print("3 ok: 실험 A 흐름 (정답 JSON, 저장된 기준, LLM 캐시)")
 
-# 4) 실험 B: 순위 점수, pgvector 청크 → 기사 순위
+# 4) 실험 B: 순위 점수, DB 청크 → 기사 순위
 assert B.score(["a", "b", "c"], ["b"]) == (True, 0.5, 2)
 assert B.score(["a"] * 5 + ["x"], ["x"]) == (False, 1 / 6, 6)       # 6위: Recall@5 실패, MRR엔 반영
 assert B.score(["a"], ["x"]) == (False, 0.0, None)
@@ -104,7 +104,7 @@ import qupict.retrieval as R
 R.search_topic = lambda tid, q, s, k=5, use_hyde=True, use_multi_query=True: [
     db.ChunkHit("c", "body", 0.9, art("A", "")), db.ChunkHit("c2", "body", 0.8, art("A", "")),
     db.ChunkHit("c3", "body", 0.7, art("B", ""))]
-assert B.article_ranking_pgvector(1, Q.QAItem("i", "q", "s", "질문", "답"), sel, True, True) == ["A", "B"]
+assert B.article_ranking_db(1, Q.QAItem("i", "q", "s", "질문", "답"), sel, True, True) == ["A", "B"]
 print("4 ok: 실험 B 순위·점수")
 
 # 5) 실험 C: 인용 링크, 요약 계산
@@ -203,7 +203,7 @@ Q.save_qa([Q.QAItem("강남-001", "강남", "방송인 강남", "질문", "정�
            Q.QAItem("강남-002", "강남", "방송인 강남", "정답만", "정답", []),
            Q.QAItem("강남-003", "강남", "방송인 강남", "둘 다 없음", "", [])])
 B.load_qa = X.load_qa
-B.article_ranking_pgvector = lambda tid, item, s, h, m: ["B"]
+B.article_ranking_db = lambda tid, item, s, h, m: ["B"]
 _, per_b = B.run()
 assert {r["id"] for r in per_b} == {"강남-001"}
 X.grade = lambda item, text, ev: grades[text]

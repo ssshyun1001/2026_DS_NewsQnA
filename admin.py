@@ -12,7 +12,7 @@ QuPicT 서비스 DB 관리 실행 파일 — 서비스 DB를 미리 채우고 �
     python admin.py filter-all  [--redo]                  2·3단계: 규칙 → LLM 판정 → DB 저장
     python admin.py index-all   [--no-images]             4단계: 이미지 설명 → 청크 → 임베딩 → DB 저장
     python admin.py status                                topic별 진행 현황
-    python admin.py init-db                               DB 테이블 만들기 (schema.sql, 처음 한 번)
+    python admin.py init-db                               DB 검색 인덱스 만들기 (Firestore, 처음 한 번)
 
     *-all 명령은 --target 강남 처럼 검색어 하나만 할 수도 있다.
     모든 일괄 명령은 "아직 안 한 것만" 처리하므로 여러 번 실행해도 안전하고 비용이 다시 들지 않는다.
@@ -112,8 +112,10 @@ def cmd_status() -> None:
 
 def cmd_init_db() -> None:
     from qupict.db import init_db
-    init_db()
-    print("DB 테이블을 만들었습니다 (schema.sql).")
+    for line in init_db():
+        print(line)
+    print("Firestore 인덱스는 처음 만들 때 몇 분 걸립니다 (GCP 콘솔 → Firestore → 색인에서 상태 확인).")
+    print("컬렉션(테이블)은 따로 만들 필요 없이 처음 저장할 때 생깁니다.")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -142,7 +144,7 @@ def _parser() -> argparse.ArgumentParser:
     ix.add_argument("--no-images", action="store_true", help="이미지 설명 없이 (LLM 비용 0)")
 
     sub.add_parser("status", help="topic별 진행 현황")
-    sub.add_parser("init-db", help="DB 테이블 만들기")
+    sub.add_parser("init-db", help="DB 검색 인덱스 만들기 (Firestore 복합 · 벡터 인덱스)")
     return p
 
 

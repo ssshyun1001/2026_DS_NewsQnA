@@ -7,7 +7,7 @@
   ──────────  ─────────────────────────────────────────────────────────────
   llm_only     없음 (질문만)
   basic_rag    필터링 없이 수집한 기사 전부 (중복·무관 포함) → FAISS 기사 검색 상위 5건
-  qupict       의미 선택 + 관련성 검증을 통과한 기사(관련·보류) → pgvector 청크 검색 (실제 서비스)
+  qupict       의미 선택 + 관련성 검증을 통과한 기사(관련·보류) → DB(Firestore) 청크 벡터 검색 (실제 서비스)
   세 방식 모두 같은 LLM·같은 답변 프롬프트를 쓴다.
 
 지표
@@ -122,8 +122,7 @@ def grade(item: QAItem, answer_text: str, evidence_texts: list[str]) -> _Grade |
 def _evidence_texts(links: list[str]) -> list[str]:
     if not links:
         return []
-    with db.connect() as conn:
-        rows = conn.execute("SELECT link, title, content FROM articles WHERE link = ANY(%s)", (links,)).fetchall()
+    rows = db.articles_by_links(links)
     return [f"제목: {r['title']}\n{r['content']}" for r in rows]
 
 

@@ -1,15 +1,15 @@
 """
-[4단계] 인덱싱 — 이미지 → 글 → 청크 → 임베딩 → article_chunks 저장
+[4단계] 인덱싱 — 이미지 → 글 → 청크 → 임베딩 → 청크 저장 (Firestore)
 
 필터링에서 '관련'·'보류' 판정을 받은 기사만 질문 답변에 쓸 수 있게 준비한다.
 
-  1) 이미지 → 글   둘 중 하나 (결과는 모두 article_images.llm_description에 저장)
+  1) 이미지 → 글   둘 중 하나 (결과는 모두 기사 문서의 images.{이미지}.llm_description에 저장)
                    - OCR(EasyOCR): 이미지 속 글자를 읽는다. LLM 비용 0. 서비스 기본 (qupict/ocr.py)
                    - VLM: LLM이 기사 이미지를 2~3문장으로 설명한다. 이미지 주소를 그대로 넘기고,
                      실패하면 파일을 내려받아 보낸다 (파일은 저장하지 않음)
   2) 청크 나누기   본문을 약 500자씩, 문장 단위로 자른다 (앞 청크의 마지막 문장을 겹쳐서 문맥 유지)
                    이미지 설명은 이미지 하나 = 청크 하나 (출처 유형 'image')
-  3) 임베딩 저장   청크마다 임베딩을 만들어 article_chunks에 저장 → 5단계 pgvector 검색에 쓴다
+  3) 임베딩 저장   청크마다 임베딩을 만들어 DB chunks에 저장 → 5단계 Firestore 벡터 검색에 쓴다
 
   index_topic(topic_id)    DB 버전: 아직 청크가 없는 기사만 처리 (다시 실행해도 안전)
   split_into_chunks(text)  청크 나누기만 따로 (실험·테스트용)
@@ -142,7 +142,7 @@ async def embed_chunks(title: str, chunks: list[str]) -> list[list[float]]:
 
 
 async def build_article_chunks(articles: list[Article],
-                               image_chunks: dict[str, list[tuple[int, str]]]) -> dict[str, list]:
+                               image_chunks: dict[str, list[tuple[str, str]]]) -> dict[str, list]:
     """기사들의 청크(본문 청크 + 이미지 청크)와 임베딩을 만든다. DB에 저장하지 않는다. {기사 link: [db.Chunk]}
 
     image_chunks: {기사 link: [(image_id, 이미지 청크 내용)]} (described_images 결과)
@@ -155,7 +155,7 @@ async def build_article_chunks(articles: list[Article],
     """
     from qupict import db
 
-    plans: list[tuple[Article, list[str], list[tuple[int, str]]]] = []
+    plans: list[tuple[Article, list[str], list[tuple[str, str]]]] = []
     for article in articles:
         bodies = split_into_chunks(article.content)
         images = image_chunks.get(article.link, [])
@@ -164,7 +164,7 @@ async def build_article_chunks(articles: list[Article],
 
     semaphore = asyncio.Semaphore(EMBED_CONCURRENCY)
 
-    async def embed_one(article: Article, bodies: list[str], images: list[tuple[int, str]]) -> list[list[float]]:
+    async def embed_one(article: Article, bodies: list[str], images: list[tuple[str, str]]) -> list[list[float]]:
         async with semaphore:
             return await embed_chunks(article.title, bodies + [text for _, text in images])
 
@@ -209,26 +209,19 @@ class IndexResult:
                 f" (이미지 설명 {self.images_described}장{no_text}, 실패 {self.images_failed}장)")
 
 
-def described_images(article_links: list[str]) -> dict[str, list[tuple[int, str]]]:
+def described_images(article_links: list[str]) -> dict[str, list[tuple[str, str]]]:
     """기사별로 이미 글(VLM 설명 또는 OCR 글자)이 있는 이미지. {기사 link: [(image_id, 이미지 청크 내용)]}
     (기사 안 순서). OCR로 읽었지만 글자가 없던 이미지("")는 청크를 만들지 않는다.
 
-    db.py에 이 조회가 없어서 여기에 두었다. (DB 담당이 db.py로 옮겨도 된다 — 읽기 전용 SELECT 하나)
+    (이미지 행은 db.described_image_rows가 읽는다)
     """
     from qupict import db
     from qupict.ocr import OCR_MODEL_NAME, ocr_text_chunk
 
     if not article_links:
         return {}
-    with db.connect() as conn:
-        rows = conn.execute(
-            """SELECT a.link, i.id, i.caption, i.llm_description, i.described_model FROM article_images i
-               JOIN articles a ON a.id = i.article_id
-               WHERE a.link = ANY(%s) AND i.llm_description IS NOT NULL
-               ORDER BY a.id, i.position""",
-            (list(article_links),),
-        ).fetchall()
-    out: dict[str, list[tuple[int, str]]] = {}
+    rows = db.described_image_rows(list(article_links))
+    out: dict[str, list[tuple[str, str]]] = {}
     for r in rows:
         if not r["llm_description"]:
             continue
@@ -246,15 +239,7 @@ def _processed_image_counts(article_links: list[str]) -> dict[str, int]:
 
     if not article_links:
         return {}
-    with db.connect() as conn:
-        rows = conn.execute(
-            """SELECT a.link, count(*) AS n FROM article_images i
-               JOIN articles a ON a.id = i.article_id
-               WHERE a.link = ANY(%s) AND i.llm_description IS NOT NULL
-               GROUP BY a.link""",
-            (list(article_links),),
-        ).fetchall()
-    return {r["link"]: r["n"] for r in rows}
+    return db.processed_image_counts(list(article_links))
 
 
 async def _describe_topic_images(topic_id: int, statuses: tuple[str, ...]) -> tuple[set[str], int, int]:
@@ -327,7 +312,7 @@ async def _ocr_topic_images(topic_id: int, statuses: tuple[str, ...]) -> tuple[s
              for link, imgs in per_article.items()}
     await download_images([Article(title="", link=link, images=images) for link, images in files.items()])
 
-    saved: list[tuple[int, str]] = []
+    saved: list[tuple[str, str]] = []
     changed: set[str] = set()
     with_text = no_text = failed = 0
     for link, imgs in per_article.items():

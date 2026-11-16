@@ -5,7 +5,6 @@ EasyOCR·DB·네트워크를 실제로 부르지 않는다. 실행: python tests
 """
 import asyncio
 import sys
-from contextlib import contextmanager
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2]))
 from qupict import db, indexing as I, ocr  # noqa: E402
@@ -59,18 +58,11 @@ rows = [{"link": "A", "id": 1, "caption": "그래프", "llm_description": "매�
         {"link": "A", "id": 2, "caption": "", "llm_description": "", "described_model": "easyocr"},
         {"link": "B", "id": 4, "caption": "", "llm_description": "무대 위의 남성", "described_model": "gemini"}]
 
-class Conn:
-    def execute(self, sql, params=None): return self
-    def fetchall(self): return rows
-
-@contextmanager
-def fake_connect():
-    yield Conn()
-real_connect, db.connect = db.connect, fake_connect
+real_rows, db.described_image_rows = db.described_image_rows, lambda links: rows
 try:
     got = I.described_images(["A", "B"])
 finally:
-    db.connect = real_connect
+    db.described_image_rows = real_rows
 assert got == {"A": [(1, "[기사 이미지] 사진 설명(기사): 그래프 / 이미지 속 글자: 매출 2조")],
                "B": [(4, "[기사 이미지] 사진 내용: 무대 위의 남성")]}, got
 print("3 ok: 이미지 청크 글 (OCR / VLM / 글자 없음)")

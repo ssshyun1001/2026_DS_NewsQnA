@@ -32,8 +32,10 @@ class Settings:
     naver_client_id: str = os.getenv("NAVER_CLIENT_ID", "")
     naver_client_secret: str = os.getenv("NAVER_CLIENT_SECRET", "")
 
-    # PostgreSQL + pgvector (로컬 Docker / 팀 공용 DB 모두 이 주소 하나만 바꾸면 된다)
-    database_url: str = os.getenv("DATABASE_URL", "")
+    # 서비스 DB = Google Cloud Firestore (프로젝트 id). 비어 있으면 DB 없이(메모리 버전으로) 돈다.
+    #   인증: Cloud Run은 서비스 계정이 자동으로, 로컬은 GOOGLE_APPLICATION_CREDENTIALS = 서비스 계정 키 파일 경로
+    firestore_project: str = os.getenv("FIRESTORE_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT", "")
+    firestore_database: str = os.getenv("FIRESTORE_DATABASE", "(default)")   # 무료 한도는 (default) DB에만 있다
 
     # Pipeline tuning
     # 중복 제거 기준 (쉼표로 여러 개): "title"(제목 임베딩) | "content"(검색어가 들어간 문단 임베딩)
@@ -81,6 +83,11 @@ class Settings:
     #   예전 설정 DESCRIBE_IMAGES=1은 "vlm"으로 읽는다. (admin.py index-all은 이 설정과 상관없이 --no-images로 정한다)
     image_text: str = (os.getenv("IMAGE_TEXT")
                        or ("vlm" if os.getenv("DESCRIBE_IMAGES") == "1" else "ocr")).strip().lower()
+
+    @property
+    def has_db(self) -> bool:
+        """서비스 DB(Firestore)를 쓸 수 있게 설정되어 있는지."""
+        return bool(self.firestore_project)
 
 
 settings = Settings()

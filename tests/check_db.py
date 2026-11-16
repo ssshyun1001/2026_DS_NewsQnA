@@ -1,10 +1,10 @@
 """
-DB 점검 스크립트 — DB 연결, 테이블, 저장·조회 함수(qupict/db.py)가 제대로 동작하는지 확인한다.
+DB 점검 스크립트 — Firestore 연결, 검색 인덱스, 저장·조회 함수(qupict/db.py)가 제대로 동작하는지 확인한다.
 
 실행 (프로젝트 폴더에서):
     python tests/check_db.py
 
-  1) 연결·확장·테이블 확인
+  1) 연결 · 검색 인덱스 확인 (Firestore)
   2) 가짜 데이터로 0~5단계 저장·조회를 한 바퀴 돌려 결과를 확인
   3) 끝나면 가짜 데이터를 지운다 (실패해도 지움). 실제 데이터는 건드리지 않는다.
 LLM·네이버 API는 부르지 않는다 (크레딧 0).
@@ -29,7 +29,7 @@ from qupict.schemas import Article, ArticleImage, NewsMeta, SelectedSense, Sense
 
 TEST_QUERY = "__DB점검__"
 TEST_LINK = "https://dbcheck.invalid/"
-TABLES = ["query_senses", "topics", "articles", "article_images", "article_topics", "article_chunks"]
+COLLECTIONS = [db.SENSES, db.TOPICS, db.ARTICLES, db.ARTICLE_TOPICS, db.CHUNKS]
 
 _passed = 0
 
@@ -48,18 +48,19 @@ def fake_embedding(seed: int) -> list[float]:
 
 
 def check_connection() -> None:
-    print("[1] 연결·확장·테이블")
-    db.init_db()
-    with db.connect() as conn:
-        ext = conn.execute("SELECT extversion FROM pg_extension WHERE extname = 'vector'").fetchone()
-        tables = {r["tablename"] for r in conn.execute(
-            "SELECT tablename FROM pg_tables WHERE schemaname = 'public'").fetchall()}
-        counts = {t: conn.execute(f"SELECT count(*) AS n FROM {t}").fetchone()["n"] for t in TABLES if t in tables}
-    check("DB 연결 (DATABASE_URL)", True)
-    check(f"pgvector 확장 (버전 {ext['extversion'] if ext else '없음'})", ext is not None)
-    missing = [t for t in TABLES if t not in tables]
-    check("테이블 6개", not missing, f"없는 테이블: {missing}")
-    print("  현재 저장된 행 수:", counts)
+    print("[1] 연결 · 검색 인덱스")
+    db.ping()
+    check(f"Firestore 연결 (프로젝트 {db.settings.firestore_project}, DB {db.settings.firestore_database})", True)
+    from google.cloud import firestore_admin_v1 as fa
+    parent = (f"projects/{db.settings.firestore_project}/databases/{db.settings.firestore_database}"
+              "/collectionGroups/-")
+    ready = {(ix.name.split("/collectionGroups/")[1].split("/")[0],
+              tuple(f.field_path for f in ix.fields if f.field_path not in ("__name__", "embedding")))
+             for ix in fa.FirestoreAdminClient().list_indexes(parent=parent) if ix.state.name == "READY"}
+    missing = [(c, [f for f, _ in fields]) for c, fields, _ in db.INDEXES if (c, tuple(f for f, _ in fields)) not in ready]
+    check("검색 인덱스 3개 준비됨", not missing, f"없거나 만드는 중: {missing} → python admin.py init-db")
+    counts = {c: int(db._col(c).count().get()[0][0].value) for c in COLLECTIONS}
+    print("  현재 저장된 문서 수:", counts)
 
 
 def link(i: int) -> str:
@@ -130,15 +131,27 @@ def check_pipeline() -> None:
     check("질문 시점이 30일 전이면 그 뒤 기사는 안 나옴",
           db.search_chunks(topic_id, fake_embedding(10), period_days=7, now=now - timedelta(days=30)) == [])
 
+    db.save_judgments(topic_id, [db.Judgment(link(1), "무관", "llm")])
+    check("판정이 '무관'으로 바뀌면 검색에서 빠짐", db.search_chunks(topic_id, fake_embedding(10), period_days=7) == [])
+    db.save_judgments(topic_id, [db.Judgment(link(1), "관련", "llm")])
+    check("검색할 수 있는 기사 수 · 가장 오래된 날짜", db.searchable_stats(topic_id, 30, ("관련",)) == (1, articles[0].pub_date))
+
     db.reset_topic_filter(topic_id)
     check("필터 초기화 후 전부 미판정", len(db.get_topic_articles(topic_id, unjudged_only=True)) == 3)
 
 
 def cleanup() -> None:
-    with db.connect() as conn:
-        conn.execute("DELETE FROM articles WHERE link LIKE %s", (TEST_LINK + "%",))
-        conn.execute("DELETE FROM topics WHERE query = %s", (TEST_QUERY,))
-        conn.execute("DELETE FROM query_senses WHERE query = %s", (TEST_QUERY,))
+    """점검용 문서만 지운다 (점검 검색어 · 점검용 link). topic 번호는 하나 써 버리지만 문제없다."""
+    keys = [db.article_key(link(i)) for i in range(1, 5)]
+    w = db._Writes()
+    for collection, doc_id, _ in [(db.CHUNKS, i, None) for i, _ in db._stream_in(db.CHUNKS, "article_key", keys)] +             [(db.ARTICLE_TOPICS, i, None) for i, _ in db._stream_in(db.ARTICLE_TOPICS, "article_key", keys)] +             [(db.ARTICLES, k, None) for k in keys]:
+        w.delete(collection, doc_id)
+    for record in db.list_topics(TEST_QUERY):
+        w.delete(db.TOPICS, str(record.id))
+        w.delete(db.TOPIC_KEYS, db._hash(TEST_QUERY, record.selected.sense.name))
+    for doc_id, _ in db._stream(db.SENSES, ("query", "==", TEST_QUERY)):
+        w.delete(db.SENSES, doc_id)
+    w.commit()
 
 
 def main() -> None:
@@ -146,8 +159,8 @@ def main() -> None:
         check_connection()
     except Exception as e:
         print(f"\n❌ DB에 연결하지 못했습니다: {e}")
-        print("   - Docker Desktop이 켜져 있고 `docker compose up -d`를 했는지")
-        print("   - .env의 DATABASE_URL 비밀번호가 POSTGRES_PASSWORD와 같은지 확인하세요.")
+        print("   - .env에 FIRESTORE_PROJECT가 있는지")
+        print("   - gcloud auth application-default login 으로 로그인했는지 확인하세요 (README의 DB 설정 참고).")
         sys.exit(1)
     try:
         check_pipeline()

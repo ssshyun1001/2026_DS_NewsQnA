@@ -33,7 +33,7 @@ def main() -> None:
     _make_thread = web._remember_thread
     web._remember_thread = lambda fn, *a: threads.append(_make_thread(fn, *a)) or threads[-1]
     web.validate_settings = lambda: None
-    web.settings = SimpleNamespace(database_url="postgresql://가짜", chat_model="가짜 모델")
+    web.settings = SimpleNamespace(has_db=True, chat_model="가짜 모델")
 
     calls = {}
 

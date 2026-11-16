@@ -519,7 +519,7 @@ async def crawl_articles(metas: list[NewsMeta], concurrency: int = CRAWL_CONCURR
 # 이미지 파일 내려받기
 #
 # 1단계(수집)에서는 이미지 주소·사진 설명만 모아 DB에 저장한다. 이미지 파일은 DB에 저장하지 않는다
-# (팀 결정: Supabase 무료 용량 500MB를 아끼기 위해. article_images에는 주소·캡션·LLM 설명만 있다).
+# (팀 결정: DB 용량을 아끼기 위해. 기사 문서의 images에는 주소·캡션·LLM 설명만 있다).
 #
 # 파일은 4단계에서 "관련" 판정을 받은 기사의 이미지 설명을 만들 때만, 그때 이 함수로 받아
 # 메모리에서 LLM에 보내고 버린다. 걸러질 기사의 이미지는 받지 않는다.
@@ -616,17 +616,16 @@ async def collect_to_db(
     크롤링하지 않고 topic에 연결만 한다. DB에 없는 기사(주로 지난 수집 이후 새로 나온 기사)만 크롤링해 저장한다.
     이후 단계는 db.get_topic_articles(topic_id, period_days=...)로 발행일 기준 기간 안 기사를 꺼내 쓴다.
 
-    저장되는 곳 (schema.sql)
+    저장되는 곳 (Firestore 컬렉션, qupict/db.py)
       topics          고른 의미 (정의·별칭·연관어·배제어·다른 의미)
-      articles        제목·링크·언론사·발행일·요약·본문·수집 시각
-                      (네이버 뉴스 링크는 크롤링할 때만 쓰고 저장하지 않는다. 출처·중복 확인은 link 기준)
-      article_images  이미지 주소·캡션·기사 안 순서 (이미지 파일은 저장하지 않음)
+      articles        제목·링크·언론사·발행일·요약·본문·수집 시각 + images(이미지 주소·캡션·기사 안 순서,
+                      이미지 파일은 저장하지 않음). 네이버 뉴스 링크는 크롤링할 때만 쓰고 저장하지 않는다
       article_topics  기사 ↔ topic 연결 + 이 기사를 찾은 검색어
     """
     from qupict import db
 
     warm_up_parser()        # 해석용 프로세스는 검색하는 동안 미리 띄운다
-    # topic 저장(DB 연결 약 1.6초)과 네이버 검색은 서로 상관없어서 동시에 한다
+    # topic 저장(DB)과 네이버 검색은 서로 상관없어서 동시에 한다
     with timing.timed("topic 저장(DB) + 검색(네이버 API), 동시") as t:
         (topic_id, topic_sec), metas = await asyncio.gather(
             asyncio.to_thread(timed_call, db.save_topic, selected),

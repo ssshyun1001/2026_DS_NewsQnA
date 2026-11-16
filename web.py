@@ -131,7 +131,7 @@ def index() -> FileResponse:
 
 @app.get("/api/info")
 def info() -> dict:
-    return {"has_db": bool(settings.database_url), "chat_model": settings.chat_model}
+    return {"has_db": settings.has_db, "chat_model": settings.chat_model}
 
 
 # ---------------------------------------------------------------------------
@@ -310,13 +310,13 @@ def prepare(req: PrepareRequest) -> dict:
     except EnvironmentError as e:
         raise HTTPException(500, str(e))
     selected = _select(req)
-    memory = req.memory or not settings.database_url
+    memory = req.memory or not settings.has_db
     label = f"{selected.query} ({selected.sense.name})"
     job_id = uuid.uuid4().hex
     job = Job(label=label)
     job.logs.append(f"[0단계] 선택한 의미 → {selected.sense.name}: {selected.sense.definition}")
     if memory and not req.memory:
-        job.logs.append("DATABASE_URL이 없어 DB 없이(메모리 버전으로) 실행합니다.")
+        job.logs.append("FIRESTORE_PROJECT가 없어 DB 없이(메모리 버전으로) 실행합니다.")
     _jobs[job_id] = job
     threading.Thread(target=_run_job, args=(job_id, selected, req, memory), daemon=True).start()
     return {"job_id": job_id, "label": label}
@@ -418,7 +418,7 @@ def main() -> None:
     args = p.parse_args()
     print(f"브라우저에서 http://{'localhost' if args.host in ('127.0.0.1', '0.0.0.0') else args.host}:{args.port} 을 여세요.")
     from qupict import collect, db
-    db.warm_up()                # DB 연결(첫 연결 약 1.4초)을 서버를 켤 때 미리 열어 둔다 → 첫 요청이 빨라짐
+    db.warm_up()                # DB 클라이언트 · 인증 토큰을 서버를 켤 때 미리 준비해 둔다 → 첫 요청이 빨라짐
     collect.warm_up_parser()    # 크롤링 해석용 프로세스(띄우는 데 약 2초)도 미리 띄워 둔다
     uvicorn.run(app, host=args.host, port=args.port)
 

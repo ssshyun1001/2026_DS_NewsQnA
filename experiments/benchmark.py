@@ -148,9 +148,8 @@ async def run_benchmark(args) -> dict:
     # 5) DB 왕복 (읽기만)
     with timing.timed("5) DB 왕복"):
         for i in range(3):
-            with timing.timed(f"연결 + SELECT 1 (#{i + 1})"):
-                with db.connect() as conn:
-                    conn.execute("SELECT 1").fetchone()
+            with timing.timed(f"문서 하나 읽기 (#{i + 1})"):
+                db.ping()
         with timing.timed("topic 기사 불러오기") as t:
             usable = db.get_topic_articles(record.id, statuses=ANSWER_STATUSES)
             t.note = f"{len(usable)}건 (본문·임베딩 포함)"
