@@ -30,7 +30,7 @@ from qupict import timing
 from qupict.collect import download_images
 from qupict.concurrency import run_parallel, timed_call
 from qupict.config import settings
-from qupict.llm import get_chat_model, get_embeddings
+from qupict.llm import aembed_in_batches, get_chat_model, get_embeddings, llm_slot
 from qupict.schemas import Article, ArticleImage
 
 INDEX_STATUSES = ("관련", "보류")   # 질문 답변에 쓰는 판정 (run.py의 ANSWER_STATUSES와 같게)
@@ -96,7 +96,8 @@ async def _ask_image(image_url: str, title: str, caption: str) -> str:
         {"type": "text", "text": f"기사 제목: {title}\n사진 설명(기사): {caption or '(없음)'}"},
         {"type": "image_url", "image_url": {"url": image_url}},
     ])
-    result = await get_chat_model(temperature=0).ainvoke([SystemMessage(_IMAGE_SYSTEM_PROMPT), message])
+    async with llm_slot():          # 서버 전체(다른 사용자 작업 포함)의 동시 요청 상한 안에서
+        result = await get_chat_model(temperature=0).ainvoke([SystemMessage(_IMAGE_SYSTEM_PROMPT), message])
     text = (result.content or "").strip()
     if not text:
         raise ValueError("빈 응답")
@@ -138,7 +139,8 @@ async def embed_chunks(title: str, chunks: list[str]) -> list[list[float]]:
     DB에는 청크 본문만 저장한다."""
     if not chunks:
         return []
-    return await get_embeddings().aembed_documents([f"{title}\n{c}" for c in chunks])
+    # aembed_in_batches: 예전 aembed_documents와 같은 크기(100개)로 나눠 보내되, 서버 전체 동시 요청 상한(llm_slot)을 지킨다
+    return await aembed_in_batches(get_embeddings(), [f"{title}\n{c}" for c in chunks])
 
 
 async def build_article_chunks(articles: list[Article],
