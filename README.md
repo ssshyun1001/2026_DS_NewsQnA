@@ -66,7 +66,7 @@ QuPicT는 이 문제를 **수집 이전 단계에서** 풉니다.
 ## 웹 서비스
 
 ```bash
-python web.py            # http://localhost:8000
+python web.py           
 ```
 
 1. 검색어 입력 → 의미 고르기 (후보 옆에 "직접 입력 · N회 선택" 표시)
