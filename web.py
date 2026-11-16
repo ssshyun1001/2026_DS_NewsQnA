@@ -347,13 +347,6 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
             from qupict.retrieval import search_topic, warm_up_search
             from run import oldest_searchable_or_none, prepare_topic, wait_after_prepare
 
-            # 수집 · 필터링 · 인덱싱을 모두 끝낸 뒤에야 질문을 받는다 (예전에 준비한 검색어여도 먼저 답하지 않는다)
-            prepared = asyncio.run(prepare_topic(selected, req.period_days, req.max_articles, log=log))
-            topic_id = prepared.topic_id
-            # "준비 완료" 전에 잠깐 기다린다 (run.PREPARE_SETTLE_SECONDS). 새로 저장한 것이 없으면 기다리지 않는다
-            wait_after_prepare(log=log, wrote=prepared.wrote)
-            # 하이브리드 검색의 키워드(BM25) 인덱스를 미리 만든다 (첫 질문이 인덱스 만드는 시간만큼 늦어지지 않게)
-            threading.Thread(target=warm_up_search, args=(topic_id,), daemon=True).start()
             # 수집 · 필터링 · 인덱싱을 모두 끝낸 뒤에야 질문을 받는다 (예전에 준비한 검색어여도 먼저 답하지 않는다).
             # 같은 검색어 · 의미를 다른 사용자가 준비하는 중이면 (_topic_lock):
             #   끝나기를 기다렸다가 그 결과를 그대로 쓴다 → 같은 기사를 다시 수집 · 판정 · 임베딩하지 않고, 거의 같이 끝난다.
