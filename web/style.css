@@ -116,9 +116,10 @@ main { max-width: 820px; margin: 0 auto; padding: 28px 16px 80px; }
 }
 /* 로고 크기 (휴대폰에서는 10번에서 줄인다). 여백을 잘라낸 로고라 예전 56px(여백 포함)보다 엠블럼이 약 40% 크다 */
 .brand .logo { width: 64px; height: 64px; flex: none; }
-/* 어두운 화면: 남색 로고가 바탕에 묻히지 않게 흰 동그라미 위에 올린다 */
+/* 어두운 화면: 남색 로고가 바탕에 묻히지 않게 흰 동그라미 위에 올린다.
+   안쪽 여백 없이(padding 0) 로고가 동그라미를 꽉 채운다 → 밝은 화면과 같은 크기(64px · 휴대폰 52px)로 보인다 */
 @media (prefers-color-scheme: dark) {
-  .brand .logo { background: #ffffff; border-radius: 50%; padding: 3px; }
+  .brand .logo { background: #ffffff; border-radius: 50%; padding: 0; }
 }
 
 h1 { font-size: 24px; margin: 0; color: var(--title); letter-spacing: -0.3px; }
