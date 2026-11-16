@@ -1,0 +1,3174 @@
+{
+  "experiment": "exp_b_retrieval",
+  "run_at": "2026-11-16T16:24:29",
+  "meta": {
+    "rank_depth": 10,
+    "chunks_per_search": 20
+  },
+  "rows": [
+    {
+      "engine": "pgvector",
+      "variant": "base",
+      "questions": 87,
+      "recall@5": 0.333,
+      "mrr": 0.28,
+      "avg_seconds": 1.21
+    },
+    {
+      "engine": "pgvector",
+      "variant": "hyde",
+      "questions": 87,
+      "recall@5": 0.356,
+      "mrr": 0.291,
+      "avg_seconds": 2.33
+    },
+    {
+      "engine": "pgvector",
+      "variant": "multi",
+      "questions": 87,
+      "recall@5": 0.402,
+      "mrr": 0.334,
+      "avg_seconds": 2.37
+    },
+    {
+      "engine": "pgvector",
+      "variant": "both",
+      "questions": 87,
+      "recall@5": 0.448,
+      "mrr": 0.372,
+      "avg_seconds": 2.59
+    },
+    {
+      "id": "G001",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 27.79
+    },
+    {
+      "id": "G001",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 6.12
+    },
+    {
+      "id": "G001",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 4.84
+    },
+    {
+      "id": "G001",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.58
+    },
+    {
+      "id": "G007",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.81
+    },
+    {
+      "id": "G007",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.41
+    },
+    {
+      "id": "G007",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.22
+    },
+    {
+      "id": "G007",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.8
+    },
+    {
+      "id": "G009",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.77
+    },
+    {
+      "id": "G009",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.18
+    },
+    {
+      "id": "G009",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.26
+    },
+    {
+      "id": "G009",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.58
+    },
+    {
+      "id": "G010",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.07
+    },
+    {
+      "id": "G010",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.04
+    },
+    {
+      "id": "G010",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.05
+    },
+    {
+      "id": "G010",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.56
+    },
+    {
+      "id": "G012",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.74
+    },
+    {
+      "id": "G012",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.45
+    },
+    {
+      "id": "G012",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.48
+    },
+    {
+      "id": "G012",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.03
+    },
+    {
+      "id": "G013",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.72
+    },
+    {
+      "id": "G013",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.98
+    },
+    {
+      "id": "G013",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.52
+    },
+    {
+      "id": "G013",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.44
+    },
+    {
+      "id": "G015",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.75
+    },
+    {
+      "id": "G015",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.08
+    },
+    {
+      "id": "G015",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.99
+    },
+    {
+      "id": "G015",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.01
+    },
+    {
+      "id": "E001",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.84
+    },
+    {
+      "id": "E001",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 4.59
+    },
+    {
+      "id": "E001",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.12
+    },
+    {
+      "id": "E001",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.96
+    },
+    {
+      "id": "E002",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.81
+    },
+    {
+      "id": "E002",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.83
+    },
+    {
+      "id": "E002",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.13
+    },
+    {
+      "id": "E002",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.1
+    },
+    {
+      "id": "E003",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.76
+    },
+    {
+      "id": "E003",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.83
+    },
+    {
+      "id": "E003",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.32
+    },
+    {
+      "id": "E003",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.25
+    },
+    {
+      "id": "E004",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.76
+    },
+    {
+      "id": "E004",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.12
+    },
+    {
+      "id": "E004",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.29
+    },
+    {
+      "id": "E004",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.52
+    },
+    {
+      "id": "E005",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.72
+    },
+    {
+      "id": "E005",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.11
+    },
+    {
+      "id": "E005",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.51
+    },
+    {
+      "id": "E005",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.41
+    },
+    {
+      "id": "E006",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.81
+    },
+    {
+      "id": "E006",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.97
+    },
+    {
+      "id": "E006",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.49
+    },
+    {
+      "id": "E006",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.28
+    },
+    {
+      "id": "E007",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.72
+    },
+    {
+      "id": "E007",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.86
+    },
+    {
+      "id": "E007",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.21
+    },
+    {
+      "id": "E007",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.28
+    },
+    {
+      "id": "E008",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.73
+    },
+    {
+      "id": "E008",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.96
+    },
+    {
+      "id": "E008",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.22
+    },
+    {
+      "id": "E008",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.12
+    },
+    {
+      "id": "E009",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.79
+    },
+    {
+      "id": "E009",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.07
+    },
+    {
+      "id": "E009",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.3
+    },
+    {
+      "id": "E009",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.85
+    },
+    {
+      "id": "E010",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.8
+    },
+    {
+      "id": "E010",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.45
+    },
+    {
+      "id": "E010",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.12
+    },
+    {
+      "id": "E010",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.11
+    },
+    {
+      "id": "OCR001",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.83
+    },
+    {
+      "id": "OCR001",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.04
+    },
+    {
+      "id": "OCR001",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.36
+    },
+    {
+      "id": "OCR001",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.61
+    },
+    {
+      "id": "OCR002",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.69
+    },
+    {
+      "id": "OCR002",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 5.59
+    },
+    {
+      "id": "OCR002",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.55
+    },
+    {
+      "id": "OCR002",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.43
+    },
+    {
+      "id": "OCR005",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 7.69
+    },
+    {
+      "id": "OCR005",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.77
+    },
+    {
+      "id": "OCR005",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.1
+    },
+    {
+      "id": "OCR005",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.28
+    },
+    {
+      "id": "OCR007",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.7
+    },
+    {
+      "id": "OCR007",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.21
+    },
+    {
+      "id": "OCR007",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.45
+    },
+    {
+      "id": "OCR007",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.33
+    },
+    {
+      "id": "SWUOCR001",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.01
+    },
+    {
+      "id": "SWUOCR001",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 8.42
+    },
+    {
+      "id": "SWUOCR001",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.49
+    },
+    {
+      "id": "SWUOCR001",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 3.73
+    },
+    {
+      "id": "SWUOCR002",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.75
+    },
+    {
+      "id": "SWUOCR002",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.74
+    },
+    {
+      "id": "SWUOCR002",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 3.2
+    },
+    {
+      "id": "SWUOCR002",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 8.74
+    },
+    {
+      "id": "SWUOCR003",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.76
+    },
+    {
+      "id": "SWUOCR003",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.2
+    },
+    {
+      "id": "SWUOCR003",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.4
+    },
+    {
+      "id": "SWUOCR003",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.22
+    },
+    {
+      "id": "SWUOCR004",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.73
+    },
+    {
+      "id": "SWUOCR004",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.0
+    },
+    {
+      "id": "SWUOCR004",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.15
+    },
+    {
+      "id": "SWUOCR004",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.11
+    },
+    {
+      "id": "SWUOCR005",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.71
+    },
+    {
+      "id": "SWUOCR005",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.93
+    },
+    {
+      "id": "SWUOCR005",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.99
+    },
+    {
+      "id": "SWUOCR005",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.39
+    },
+    {
+      "id": "SWUOCR006",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.77
+    },
+    {
+      "id": "SWUOCR006",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.26
+    },
+    {
+      "id": "SWUOCR006",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.91
+    },
+    {
+      "id": "SWUOCR006",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.25
+    },
+    {
+      "id": "SWUOCR007",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.72
+    },
+    {
+      "id": "SWUOCR007",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.05
+    },
+    {
+      "id": "SWUOCR007",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.46
+    },
+    {
+      "id": "SWUOCR007",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.47
+    },
+    {
+      "id": "SWUOCR008",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.17
+    },
+    {
+      "id": "SWUOCR008",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.31
+    },
+    {
+      "id": "SWUOCR008",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.15
+    },
+    {
+      "id": "SWUOCR008",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 2.78
+    },
+    {
+      "id": "SWUOCR009",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.81
+    },
+    {
+      "id": "SWUOCR009",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 3.3
+    },
+    {
+      "id": "SWUOCR009",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.49
+    },
+    {
+      "id": "SWUOCR009",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.76
+    },
+    {
+      "id": "SWUOCR010",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.54
+    },
+    {
+      "id": "SWUOCR010",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.19
+    },
+    {
+      "id": "SWUOCR010",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.65
+    },
+    {
+      "id": "SWUOCR010",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.19
+    },
+    {
+      "id": "SAMOCR001",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.94
+    },
+    {
+      "id": "SAMOCR001",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.12
+    },
+    {
+      "id": "SAMOCR001",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.27
+    },
+    {
+      "id": "SAMOCR001",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.53
+    },
+    {
+      "id": "SAMOCR002",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.77
+    },
+    {
+      "id": "SAMOCR002",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.15
+    },
+    {
+      "id": "SAMOCR002",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.05
+    },
+    {
+      "id": "SAMOCR002",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.29
+    },
+    {
+      "id": "SAMOCR003",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.92
+    },
+    {
+      "id": "SAMOCR003",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.99
+    },
+    {
+      "id": "SAMOCR003",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.2
+    },
+    {
+      "id": "SAMOCR003",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.2
+    },
+    {
+      "id": "SAMOCR004",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.75
+    },
+    {
+      "id": "SAMOCR004",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.86
+    },
+    {
+      "id": "SAMOCR004",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.33
+    },
+    {
+      "id": "SAMOCR004",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 0.2,
+      "rank": 5,
+      "seconds": 2.39
+    },
+    {
+      "id": "SAMOCR005",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.86
+    },
+    {
+      "id": "SAMOCR005",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.11
+    },
+    {
+      "id": "SAMOCR005",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.19
+    },
+    {
+      "id": "SAMOCR005",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.13
+    },
+    {
+      "id": "SAMOCR006",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.73
+    },
+    {
+      "id": "SAMOCR006",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.01
+    },
+    {
+      "id": "SAMOCR006",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.41
+    },
+    {
+      "id": "SAMOCR006",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.4
+    },
+    {
+      "id": "SAMOCR007",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.76
+    },
+    {
+      "id": "SAMOCR007",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.48
+    },
+    {
+      "id": "SAMOCR007",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.38
+    },
+    {
+      "id": "SAMOCR007",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.77
+    },
+    {
+      "id": "SAMOCR011",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.7
+    },
+    {
+      "id": "SAMOCR011",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.42
+    },
+    {
+      "id": "SAMOCR011",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.07
+    },
+    {
+      "id": "SAMOCR011",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.49
+    },
+    {
+      "id": "SAMOCR012",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.68
+    },
+    {
+      "id": "SAMOCR012",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.84
+    },
+    {
+      "id": "SAMOCR012",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.03
+    },
+    {
+      "id": "SAMOCR012",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.52
+    },
+    {
+      "id": "APPLEOCR001",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.23
+    },
+    {
+      "id": "APPLEOCR001",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.2
+    },
+    {
+      "id": "APPLEOCR001",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.15
+    },
+    {
+      "id": "APPLEOCR001",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.19
+    },
+    {
+      "id": "APPLEOCR005",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.65
+    },
+    {
+      "id": "APPLEOCR005",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.9
+    },
+    {
+      "id": "APPLEOCR005",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.26
+    },
+    {
+      "id": "APPLEOCR005",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.16
+    },
+    {
+      "id": "APPLEOCR006",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.77
+    },
+    {
+      "id": "APPLEOCR006",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.27
+    },
+    {
+      "id": "APPLEOCR006",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.96
+    },
+    {
+      "id": "APPLEOCR006",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.31
+    },
+    {
+      "id": "APPLEOCR008",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.91
+    },
+    {
+      "id": "APPLEOCR008",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.98
+    },
+    {
+      "id": "APPLEOCR008",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.49
+    },
+    {
+      "id": "APPLEOCR008",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.99
+    },
+    {
+      "id": "APPLEOCR009",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.73
+    },
+    {
+      "id": "APPLEOCR009",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.32
+    },
+    {
+      "id": "APPLEOCR009",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.21
+    },
+    {
+      "id": "APPLEOCR009",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.35
+    },
+    {
+      "id": "APPLEOCR011",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.77
+    },
+    {
+      "id": "APPLEOCR011",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.53
+    },
+    {
+      "id": "APPLEOCR011",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 4.15
+    },
+    {
+      "id": "APPLEOCR011",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 4.6
+    },
+    {
+      "id": "APPLEOCR012",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.71
+    },
+    {
+      "id": "APPLEOCR012",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.0
+    },
+    {
+      "id": "APPLEOCR012",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.21
+    },
+    {
+      "id": "APPLEOCR012",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.1
+    },
+    {
+      "id": "APPLEFRUIT001",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.92
+    },
+    {
+      "id": "APPLEFRUIT001",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.95
+    },
+    {
+      "id": "APPLEFRUIT001",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.15
+    },
+    {
+      "id": "APPLEFRUIT001",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 3.62
+    },
+    {
+      "id": "SAM001",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.7
+    },
+    {
+      "id": "SAM001",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.15
+    },
+    {
+      "id": "SAM001",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.43
+    },
+    {
+      "id": "SAM001",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.41
+    },
+    {
+      "id": "SAM002",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.97
+    },
+    {
+      "id": "SAM002",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.24
+    },
+    {
+      "id": "SAM002",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.14
+    },
+    {
+      "id": "SAM002",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.64
+    },
+    {
+      "id": "SAM003",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.72
+    },
+    {
+      "id": "SAM003",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.9
+    },
+    {
+      "id": "SAM003",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.31
+    },
+    {
+      "id": "SAM003",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.35
+    },
+    {
+      "id": "SAM004",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.12
+    },
+    {
+      "id": "SAM004",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.11
+    },
+    {
+      "id": "SAM004",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.56
+    },
+    {
+      "id": "SAM004",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.57
+    },
+    {
+      "id": "SAM005",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.79
+    },
+    {
+      "id": "SAM005",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.9
+    },
+    {
+      "id": "SAM005",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.3
+    },
+    {
+      "id": "SAM005",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.33
+    },
+    {
+      "id": "SAM006",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.77
+    },
+    {
+      "id": "SAM006",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.0
+    },
+    {
+      "id": "SAM006",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.8
+    },
+    {
+      "id": "SAM006",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.44
+    },
+    {
+      "id": "SAM010",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.71
+    },
+    {
+      "id": "SAM010",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.16
+    },
+    {
+      "id": "SAM010",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.19
+    },
+    {
+      "id": "SAM010",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.33
+    },
+    {
+      "id": "SAM011",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 0.66
+    },
+    {
+      "id": "SAM011",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 2.02
+    },
+    {
+      "id": "SAM011",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 2.18
+    },
+    {
+      "id": "SAM011",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 2.59
+    },
+    {
+      "id": "SAM012",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.76
+    },
+    {
+      "id": "SAM012",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.33
+    },
+    {
+      "id": "SAM012",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 2.23
+    },
+    {
+      "id": "SAM012",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.32
+    },
+    {
+      "id": "SAM013",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.78
+    },
+    {
+      "id": "SAM013",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.26
+    },
+    {
+      "id": "SAM013",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.06
+    },
+    {
+      "id": "SAM013",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.39
+    },
+    {
+      "id": "SAM015",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.79
+    },
+    {
+      "id": "SAM015",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.97
+    },
+    {
+      "id": "SAM015",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.14
+    },
+    {
+      "id": "SAM015",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.55
+    },
+    {
+      "id": "APPLECO001",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.87
+    },
+    {
+      "id": "APPLECO001",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.51
+    },
+    {
+      "id": "APPLECO001",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.22
+    },
+    {
+      "id": "APPLECO001",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.48
+    },
+    {
+      "id": "APPLECO002",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.72
+    },
+    {
+      "id": "APPLECO002",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.3
+    },
+    {
+      "id": "APPLECO002",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.25
+    },
+    {
+      "id": "APPLECO002",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.13
+    },
+    {
+      "id": "APPLECO003",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.79
+    },
+    {
+      "id": "APPLECO003",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.03
+    },
+    {
+      "id": "APPLECO003",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.03
+    },
+    {
+      "id": "APPLECO003",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.34
+    },
+    {
+      "id": "APPLECO004",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.74
+    },
+    {
+      "id": "APPLECO004",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.32
+    },
+    {
+      "id": "APPLECO004",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.54
+    },
+    {
+      "id": "APPLECO004",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.4
+    },
+    {
+      "id": "APPLECO006",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.81
+    },
+    {
+      "id": "APPLECO006",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.22
+    },
+    {
+      "id": "APPLECO006",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.26
+    },
+    {
+      "id": "APPLECO006",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.11
+    },
+    {
+      "id": "APPLECO007",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.73
+    },
+    {
+      "id": "APPLECO007",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.08
+    },
+    {
+      "id": "APPLECO007",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.72
+    },
+    {
+      "id": "APPLECO007",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.57
+    },
+    {
+      "id": "APPLECO008",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.73
+    },
+    {
+      "id": "APPLECO008",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.38
+    },
+    {
+      "id": "APPLECO008",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.9
+    },
+    {
+      "id": "APPLECO008",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.6
+    },
+    {
+      "id": "APPLECO009",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.89
+    },
+    {
+      "id": "APPLECO009",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.04
+    },
+    {
+      "id": "APPLECO009",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.05
+    },
+    {
+      "id": "APPLECO009",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.99
+    },
+    {
+      "id": "APPLECO010",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.78
+    },
+    {
+      "id": "APPLECO010",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.78
+    },
+    {
+      "id": "APPLECO010",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.48
+    },
+    {
+      "id": "APPLECO010",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.89
+    },
+    {
+      "id": "APPLECO011",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.72
+    },
+    {
+      "id": "APPLECO011",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.22
+    },
+    {
+      "id": "APPLECO011",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.37
+    },
+    {
+      "id": "APPLECO011",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.75
+    },
+    {
+      "id": "APPLECO012",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.76
+    },
+    {
+      "id": "APPLECO012",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.14
+    },
+    {
+      "id": "APPLECO012",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.31
+    },
+    {
+      "id": "APPLECO012",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.74
+    },
+    {
+      "id": "APPLECO013",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.9
+    },
+    {
+      "id": "APPLECO013",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.46
+    },
+    {
+      "id": "APPLECO013",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.58
+    },
+    {
+      "id": "APPLECO013",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.55
+    },
+    {
+      "id": "APPLECO014",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.74
+    },
+    {
+      "id": "APPLECO014",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.95
+    },
+    {
+      "id": "APPLECO014",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.58
+    },
+    {
+      "id": "APPLECO014",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.43
+    },
+    {
+      "id": "APPLECO015",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.72
+    },
+    {
+      "id": "APPLECO015",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.09
+    },
+    {
+      "id": "APPLECO015",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.28
+    },
+    {
+      "id": "APPLECO015",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.51
+    },
+    {
+      "id": "APPLEFR002",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.79
+    },
+    {
+      "id": "APPLEFR002",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.32
+    },
+    {
+      "id": "APPLEFR002",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.43
+    },
+    {
+      "id": "APPLEFR002",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.62
+    },
+    {
+      "id": "APPLEFR003",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.75
+    },
+    {
+      "id": "APPLEFR003",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.58
+    },
+    {
+      "id": "APPLEFR003",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.13
+    },
+    {
+      "id": "APPLEFR003",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.23
+    },
+    {
+      "id": "APPLEFR004",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.71
+    },
+    {
+      "id": "APPLEFR004",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.23
+    },
+    {
+      "id": "APPLEFR004",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.33
+    },
+    {
+      "id": "APPLEFR004",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.38
+    },
+    {
+      "id": "APPLEFR005",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.73
+    },
+    {
+      "id": "APPLEFR005",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.2
+    },
+    {
+      "id": "APPLEFR005",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.03
+    },
+    {
+      "id": "APPLEFR005",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.21
+    },
+    {
+      "id": "APPLEFR006",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.94
+    },
+    {
+      "id": "APPLEFR006",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.29
+    },
+    {
+      "id": "APPLEFR006",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.39
+    },
+    {
+      "id": "APPLEFR006",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 3.3
+    },
+    {
+      "id": "APPLEFR007",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.7
+    },
+    {
+      "id": "APPLEFR007",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.31
+    },
+    {
+      "id": "APPLEFR007",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.04
+    },
+    {
+      "id": "APPLEFR007",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.31
+    },
+    {
+      "id": "APPLEFR008",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.75
+    },
+    {
+      "id": "APPLEFR008",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.99
+    },
+    {
+      "id": "APPLEFR008",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.02
+    },
+    {
+      "id": "APPLEFR008",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.04
+    },
+    {
+      "id": "APPLEFR009",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.75
+    },
+    {
+      "id": "APPLEFR009",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.92
+    },
+    {
+      "id": "APPLEFR009",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 3.24
+    },
+    {
+      "id": "APPLEFR009",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.39
+    },
+    {
+      "id": "APPLEFR010",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.75
+    },
+    {
+      "id": "APPLEFR010",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.3
+    },
+    {
+      "id": "APPLEFR010",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.59
+    },
+    {
+      "id": "APPLEFR010",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 4.01
+    },
+    {
+      "id": "APPLEFR011",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.77
+    },
+    {
+      "id": "APPLEFR011",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.1
+    },
+    {
+      "id": "APPLEFR011",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.29
+    },
+    {
+      "id": "APPLEFR011",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.21
+    },
+    {
+      "id": "APPLEFR012",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.92
+    },
+    {
+      "id": "APPLEFR012",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.77
+    },
+    {
+      "id": "APPLEFR012",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.35
+    },
+    {
+      "id": "APPLEFR012",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.31
+    },
+    {
+      "id": "APPLEFR013",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.73
+    },
+    {
+      "id": "APPLEFR013",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.84
+    },
+    {
+      "id": "APPLEFR013",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.89
+    },
+    {
+      "id": "APPLEFR013",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.4
+    },
+    {
+      "id": "APPLEFR014",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.77
+    },
+    {
+      "id": "APPLEFR014",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.79
+    },
+    {
+      "id": "APPLEFR014",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.17
+    },
+    {
+      "id": "APPLEFR014",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.32
+    },
+    {
+      "id": "APPLEFR015",
+      "engine": "pgvector",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.71
+    },
+    {
+      "id": "APPLEFR015",
+      "engine": "pgvector",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.31
+    },
+    {
+      "id": "APPLEFR015",
+      "engine": "pgvector",
+      "variant": "multi",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 3.51
+    },
+    {
+      "id": "APPLEFR015",
+      "engine": "pgvector",
+      "variant": "both",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.56
+    }
+  ]
+}
