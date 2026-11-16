@@ -1,0 +1,7067 @@
+{
+  "experiment": "exp_b_hyde_hybrid_1794813749204542500",
+  "run_at": "2026-11-16T16:22:29",
+  "meta": {
+    "rank_depth": 10,
+    "chunks_per_search": 20,
+    "rrf_k": 60,
+    "bm25_setup_seconds_by_dataset": {
+      "original": {
+        "강남 → 지역 강남": 5.973,
+        "강남 → 방송인 강남": 0.41,
+        "서울여대 → 서울여자대학교": 1.288,
+        "삼전 → 기업 삼성전자": 2.165,
+        "애플 → 기업 Apple": 5.691,
+        "애플 → 과일 사과": 1.332
+      },
+      "varied": {
+        "강남 → 지역 강남": 5.191,
+        "강남 → 방송인 강남": 0.258,
+        "서울여대 → 서울여자대학교": 1.513,
+        "삼전 → 기업 삼성전자": 1.557,
+        "애플 → 기업 Apple": 6.457,
+        "애플 → 과일 사과": 1.909
+      }
+    },
+    "target": null,
+    "datasets": {
+      "original": "C:\\Users\\seoyeon\\2026_DS_NewsQnA\\experiments\\qa_set_hyde_hybrid.csv",
+      "varied": "C:\\Users\\seoyeon\\2026_DS_NewsQnA\\experiments\\qa_set_hyde_hybrid_varied.csv"
+    },
+    "limit": null
+  },
+  "rows": [
+    {
+      "engine": "db",
+      "variant": "base",
+      "questions": 87,
+      "recall@5": 0.333,
+      "mrr": 0.28,
+      "avg_seconds": 0.927,
+      "dataset": "original"
+    },
+    {
+      "engine": "db",
+      "variant": "hyde",
+      "questions": 87,
+      "recall@5": 0.402,
+      "mrr": 0.337,
+      "avg_seconds": 2.381,
+      "dataset": "original"
+    },
+    {
+      "engine": "db",
+      "variant": "hybrid",
+      "questions": 87,
+      "recall@5": 0.609,
+      "mrr": 0.508,
+      "avg_seconds": 0.931,
+      "dataset": "original"
+    },
+    {
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "questions": 87,
+      "recall@5": 0.598,
+      "mrr": 0.501,
+      "avg_seconds": 2.385,
+      "dataset": "original"
+    },
+    {
+      "engine": "db",
+      "variant": "base",
+      "questions": 87,
+      "recall@5": 0.299,
+      "mrr": 0.279,
+      "avg_seconds": 0.914,
+      "dataset": "varied"
+    },
+    {
+      "engine": "db",
+      "variant": "hyde",
+      "questions": 87,
+      "recall@5": 0.379,
+      "mrr": 0.34,
+      "avg_seconds": 2.325,
+      "dataset": "varied"
+    },
+    {
+      "engine": "db",
+      "variant": "hybrid",
+      "questions": 87,
+      "recall@5": 0.621,
+      "mrr": 0.502,
+      "avg_seconds": 0.918,
+      "dataset": "varied"
+    },
+    {
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "questions": 87,
+      "recall@5": 0.621,
+      "mrr": 0.489,
+      "avg_seconds": 2.328,
+      "dataset": "varied"
+    },
+    {
+      "id": "G001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.188,
+      "dataset": "original"
+    },
+    {
+      "id": "G001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.086,
+      "dataset": "original"
+    },
+    {
+      "id": "G001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.195,
+      "dataset": "original"
+    },
+    {
+      "id": "G001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.092,
+      "dataset": "original"
+    },
+    {
+      "id": "G007",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.842,
+      "dataset": "original"
+    },
+    {
+      "id": "G007",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 4.805,
+      "dataset": "original"
+    },
+    {
+      "id": "G007",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.848,
+      "dataset": "original"
+    },
+    {
+      "id": "G007",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 4.811,
+      "dataset": "original"
+    },
+    {
+      "id": "G009",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.837,
+      "dataset": "original"
+    },
+    {
+      "id": "G009",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.532,
+      "dataset": "original"
+    },
+    {
+      "id": "G009",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.843,
+      "dataset": "original"
+    },
+    {
+      "id": "G009",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.537,
+      "dataset": "original"
+    },
+    {
+      "id": "G010",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.969,
+      "dataset": "original"
+    },
+    {
+      "id": "G010",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.076,
+      "dataset": "original"
+    },
+    {
+      "id": "G010",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.975,
+      "dataset": "original"
+    },
+    {
+      "id": "G010",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.082,
+      "dataset": "original"
+    },
+    {
+      "id": "G012",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.444,
+      "dataset": "original"
+    },
+    {
+      "id": "G012",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.998,
+      "dataset": "original"
+    },
+    {
+      "id": "G012",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.449,
+      "dataset": "original"
+    },
+    {
+      "id": "G012",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.004,
+      "dataset": "original"
+    },
+    {
+      "id": "G013",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.88,
+      "dataset": "original"
+    },
+    {
+      "id": "G013",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.178,
+      "dataset": "original"
+    },
+    {
+      "id": "G013",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.887,
+      "dataset": "original"
+    },
+    {
+      "id": "G013",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.185,
+      "dataset": "original"
+    },
+    {
+      "id": "G015",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.923,
+      "dataset": "original"
+    },
+    {
+      "id": "G015",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 3.417,
+      "dataset": "original"
+    },
+    {
+      "id": "G015",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.93,
+      "dataset": "original"
+    },
+    {
+      "id": "G015",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 3.424,
+      "dataset": "original"
+    },
+    {
+      "id": "E001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.66,
+      "dataset": "original"
+    },
+    {
+      "id": "E001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.589,
+      "dataset": "original"
+    },
+    {
+      "id": "E001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.663,
+      "dataset": "original"
+    },
+    {
+      "id": "E001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.592,
+      "dataset": "original"
+    },
+    {
+      "id": "E002",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.635,
+      "dataset": "original"
+    },
+    {
+      "id": "E002",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.756,
+      "dataset": "original"
+    },
+    {
+      "id": "E002",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.637,
+      "dataset": "original"
+    },
+    {
+      "id": "E002",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.759,
+      "dataset": "original"
+    },
+    {
+      "id": "E003",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.623,
+      "dataset": "original"
+    },
+    {
+      "id": "E003",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.882,
+      "dataset": "original"
+    },
+    {
+      "id": "E003",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.625,
+      "dataset": "original"
+    },
+    {
+      "id": "E003",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.885,
+      "dataset": "original"
+    },
+    {
+      "id": "E004",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.681,
+      "dataset": "original"
+    },
+    {
+      "id": "E004",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.915,
+      "dataset": "original"
+    },
+    {
+      "id": "E004",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.684,
+      "dataset": "original"
+    },
+    {
+      "id": "E004",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.918,
+      "dataset": "original"
+    },
+    {
+      "id": "E005",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.813,
+      "dataset": "original"
+    },
+    {
+      "id": "E005",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.839,
+      "dataset": "original"
+    },
+    {
+      "id": "E005",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.814,
+      "dataset": "original"
+    },
+    {
+      "id": "E005",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.84,
+      "dataset": "original"
+    },
+    {
+      "id": "E006",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.702,
+      "dataset": "original"
+    },
+    {
+      "id": "E006",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.068,
+      "dataset": "original"
+    },
+    {
+      "id": "E006",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.703,
+      "dataset": "original"
+    },
+    {
+      "id": "E006",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.07,
+      "dataset": "original"
+    },
+    {
+      "id": "E007",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.643,
+      "dataset": "original"
+    },
+    {
+      "id": "E007",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.786,
+      "dataset": "original"
+    },
+    {
+      "id": "E007",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.167,
+      "rank": 6,
+      "seconds": 0.645,
+      "dataset": "original"
+    },
+    {
+      "id": "E007",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.167,
+      "rank": 6,
+      "seconds": 2.787,
+      "dataset": "original"
+    },
+    {
+      "id": "E008",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.746,
+      "dataset": "original"
+    },
+    {
+      "id": "E008",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.103,
+      "dataset": "original"
+    },
+    {
+      "id": "E008",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.749,
+      "dataset": "original"
+    },
+    {
+      "id": "E008",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.106,
+      "dataset": "original"
+    },
+    {
+      "id": "E009",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.586,
+      "dataset": "original"
+    },
+    {
+      "id": "E009",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.419,
+      "dataset": "original"
+    },
+    {
+      "id": "E009",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.587,
+      "dataset": "original"
+    },
+    {
+      "id": "E009",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.42,
+      "dataset": "original"
+    },
+    {
+      "id": "E010",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.544,
+      "dataset": "original"
+    },
+    {
+      "id": "E010",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.413,
+      "dataset": "original"
+    },
+    {
+      "id": "E010",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.546,
+      "dataset": "original"
+    },
+    {
+      "id": "E010",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.414,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.864,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.803,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.872,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.811,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR002",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.065,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR002",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.267,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR002",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.07,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR002",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.272,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR005",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.598,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR005",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.016,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR005",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.6,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR005",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.018,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR007",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.795,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR007",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.036,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR007",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.797,
+      "dataset": "original"
+    },
+    {
+      "id": "OCR007",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.037,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.042,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 3.816,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.044,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 3.819,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR002",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.749,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR002",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.078,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR002",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.752,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR002",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.081,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR003",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.78,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR003",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.267,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR003",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.782,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR003",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.27,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR004",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.822,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR004",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 1.979,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR004",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.824,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR004",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.981,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR005",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.812,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR005",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.606,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR005",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 0.815,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR005",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.609,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR006",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.897,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR006",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.259,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR006",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.9,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR006",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.262,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR007",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.812,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR007",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.599,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR007",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.815,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR007",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.602,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR008",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.094,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR008",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.124,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR008",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.097,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR008",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.127,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR009",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.065,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR009",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.034,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR009",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.068,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR009",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.037,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR010",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.892,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR010",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.024,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR010",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.896,
+      "dataset": "original"
+    },
+    {
+      "id": "SWUOCR010",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.028,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.882,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.884,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.886,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.888,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR002",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.821,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR002",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.045,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR002",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.824,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR002",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.048,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR003",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.736,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR003",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.02,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR003",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.74,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR003",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.023,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR004",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.04,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR004",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 2.494,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR004",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.042,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR004",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.496,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR005",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.677,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR005",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.944,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR005",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.682,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR005",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.95,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR006",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.929,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR006",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.59,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR006",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.932,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR006",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.594,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR007",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.05,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR007",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.736,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR007",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.054,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR007",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.74,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR011",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.918,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR011",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.367,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR011",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.922,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR011",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.371,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR012",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.835,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR012",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.207,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR012",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.837,
+      "dataset": "original"
+    },
+    {
+      "id": "SAMOCR012",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.21,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.195,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.158,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.205,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.168,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR005",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.843,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR005",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.768,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR005",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.848,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR005",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.773,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR006",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.078,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR006",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.31,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR006",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.084,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR006",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.316,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR008",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.826,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR008",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.544,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR008",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.833,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR008",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.55,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR009",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.831,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR009",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.473,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR009",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.841,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR009",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.483,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR011",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.01,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR011",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.428,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR011",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.019,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR011",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.437,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR012",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.922,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR012",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 7.4,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR012",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.926,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEOCR012",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 7.403,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFRUIT001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.165,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFRUIT001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.243,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFRUIT001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.168,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFRUIT001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.246,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.84,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.083,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.844,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.087,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM002",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.199,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM002",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.401,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM002",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.204,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM002",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.406,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM003",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.84,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM003",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.053,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM003",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.844,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM003",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.057,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM004",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.864,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM004",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.921,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM004",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.867,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM004",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.924,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM005",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.929,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM005",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.849,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM005",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.931,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM005",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.851,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM006",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.676,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM006",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.996,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM006",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.68,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM006",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.0,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM010",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.175,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM010",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.999,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM010",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 1.179,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM010",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 2.004,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM011",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 0.781,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM011",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 1.875,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM011",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.782,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM011",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.876,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM012",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.616,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM012",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.382,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM012",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.111,
+      "rank": 9,
+      "seconds": 0.62,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM012",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.125,
+      "rank": 8,
+      "seconds": 2.386,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM013",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.778,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM013",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 4.175,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM013",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.111,
+      "rank": 9,
+      "seconds": 0.78,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM013",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.111,
+      "rank": 9,
+      "seconds": 4.178,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM015",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.778,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM015",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.167,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM015",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.78,
+      "dataset": "original"
+    },
+    {
+      "id": "SAM015",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.169,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.756,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.873,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.761,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.877,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO002",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.866,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO002",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.073,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO002",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.871,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO002",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.077,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO003",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.776,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO003",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.141,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO003",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.781,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO003",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.146,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO004",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.887,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO004",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.654,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO004",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.893,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO004",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.661,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO006",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.824,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO006",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.018,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO006",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.828,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO006",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.022,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO007",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.779,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO007",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.44,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO007",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.784,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO007",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.445,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO008",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.968,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO008",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.462,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO008",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.975,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO008",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.469,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO009",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.098,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO009",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.649,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO009",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.102,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO009",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.652,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO010",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.832,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO010",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.994,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO010",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.841,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO010",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.003,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO011",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.813,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO011",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.259,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO011",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.817,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO011",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.263,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO012",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.918,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO012",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.84,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO012",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.927,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO012",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.849,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO013",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.892,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO013",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.061,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO013",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.898,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO013",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.068,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO014",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.997,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO014",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.097,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO014",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.003,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO014",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.103,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO015",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.054,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO015",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.584,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO015",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.063,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLECO015",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.593,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR002",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.697,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR002",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.895,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR002",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.699,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR002",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.897,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR003",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.895,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR003",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.405,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR003",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.898,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR003",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 3.408,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR004",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.33,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR004",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.428,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR004",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.332,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR004",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.43,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR005",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.723,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR005",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.515,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR005",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.725,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR005",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.518,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR006",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.755,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR006",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.25,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR006",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.757,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR006",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.252,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR007",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.119,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR007",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.136,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR007",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.121,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR007",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.138,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR008",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.938,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR008",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.257,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR008",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.942,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR008",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.262,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR009",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.82,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR009",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.947,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR009",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.823,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR009",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.95,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR010",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.946,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR010",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.754,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR010",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 0.949,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR010",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 2.757,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR011",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.917,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR011",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.256,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR011",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.919,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR011",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.258,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR012",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.018,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR012",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.368,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR012",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.021,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR012",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.371,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR013",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.165,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR013",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.318,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR013",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.168,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR013",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.32,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR014",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.847,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR014",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.879,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR014",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 0.849,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR014",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.881,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR015",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.793,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR015",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.321,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR015",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.794,
+      "dataset": "original"
+    },
+    {
+      "id": "APPLEFR015",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.323,
+      "dataset": "original"
+    },
+    {
+      "id": "G001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.185,
+      "dataset": "varied"
+    },
+    {
+      "id": "G001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.003,
+      "dataset": "varied"
+    },
+    {
+      "id": "G001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.191,
+      "dataset": "varied"
+    },
+    {
+      "id": "G001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.009,
+      "dataset": "varied"
+    },
+    {
+      "id": "G007",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.211,
+      "dataset": "varied"
+    },
+    {
+      "id": "G007",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.145,
+      "dataset": "varied"
+    },
+    {
+      "id": "G007",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.217,
+      "dataset": "varied"
+    },
+    {
+      "id": "G007",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.152,
+      "dataset": "varied"
+    },
+    {
+      "id": "G009",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.06,
+      "dataset": "varied"
+    },
+    {
+      "id": "G009",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.2,
+      "dataset": "varied"
+    },
+    {
+      "id": "G009",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.062,
+      "dataset": "varied"
+    },
+    {
+      "id": "G009",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.202,
+      "dataset": "varied"
+    },
+    {
+      "id": "G010",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.873,
+      "dataset": "varied"
+    },
+    {
+      "id": "G010",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.678,
+      "dataset": "varied"
+    },
+    {
+      "id": "G010",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.877,
+      "dataset": "varied"
+    },
+    {
+      "id": "G010",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.682,
+      "dataset": "varied"
+    },
+    {
+      "id": "G012",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.986,
+      "dataset": "varied"
+    },
+    {
+      "id": "G012",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.102,
+      "dataset": "varied"
+    },
+    {
+      "id": "G012",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.992,
+      "dataset": "varied"
+    },
+    {
+      "id": "G012",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.109,
+      "dataset": "varied"
+    },
+    {
+      "id": "G013",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.839,
+      "dataset": "varied"
+    },
+    {
+      "id": "G013",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.5,
+      "dataset": "varied"
+    },
+    {
+      "id": "G013",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.848,
+      "dataset": "varied"
+    },
+    {
+      "id": "G013",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.51,
+      "dataset": "varied"
+    },
+    {
+      "id": "G015",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.866,
+      "dataset": "varied"
+    },
+    {
+      "id": "G015",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.293,
+      "dataset": "varied"
+    },
+    {
+      "id": "G015",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.87,
+      "dataset": "varied"
+    },
+    {
+      "id": "G015",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.298,
+      "dataset": "varied"
+    },
+    {
+      "id": "E001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.092,
+      "dataset": "varied"
+    },
+    {
+      "id": "E001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.255,
+      "dataset": "varied"
+    },
+    {
+      "id": "E001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.095,
+      "dataset": "varied"
+    },
+    {
+      "id": "E001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.257,
+      "dataset": "varied"
+    },
+    {
+      "id": "E002",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.667,
+      "dataset": "varied"
+    },
+    {
+      "id": "E002",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.85,
+      "dataset": "varied"
+    },
+    {
+      "id": "E002",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.668,
+      "dataset": "varied"
+    },
+    {
+      "id": "E002",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.851,
+      "dataset": "varied"
+    },
+    {
+      "id": "E003",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.631,
+      "dataset": "varied"
+    },
+    {
+      "id": "E003",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.015,
+      "dataset": "varied"
+    },
+    {
+      "id": "E003",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.633,
+      "dataset": "varied"
+    },
+    {
+      "id": "E003",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.017,
+      "dataset": "varied"
+    },
+    {
+      "id": "E004",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.613,
+      "dataset": "varied"
+    },
+    {
+      "id": "E004",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.769,
+      "dataset": "varied"
+    },
+    {
+      "id": "E004",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.616,
+      "dataset": "varied"
+    },
+    {
+      "id": "E004",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.771,
+      "dataset": "varied"
+    },
+    {
+      "id": "E005",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.651,
+      "dataset": "varied"
+    },
+    {
+      "id": "E005",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.294,
+      "dataset": "varied"
+    },
+    {
+      "id": "E005",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.652,
+      "dataset": "varied"
+    },
+    {
+      "id": "E005",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.295,
+      "dataset": "varied"
+    },
+    {
+      "id": "E006",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.881,
+      "dataset": "varied"
+    },
+    {
+      "id": "E006",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.831,
+      "dataset": "varied"
+    },
+    {
+      "id": "E006",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 0.882,
+      "dataset": "varied"
+    },
+    {
+      "id": "E006",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 1.833,
+      "dataset": "varied"
+    },
+    {
+      "id": "E007",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.534,
+      "dataset": "varied"
+    },
+    {
+      "id": "E007",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.045,
+      "dataset": "varied"
+    },
+    {
+      "id": "E007",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.535,
+      "dataset": "varied"
+    },
+    {
+      "id": "E007",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.047,
+      "dataset": "varied"
+    },
+    {
+      "id": "E008",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.607,
+      "dataset": "varied"
+    },
+    {
+      "id": "E008",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.769,
+      "dataset": "varied"
+    },
+    {
+      "id": "E008",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.609,
+      "dataset": "varied"
+    },
+    {
+      "id": "E008",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.771,
+      "dataset": "varied"
+    },
+    {
+      "id": "E009",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.588,
+      "dataset": "varied"
+    },
+    {
+      "id": "E009",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.605,
+      "dataset": "varied"
+    },
+    {
+      "id": "E009",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.589,
+      "dataset": "varied"
+    },
+    {
+      "id": "E009",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 3.606,
+      "dataset": "varied"
+    },
+    {
+      "id": "E010",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.985,
+      "dataset": "varied"
+    },
+    {
+      "id": "E010",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.854,
+      "dataset": "varied"
+    },
+    {
+      "id": "E010",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.986,
+      "dataset": "varied"
+    },
+    {
+      "id": "E010",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.855,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.128,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.172,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.136,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.18,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR002",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.787,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR002",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.913,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR002",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.79,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR002",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.915,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR005",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.666,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR005",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.834,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR005",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.668,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR005",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.836,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR007",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.569,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR007",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.817,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR007",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.571,
+      "dataset": "varied"
+    },
+    {
+      "id": "OCR007",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.819,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.856,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.171,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.858,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.172,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR002",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.743,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR002",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.209,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR002",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.744,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR002",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.21,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR003",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.64,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR003",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.113,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR003",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.641,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR003",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.114,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR004",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.734,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR004",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.398,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR004",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.736,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR004",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.4,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR005",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.8,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR005",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.91,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR005",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 0.803,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR005",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 1.912,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR006",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.801,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR006",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 4.227,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR006",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.803,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR006",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 4.229,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR007",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.828,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR007",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.997,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR007",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.83,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR007",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 1.999,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR008",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.816,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR008",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.325,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR008",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.818,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR008",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.327,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR009",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.878,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR009",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.637,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR009",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.883,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR009",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.642,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR010",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.954,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR010",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.5,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR010",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 0.956,
+      "dataset": "varied"
+    },
+    {
+      "id": "SWUOCR010",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 2.502,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.904,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.965,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 0.907,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.968,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR002",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.794,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR002",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.583,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR002",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.797,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR002",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.586,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR003",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.5,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR003",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.584,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR003",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.503,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR003",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.586,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR004",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.826,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR004",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.238,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR004",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.828,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR004",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.24,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR005",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.973,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR005",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.593,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR005",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.977,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR005",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.598,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR006",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.004,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR006",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.97,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR006",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.008,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR006",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.973,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR007",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.865,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR007",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.868,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR007",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.143,
+      "rank": 7,
+      "seconds": 0.868,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR007",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.143,
+      "rank": 7,
+      "seconds": 1.871,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR011",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.054,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR011",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.108,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR011",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.057,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR011",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.112,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR012",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.113,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR012",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.349,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR012",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.116,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAMOCR012",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.352,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.998,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.225,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.125,
+      "rank": 8,
+      "seconds": 1.005,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.125,
+      "rank": 8,
+      "seconds": 2.232,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR005",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.715,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR005",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.504,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR005",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.72,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR005",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.508,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR006",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.851,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR006",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.32,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR006",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.854,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR006",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.322,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR008",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 0.799,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR008",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 5.04,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR008",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 0.807,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR008",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 5.048,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR009",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.936,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR009",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.41,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR009",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.944,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR009",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.418,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR011",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.099,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR011",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.436,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR011",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.111,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR011",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.447,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR012",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.918,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR012",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.282,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR012",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.926,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEOCR012",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.29,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFRUIT001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.002,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFRUIT001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.527,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFRUIT001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.005,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFRUIT001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.53,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.999,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.335,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.003,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.339,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM002",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.846,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM002",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.239,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM002",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.849,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM002",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.242,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM003",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.067,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM003",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.295,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM003",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.07,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM003",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.298,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM004",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.955,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM004",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.589,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM004",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.958,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM004",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.592,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM005",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.974,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM005",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.205,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM005",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.977,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM005",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.209,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM006",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.915,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM006",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.412,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM006",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.919,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM006",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.417,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM010",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.84,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM010",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 2.43,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM010",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 0.845,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM010",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 2.435,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM011",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.162,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM011",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.43,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM011",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 1.168,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM011",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.435,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM012",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.932,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM012",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.2,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM012",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 0.934,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM012",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 2.202,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM013",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.048,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM013",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.043,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM013",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 1.051,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM013",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.333,
+      "rank": 3,
+      "seconds": 2.046,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM015",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.651,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM015",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.019,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM015",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.657,
+      "dataset": "varied"
+    },
+    {
+      "id": "SAM015",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.025,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO001",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.851,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO001",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.219,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO001",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.856,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO001",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 3.224,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO002",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.095,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO002",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.861,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO002",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.102,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO002",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.868,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO003",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.765,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO003",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.599,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO003",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.773,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO003",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.607,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO004",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.971,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO004",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.128,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO004",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.975,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO004",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.132,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO006",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.886,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO006",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.645,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO006",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.891,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO006",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.65,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO007",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.961,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO007",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.874,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO007",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.966,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO007",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.88,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO008",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.013,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO008",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.099,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO008",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.018,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO008",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.104,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO009",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.0,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO009",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.406,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO009",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.006,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO009",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.411,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO010",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.624,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO010",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.181,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO010",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.63,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO010",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.187,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO011",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.982,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO011",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.345,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO011",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.984,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO011",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.347,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO012",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.855,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO012",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.687,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO012",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.865,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO012",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.697,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO013",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.884,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO013",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.756,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO013",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.889,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO013",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.761,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO014",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.842,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO014",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.754,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO014",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.846,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO014",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.758,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO015",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.749,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO015",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.104,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO015",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.752,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLECO015",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.108,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR002",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.8,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR002",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.465,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR002",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.802,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR002",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.466,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR003",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.692,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR003",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.763,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR003",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.693,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR003",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.764,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR004",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.761,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR004",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.228,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR004",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.763,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR004",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.23,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR005",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.763,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR005",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.426,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR005",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.765,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR005",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.428,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR006",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.799,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR006",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.087,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR006",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.801,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR006",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.088,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR007",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.796,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR007",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 2.272,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR007",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.799,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR007",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.275,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR008",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.9,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR008",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.995,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR008",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.903,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR008",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.997,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR009",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.745,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR009",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.85,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR009",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.747,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR009",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.853,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR010",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.207,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR010",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 1.797,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR010",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 1.21,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR010",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.25,
+      "rank": 4,
+      "seconds": 1.801,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR011",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.801,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR011",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.915,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR011",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.803,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR011",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.917,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR012",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.038,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR012",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.337,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR012",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 1.039,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR012",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.338,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR013",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.872,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR013",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.186,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR013",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.873,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR013",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.187,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR014",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": false,
+      "reciprocal_rank": 0.0,
+      "rank": null,
+      "seconds": 0.754,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR014",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.293,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR014",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.757,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR014",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.295,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR015",
+      "engine": "db",
+      "variant": "base",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 0.917,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR015",
+      "engine": "db",
+      "variant": "hyde",
+      "hit@5": true,
+      "reciprocal_rank": 0.5,
+      "rank": 2,
+      "seconds": 2.353,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR015",
+      "engine": "db",
+      "variant": "hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 0.919,
+      "dataset": "varied"
+    },
+    {
+      "id": "APPLEFR015",
+      "engine": "db",
+      "variant": "hyde_hybrid",
+      "hit@5": true,
+      "reciprocal_rank": 1.0,
+      "rank": 1,
+      "seconds": 2.356,
+      "dataset": "varied"
+    }
+  ]
+}
