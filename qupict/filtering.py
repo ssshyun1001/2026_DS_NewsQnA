@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import threading
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 
@@ -53,7 +54,7 @@ from pydantic import BaseModel, Field
 from qupict import timing
 from qupict.config import settings
 from qupict.concurrency import run_parallel
-from qupict.llm import aembed_in_batches, get_embeddings, get_structured_model
+from qupict.llm import aembed_in_batches, get_embeddings, get_structured_model, llm_slot
 from qupict.schemas import Article, SelectedSense
 
 RULE_REJECT_SCORE = -2          # 규칙 점수가 이 값 이하면 '무관' (정답 라벨이 생기면 실험으로 조정)
@@ -221,18 +222,38 @@ async def embed_for_dedup(articles: list[Article], terms: list[str] | None = Non
 
 _NOUN_TAGS = ("NNP", "SL")
 _kiwi = None
+_kiwi_lock = threading.Lock()
 
 
 def get_kiwi():
-    """형태소 분석기 Kiwi (처음 한 번만 만든다. qupict/hot.py도 같은 것을 쓴다)."""
+    """형태소 분석기 Kiwi (처음 한 번만 만든다. qupict/hot.py도 같은 것을 쓴다).
+
+    Kiwi는 메모리를 약 500MB 쓰고 만드는 데 몇 초 걸린다. 웹 서버에서 여러 사용자가 동시에 처음 부르면
+    잠금이 없을 때 각자 하나씩 만들어 메모리가 몇 배가 된다 → 잠금으로 딱 하나만 만들고, 나머지는 기다렸다 같이 쓴다.
+    웹 서버는 켤 때 미리 만들어 둔다 (web.py main → warm_up_kiwi)."""
     global _kiwi
     if _kiwi is None:
-        try:
-            from kiwipiepy import Kiwi
-        except ImportError as e:
-            raise ImportError("고유명사 기준(noun) 중복 제거에는 kiwipiepy가 필요합니다: pip install kiwipiepy") from e
-        _kiwi = Kiwi()
+        with _kiwi_lock:
+            if _kiwi is None:                    # 기다리는 동안 다른 스레드가 이미 만들었으면 그대로 쓴다
+                try:
+                    from kiwipiepy import Kiwi
+                except ImportError as e:
+                    raise ImportError("고유명사 기준(noun) 중복 제거에는 kiwipiepy가 필요합니다: pip install kiwipiepy") from e
+                _kiwi = Kiwi()
     return _kiwi
+
+
+def warm_up_kiwi() -> threading.Thread:
+    """Kiwi를 뒤에서 미리 만든다 (웹 서버를 켤 때). 서버는 바로 요청을 받고, 첫 사용자가 Kiwi 로딩을 기다리지 않게 된다.
+    다 만들기 전에 누가 부르면 get_kiwi의 잠금에서 기다렸다 같은 것을 쓴다. kiwipiepy가 없으면 조용히 넘어간다."""
+    def work() -> None:
+        try:
+            get_kiwi()
+        except ImportError:
+            pass
+    thread = threading.Thread(target=work, daemon=True)
+    thread.start()
+    return thread
 
 
 def extract_nouns(text: str) -> list[str]:
@@ -515,11 +536,12 @@ async def llm_verify(articles: list[Article], selected: SelectedSense) -> tuple[
     semaphore = asyncio.Semaphore(LLM_CONCURRENCY)
 
     async def judge(batch: list[Article]) -> list[Verdict]:
-        async with semaphore:
+        async with semaphore:                # 이 작업 안의 동시 요청 상한 (LLM_CONCURRENCY)
             try:
-                result: _LLMVerdictBatch = await llm.ainvoke(
-                    [("system", system), ("human", f"아래 기사들을 판정하라.\n\n{_articles_block(batch)}")]
-                )
+                async with llm_slot():       # 서버 전체(다른 사용자 작업 포함)의 동시 요청 상한
+                    result: _LLMVerdictBatch = await llm.ainvoke(
+                        [("system", system), ("human", f"아래 기사들을 판정하라.\n\n{_articles_block(batch)}")]
+                    )
             except Exception as e:
                 print(f"  [경고] LLM 판정 실패 ({type(e).__name__}) — 기사 {len(batch)}건은 다시 묻는다")
                 return []
