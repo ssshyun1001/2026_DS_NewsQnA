@@ -78,7 +78,8 @@ print("4 ok: search_topic 기준값 유지")
 
 # 5) 질문 세트 보고서: 방식별 정답 근거 유사도, 기준값 후보별 통과 수, 결과 저장
 tmp = Path(tempfile.mkdtemp())
-Q.QA_PATH = tmp / "qa.yaml"
+Q.QA_PATH = tmp / "qa.csv"
+Q.db_lookup = lambda q, links: ([{"강남": "방송인 강남", "눈": "날씨 눈"}[q]], [])   # 실제 DB를 읽지 않게
 Q.save_qa([Q.QAItem("강남-001", "강남", "방송인 강남", "질문", "정답", ["A"]),
            Q.QAItem("강남-002", "강남", "방송인 강남", "질문", "정답", ["Z"]),
            Q.QAItem("눈-001", "눈", "날씨 눈", "질문", "정답", ["A"])])

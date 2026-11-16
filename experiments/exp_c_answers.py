@@ -1,7 +1,7 @@
 """
 실험 C — 답변 신뢰성 비교: LLM 단독 vs 기본 RAG vs QuPicT (기획안 7단계)
 
-질문 세트(experiments/qa_set.yaml)의 질문마다 세 방식으로 답을 만들고, LLM 채점자가 정답 근거 기사와 대조해 채점한다.
+질문 세트(experiments/qa_set.csv, --qa로 다른 CSV)의 질문마다 세 방식으로 답을 만들고, LLM 채점자가 정답 근거 기사와 대조해 채점한다.
 
   방식         답변에 쓰는 기사
   ──────────  ─────────────────────────────────────────────────────────────
@@ -21,9 +21,13 @@
 
 비용: 질문 1개당 LLM 약 10번 (답변 3 + 검색 문장 4 + 채점 3). 질문 50개면 수백 크레딧 → --limit로 나눠 돌릴 수 있다.
 
-실행: python evaluate.py exp-c [--target 강남] [--limit 10]
+실행: python evaluate.py exp-c [--target 강남] [--limit 10] [--qa 골든셋.csv]
 """
 from __future__ import annotations
+
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))   # 이 파일을 바로 실행할 때도 프로젝트 폴더를 찾게
 
 from pydantic import BaseModel, Field
 
@@ -91,14 +95,17 @@ _GRADE_PROMPT = """\
   "기사로는 확인할 수 없다", "모른다" 같은 말은 주장이 아니므로 넣지 않는다.
 - correct: 정답과 같은 사실을 답했으면 true. 표현이 달라도 사실이 같으면 true.
 - hallucination: 근거 기사에 없거나 근거 기사와 다른 내용을 사실처럼 말했으면 true.
+- 정답이 "(없음)"이면 근거 기사에 나온 사실로 질문에 맞게 답했는지로 correct를 판단한다.
+- 근거 기사가 없으면 정답을 기준으로 판단한다 (claims의 supported = 정답과 맞으면 true).
 """
 
 
 def grade(item: QAItem, answer_text: str, evidence_texts: list[str]) -> _Grade | None:
-    evidence = "\n\n".join(f"[근거 기사 {i}]\n{t[:EVIDENCE_CHARS]}" for i, t in enumerate(evidence_texts, 1))
+    evidence = ("\n\n".join(f"[근거 기사 {i}]\n{t[:EVIDENCE_CHARS]}" for i, t in enumerate(evidence_texts, 1))
+                or "[근거 기사 없음]")
     llm = get_structured_model(_Grade)
     messages = [("system", _GRADE_PROMPT),
-                ("human", f"질문: {item.question}\n정답: {item.answer}\n\n{evidence}\n\n[채점할 답변]\n{answer_text}")]
+                ("human", f"질문: {item.question}\n정답: {item.answer or '(없음)'}\n\n{evidence}\n\n[채점할 답변]\n{answer_text}")]
     for attempt in range(GRADE_ATTEMPTS):      # 가끔 한 번씩 실패한다 (실제: 같은 채점이 재시도에서 성공)
         try:
             return llm.invoke(messages)
@@ -113,15 +120,22 @@ def grade(item: QAItem, answer_text: str, evidence_texts: list[str]) -> _Grade |
 # ---------------------------------------------------------------------------
 
 def _evidence_texts(links: list[str]) -> list[str]:
+    if not links:
+        return []
     with db.connect() as conn:
         rows = conn.execute("SELECT link, title, content FROM articles WHERE link = ANY(%s)", (links,)).fetchall()
     return [f"제목: {r['title']}\n{r['content']}" for r in rows]
 
 
-def run(query: str | None = None, limit: int | None = None) -> tuple[list[dict], list[dict]]:
+def run(query: str | None = None, limit: int | None = None, qa_path=None) -> tuple[list[dict], list[dict]]:
     from qupict.retrieval import build_in_memory_store
 
-    items = load_qa(query=query)[:limit] if limit else load_qa(query=query)
+    loaded = load_qa(qa_path, query=query)
+    items = [x for x in loaded if x.answer or x.evidence]   # 정답 · 근거 둘 다 없으면 채점 기준이 없다
+    skipped = len(loaded) - len(items)
+    if skipped:
+        print(f"- 정답 · 근거 기사가 모두 없는 질문 {skipped}개는 건너뜀")
+    items = items[:limit] if limit else items
     topics: dict[tuple[str, str], tuple | None] = {}
     per_answer: list[dict] = []
     for item in items:
@@ -152,6 +166,7 @@ def run(query: str | None = None, limit: int | None = None) -> tuple[list[dict],
                 "correct": g.correct if g else None,
                 "hallucination": g.hallucination if g else None,
                 "claims": len(claims), "supported_claims": sum(c.supported for c in claims),
+                "has_evidence": bool(item.evidence),
                 "cited": len(cited), "cited_evidence": sum(1 for l in cited if l in item.evidence),
                 "grade_reason": g.reasoning if g else "",
                 "claim_details": [c.model_dump() for c in claims],
@@ -164,7 +179,7 @@ def run(query: str | None = None, limit: int | None = None) -> tuple[list[dict],
         if not rs:
             continue
         with_claims = [r for r in rs if r["claims"]]
-        with_cites = [r for r in rs if r["cited"]]
+        with_cites = [r for r in rs if r["cited"] and r.get("has_evidence", True)]   # 근거 link가 있는 질문만
         summary.append({
             "method": method, "answers": len(rs),
             "accuracy": round(sum(r["correct"] for r in rs) / len(rs), 3),
@@ -177,14 +192,20 @@ def run(query: str | None = None, limit: int | None = None) -> tuple[list[dict],
     return summary, per_answer
 
 
-def main(query: str | None = None, limit: int | None = None) -> None:
-    if not load_qa(query=query):
-        print("질문 세트가 없습니다. 먼저 python evaluate.py make-qa 로 질문을 만드세요.")
+def main(query: str | None = None, limit: int | None = None, qa_path=None) -> None:
+    if not load_qa(qa_path, query=query):
+        print("질문 세트가 없습니다. experiments/qa_set.csv에 질문을 넣거나 python evaluate.py make-qa 로 만드세요.")
         return
-    summary, per_answer = run(query, limit)
+    summary, per_answer = run(query, limit, qa_path)
     print()
     print_table(summary, ["method", "answers", "accuracy", "grounding_rate", "hallucination_rate", "citation_accuracy"])
     json_path, csv_path = save_results("exp_c_answers", summary + [{k: v for k, v in r.items() if k != "claim_details"}
                                                                    for r in per_answer],
                                        {"methods": METHODS, "per_answer_with_claims": per_answer})
     print(f"\n답변·채점 결과 저장: {csv_path}\n주장별 판정(사람 검수용): {json_path}")
+
+
+if __name__ == "__main__":   # PyCharm 등에서 이 파일을 바로 실행해도 python evaluate.py exp-c 와 같게
+    import sys
+    import evaluate
+    evaluate.main(["exp-c", *sys.argv[1:]])

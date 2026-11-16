@@ -6,6 +6,8 @@
     index.html   이 파일. 카드 · 입력칸 · 버튼의 배치         → 주소 /
     style.css    색 · 글꼴 · 모양                            → 주소 /static/style.css
     app.js       버튼을 눌렀을 때 하는 일 (서버 API 호출)     → 주소 /static/app.js
+    QuPicT_logo.svg   머리말 로고 · 브라우저 탭 아이콘
+    icon-32.png, icon-180.png   svg를 못 쓰는 브라우저용 탭 아이콘 · 아이폰 홈 화면 아이콘 (QuPicT.png를 줄인 것)
 
   카드 순서: 1 검색어와 기간 → 2 의미 고르기 → 3 진행 상황 → ★ 많이 보도된 기사 Top 5 → 4 질문하기
   처음에는 1번 카드만 보이고, 나머지는 app.js가 차례로 연다 (class="hidden"을 뗀다).
@@ -19,12 +21,23 @@
 <!-- 휴대폰에서도 화면 너비에 맞게 보이게 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>QuPicT 뉴스 Q&amp;A</title>
+<!-- 브라우저 탭 아이콘(파비콘) = QuPicT 로고.
+     svg를 먼저 쓰고(선명), svg를 못 쓰는 브라우저는 32px png를 쓴다.
+     apple-touch-icon: 아이폰에서 "홈 화면에 추가"했을 때 보이는 아이콘 (180px) -->
+<link rel="icon" type="image/svg+xml" href="/static/QuPicT_logo.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icon-32.png">
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<!-- 휴대폰 주소창 색 (SWU BLUE) -->
+<meta name="theme-color" content="#101077">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <main>
-  <!-- 제목과 서비스 설명. id="info"에는 app.js가 LLM 모델 이름을 넣는다 -->
-  <h1>QuPicT 뉴스 Q&amp;A</h1>
+  <!-- 머리말: 로고 + 제목. 그 아래 서비스 설명. id="info"에는 app.js가 LLM 모델 이름을 넣는다 -->
+  <header class="brand">
+    <img class="logo" src="/static/QuPicT_logo.svg" alt="QuPicT 로고" width="56" height="56">
+    <h1>QuPicT 뉴스 Q&amp;A</h1>
+  </header>
   <p class="sub">검색어로 최근 뉴스를 모으고, 모은 기사 안에서 근거를 들어 답합니다. <br>
     QuPicT는 AI이며 인물 등에 관한 정보 제공 시 실수할 수 있습니다.
     중요한 정보는 확인하세요.<br>
@@ -32,23 +45,28 @@
   </p>
 
   <!-- 1. 검색어
+       다른 카드처럼 입력칸을 위에 모으고 버튼은 맨 아래 (.actions).
+       넓은 화면: [검색어 | 기간 | 최대 수집 기사 수] 한 줄 → 아래 [의미 찾기]
+       휴대폰: 칸마다 한 줄씩 세로로 → 맨 아래 [의미 찾기] (style.css 10번)
        [의미 찾기]를 누르면 app.js가 서버에 의미 후보를 묻고(/api/senses) 2번 카드를 연다.
+       maxn: 네이버 검색으로 모을 최대 기사 수 (준비를 시작할 때 서버에 보낸다)
        s-query: 진행 · 오류 글이 나오는 줄 -->
   <section class="card">
     <h2><span class="step">1</span>검색어와 기간</h2>
-    <form id="f-query" class="row">
-      <div class="field"><label for="query">검색어</label><input id="query" type="text" placeholder="예: 애플, 강남" required></div>
-      <div class="field small">
-        <label for="days">기간 (최근 며칠)</label>
-        <input id="days" type="number" min="1" max="365" value="30" required>
+    <form id="f-query">
+      <div class="row">
+        <div class="field"><label for="query">검색어</label><input id="query" type="text" placeholder="예: 애플, 강남" required></div>
+        <div class="field small">
+          <label for="days">기간 (최근 며칠)</label>
+          <input id="days" type="number" min="1" max="365" value="30" required>
+        </div>
+        <div class="field small">
+          <label for="maxn">최대 수집 기사 수</label>
+          <input id="maxn" type="number" min="1" max="500" value="100">
+        </div>
       </div>
-      <button id="b-query" type="submit">의미 찾기</button>
+      <div class="actions"><button id="b-query" type="submit">의미 찾기</button></div>
     </form>
-    <div class="opts">
-      <!-- 네이버 검색으로 모을 최대 기사 수 (준비를 시작할 때 서버에 보낸다) -->
-      <label>
-        <input id="maxn" type="number" min="1" max="500" value="100" style="width:80px"> 최대 수집 기사 수</label>
-    </div>
     <div id="s-query" class="status"></div>
   </section>
 
@@ -64,7 +82,7 @@
       <div id="custom-box" class="hidden" style="margin-top:8px">
         <textarea id="custom" rows="2" placeholder="찾고 싶은 대상을 설명해 주세요 (예: 2020년대 활동하는 방송인 강남)"></textarea>
       </div>
-      <div style="margin-top:12px"><button id="b-sense" type="submit">이 의미로 뉴스 모으기</button></div>
+      <div class="actions"><button id="b-sense" type="submit">이 의미로 뉴스 모으기</button></div>
     </form>
   </section>
 

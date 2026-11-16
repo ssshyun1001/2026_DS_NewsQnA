@@ -67,7 +67,6 @@ class Job:
     images: str = ""                   # 준비 완료 뒤 이미지 → 글(OCR·VLM): "" 안 함 / running / done
     hot: str = ""                      # 준비 완료 뒤 많이 보도된 기사 Top 5: "" 아직 / running / done / error
     hot_articles: list[dict] = field(default_factory=list)   # 중복이 많이 묶인 대표 기사 (한 줄 요약 · 링크)
-    early: int = 0                     # 준비가 끝나기 전에 DB에 저장된 기사로 먼저 답할 때, 그 기사 수 (0 = 아님)
     elapsed: float = 0.0               # 준비에 걸린 시간(초). 준비 완료 때 채운다
 
 
@@ -209,12 +208,12 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
         job.logs.append(f"[{time.perf_counter() - start:5.1f}초] {line}")
 
     def open_session(answer_fn) -> None:
-        """질문을 받기 시작한다 (한 작업에 한 번만. 저장된 기사로 먼저 열었으면 그 세션을 계속 쓴다)."""
+        """질문을 받기 시작한다. 3번 카드의 과정(수집 · 필터링 · 인덱싱 · 이미지 글자 읽기)이 모두 끝난 뒤에 한 번만 부른다.
+        그 전에 화면에서 적은 질문은 app.js가 기다렸다가 이 세션이 열리면 차례로 보낸다."""
+        session_id = uuid.uuid4().hex
         with _lock:
-            if job.session_id is None:
-                session_id = uuid.uuid4().hex
-                _sessions[session_id] = Session(job.label, "메모리" if memory else "DB", answer_fn)
-                job.session_id = session_id
+            _sessions[session_id] = Session(job.label, "메모리" if memory else "DB", answer_fn)
+        job.session_id = session_id
 
     try:
         if memory:
@@ -237,37 +236,28 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
             from qupict.retrieval import search_topic
             from run import oldest_searchable_or_none, prepare_topic, wait_after_prepare
 
-            # 답변이 쓰는 topic · 기사 기간. 저장된 기사로 먼저 답하는 동안에도 같은 함수를 쓰고, 준비가 끝나면 값만 바꾼다
-            # (검색은 질문할 때마다 DB에서 하므로, 준비 중에 새로 저장된 기사도 저장되는 대로 답변에 들어간다)
-            current = {"topic_id": None, "oldest": None}
-
-            def answer_fn(question: str, on_token=None, history: str = NO_HISTORY) -> Answer:
-                hits = search_topic(current["topic_id"], question, selected, period_days=req.period_days,
-                                    history="" if history == NO_HISTORY else history)
-                return generate_answer_from_chunks(question, hits, on_token=on_token, subject=answer_subject(selected),
-                                                   period=answer_period(current["oldest"]), history=history)
-
-            # 예전에 준비한 적 있는 검색어·의미면, 수집·판정을 기다리지 않고 DB에 저장된 기사로 바로 답하기 시작한다.
-            # (DB에 쌓아 두고 다시 쓰는 것이 이 서비스가 DB를 쓰는 이유: 같은 검색어는 기다리지 않는다)
-            early = threading.Thread(target=_open_from_db, daemon=True,
-                                     args=(job, selected, req.period_days, current, answer_fn, open_session, log))
-            early.start()
+            # 수집 · 필터링 · 인덱싱을 모두 끝낸 뒤에야 질문을 받는다 (예전에 준비한 검색어여도 먼저 답하지 않는다)
             prepared = asyncio.run(prepare_topic(selected, req.period_days, req.max_articles, log=log))
-            early.join()
             topic_id = prepared.topic_id
             # "준비 완료" 전에 잠깐 기다린다 (run.PREPARE_SETTLE_SECONDS). 새로 저장한 것이 없으면 기다리지 않는다
             wait_after_prepare(log=log, wrote=prepared.wrote)
-            current.update(topic_id=topic_id, oldest=oldest_searchable_or_none(topic_id, req.period_days))
+            oldest = oldest_searchable_or_none(topic_id, req.period_days)    # 답변에 적는 기사 기간의 시작
             find_hot = lambda: hot.top_duplicated_db(topic_id, req.period_days)
 
-        open_session(answer_fn)
+            def answer_fn(question: str, on_token=None, history: str = NO_HISTORY) -> Answer:
+                hits = search_topic(topic_id, question, selected, period_days=req.period_days,
+                                    history="" if history == NO_HISTORY else history)
+                return generate_answer_from_chunks(question, hits, on_token=on_token, subject=answer_subject(selected),
+                                                   period=answer_period(oldest), history=history)
+
         if not memory:
             from run import image_text_mode
             job.images = "running" if image_text_mode() else ""    # done보다 먼저: 화면이 계속 확인하게
         job.hot = "running"                                        # 이것도 done보다 먼저 (같은 이유)
         job.elapsed = time.perf_counter() - start
-        job.status = "done"
-        log(f"준비 완료! 이제 질문할 수 있습니다. (총 {job.elapsed:.1f}초)")
+        job.status = "done"                                        # 수집 · 필터링 · 인덱싱 끝 (질문은 아직)
+        log(f"준비 완료! (총 {job.elapsed:.1f}초)"
+            + (" 이미지 속 글자 읽기가 끝나면 질문에 답합니다." if job.images == "running" else ""))
     except Exception as e:
         traceback.print_exc()
         job.error = str(e) or type(e).__name__
@@ -276,7 +266,7 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
         return
 
     # 준비 완료 뒤: 많이 보도된 기사 Top 5 (중복이 많이 묶인 대표 기사 + 한 줄 요약. LLM 없이 묶음이 공통으로 쓴 문장을 고른다).
-    # 질문은 그동안에도 받는다. 실패해도 질문 답변에는 영향이 없다.
+    # 실패해도 질문 답변에는 영향이 없다.
     try:
         job.hot_articles = [_hot_payload(h) for h in hot.summarize(find_hot())]
         job.hot = "done"
@@ -285,41 +275,22 @@ def _run_job(job_id: str, selected: SelectedSense, req: PrepareRequest, memory: 
         log(f"[많이 보도된 기사] 실패해서 건너뜁니다 ({type(e).__name__}: {e})")
         job.hot = "error"
 
-    # 준비 완료 뒤: 이미지 → 글(OCR·VLM)을 이 스레드에서 이어서 한다. 질문은 그동안에도 받는다.
-    # 끝나면 그 뒤 질문부터 이미지 속 내용도 검색된다. 실패해도 질문 답변에는 영향이 없다.
-    if job.images == "running":
-        from run import add_image_text
-        try:
-            asyncio.run(add_image_text(topic_id, log=log))
-        except Exception as e:
-            traceback.print_exc()
-            log(f"[이미지] 실패해서 건너뜁니다 ({type(e).__name__}: {e})")
-        job.images = "done"
-
-
-def _open_from_db(job: Job, selected: SelectedSense, period_days: int, current: dict,
-                  answer_fn, open_session, log) -> None:
-    """[DB 버전] 준비를 시작하는 동시에 돈다. 이 검색어·의미를 예전에 준비해서 질문에 쓸 수 있는 기사
-    (판정 통과 + 청크 있음 + 기간 안)가 DB에 있으면, 준비가 끝나기 전에 그 기사로 먼저 질문을 받는다.
-    처음 검색하는 대상이거나 조회가 실패하면 아무것도 하지 않는다 (준비가 끝나면 평소처럼 열린다)."""
-    from qupict import db
-    from qupict.retrieval import searchable_stats
-
+    # 준비 완료 뒤: 이미지 → 글(OCR·VLM)을 이 스레드에서 이어서 한다.
+    # 3번 카드의 과정(이미지 글자 읽기까지)이 모두 끝나야 질문에 답한다 → 첫 답변부터 이미지 속 내용도 검색된다.
+    # 실패해도 질문은 받는다 (이미지 없이 답함).
     try:
-        record = db.get_topic(selected.query, selected.sense.name)
-        if record is None:
-            return
-        count, oldest = searchable_stats(record.id, period_days)
-        if not count:
-            return
-        current.update(topic_id=record.id, oldest=oldest)
-        job.early = count
-        open_session(answer_fn)
-        log(f"DB에 저장된 기사 {count}건으로 지금 바로 질문할 수 있습니다 "
-            f"(수집·판정을 기다리지 않음. 새 기사는 저장되는 대로 답변에 들어갑니다)")
-    except Exception as e:
-        traceback.print_exc()
-        log(f"[DB 재사용] 저장된 기사 확인에 실패해서 준비가 끝난 뒤 답합니다 ({type(e).__name__})")
+        if job.images == "running":
+            from run import add_image_text
+            try:
+                asyncio.run(add_image_text(topic_id, log=log, note="끝나면 질문에 답합니다."))
+            except Exception as e:
+                traceback.print_exc()
+                log(f"[이미지] 실패해서 건너뜁니다 ({type(e).__name__}: {e})")
+    finally:
+        open_session(answer_fn)            # images를 done으로 바꾸기 전에: 화면이 확인을 멈추기 전에 세션이 보이게
+        log("이제 질문할 수 있습니다.")
+        if job.images == "running":
+            job.images = "done"
 
 
 def _hot_payload(h) -> dict:
@@ -358,7 +329,7 @@ def job_status(job_id: str) -> dict:
         raise HTTPException(404, "작업을 찾을 수 없습니다 (서버를 다시 켰다면 처음부터 다시 해 주세요).")
     return {"status": job.status, "logs": job.logs, "session_id": job.session_id,
             "error": job.error, "label": job.label, "images": job.images,
-            "hot": job.hot, "hot_articles": job.hot_articles, "early": job.early, "elapsed": round(job.elapsed, 1)}
+            "hot": job.hot, "hot_articles": job.hot_articles, "elapsed": round(job.elapsed, 1)}
 
 
 # ---------------------------------------------------------------------------
