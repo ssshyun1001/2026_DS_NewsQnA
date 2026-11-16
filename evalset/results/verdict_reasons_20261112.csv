@@ -1,0 +1,280 @@
+﻿대상,사람 라벨,모델 판정,단계,일치,근거,제목,링크
+서울여대 → 서울여자대학교,무관,무관,llm,O,원전 분리작업단위(SWU) 약어로만 쓰여 무관함,[기획] 원전 확대도 공급망이 관건…농축우라늄은 여전히 '남의 손',https://www.m-i.kr/news/articleView.html?idxno=2016466
+서울여대 → 서울여자대학교,관련,관련,llm,O,서울여대가 정시 탐구 반영 대학으로 언급됨,[단독] [2027정시] '역대급 사탐런 전략적 대응' 탐구 1개 반영 대학.. 조...,https://www.veritas-a.com/news/articleView.html?idxno=636030
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","'우리들의 발라드' TOP6, 팬콘서트 'TIMELESS'로 팬들과 호흡...감동의 무...",http://www.beyondpost.co.kr/view.php?ud=202611091606089140a310e76584_30
+서울여대 → 서울여자대학교,무관,관련,llm,X,서울여대 총장이 로보페스트 관련 행사에 참석함,"광운대, '2027 로보페스트 세계대회' 성공 개최 한마음",http://www.enewstoday.co.kr/news/articleView.html?idxno=2489802
+서울여대 → 서울여자대학교,무관,무관,llm,O,원전 농축 서비스 단위(SWU)로만 쓰여 무관함,미 원전 우라늄 미국산 7%…농축 서비스도 23%,https://www.tokenpost.kr/news/economy/434297
+서울여대 → 서울여자대학교,관련,관련,llm,O,서울여대의 과학통합논술 중심 대학 내용 포함,[거인의어깨 입시컨설팅] 수능 가채점 활용 및 대학별고사 최종 준비,https://www.newspim.com/news/view/20261104000438
+서울여대 → 서울여자대학교,관련,관련,llm,O,서울여대의 법정부담금 부담률이 언급됨,[단독] 재단 재산은 건국대 1위…법정부담금 ‘찔끔’ 낸 수도권 사립대...,https://www.etoday.co.kr/news/view/2641726
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",[똑똑한소비] 롯데웰푸드 빼빼로 버스 팝업·bhc 한국시리즈 직영점 중...,https://www.ekn.kr/web/view.php?key=20261102028044388
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","[유통단신] 롯데웰푸드, '빼빼로데이' 기념 홍대 등 도심 순회 팝업 外 ...",https://www.getnews.co.kr/news/articleView.html?idxno=885726
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","식품업계, 소비자 일상 속으로… 체험·콘텐츠 마케팅 강화",https://www.pressman.kr/news/articleView.html?idxno=104295
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","[나눔 트렌드] 롯데웰푸드, 빼빼로데이 캠페인 프로모션 전개... “방한...",https://www.ibabynews.com/news/articleView.html?idxno=156428
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","롯데몰 웨스트레이크 하노이·롯데웰푸드, 누적 1조원 매출 돌파·도심...",http://www.wsobi.com/news/articleView.html?idxno=320796
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","롯데웰푸드, '빼빼로 하트 어택' 전개…명동·성수 등 체험 행사 확대",http://www.dailysmart.co.kr/news/articleView.html?idxno=131798
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",유통가 빼빼로데이 대전…포켓몬·재혼황후 등 IP 협업 '풍성',http://www.ftoday.co.kr/news/articleView.html?idxno=368695
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","[유통갤러리] 풀무원헬스케어, 디자인밀 ‘AI 상담톡’ 론칭 外",https://theviewers.co.kr/View.aspx?No=4292681
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","[올공, 147일上] '참정권 훼손'에 분노한 2030 외침...국조·특검 끌어냈...",https://www.ntoday.co.kr/news/articleView.html?idxno=130478
+서울여대 → 서울여자대학교,관련,무관,rule,X,"검색어·별칭(서울여대, SWU)이 기사에 없음",[단독] 2027 대입 정시부터 '마감 3시간 전' 직전 경쟁률 통일…접수번...,https://www.ajunews.com/view/20261030095159845
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","침묵 건너 닿은 숲…박기영, 우리말로 직조한 재즈의 숨결",https://www.newsis.com/view/NISX20261029_0003845582
+서울여대 → 서울여자대학교,관련,무관,rule,X,"검색어·별칭(서울여대, SWU)이 기사에 없음",[단독] 상위8개대 2026논술 '경쟁률 착시'.. 실질경쟁률 하락률 중대 76....,https://www.veritas-a.com/news/articleView.html?idxno=633473
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","배우냐 걸그룹이냐..김지원vs장원영, 같은 옷 다른 느낌",https://www.sportschosun.com/entertainment/2026-10-26/202610260100163000010631
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","서울시교육청, 정근식 교육감 2기 조직개편 추진…학생 마음건강·교권...",https://www.lecturernews.com/news/articleView.html?idxno=212604
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","'닥터X' 방영 중단 청원 속..김지원, 팬미팅서 전한 반가운 근황 [Oh!쎈 ...",http://www.osen.co.kr/article/G1112898113
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","김지원, 소녀시대 빙의 댄스 폭발-연습생 출신",https://www.mediafine.co.kr/news/articleView.html?idxno=93614
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","'모교 교수로 돌아온 약학자' 이한길 교수, 이화여대 연구 인프라 구축...",https://www.fnnews.com/news/202610221735289663
+서울여대 → 서울여자대학교,관련,무관,rule,X,"검색어·별칭(서울여대, SWU)이 기사에 없음","2028 학생부교과전형 달라진 지원 전략 …""내신만 보고 포기하긴 일러""",https://www.ggilbo.com/news/articleView.html?idxno=1188601
+서울여대 → 서울여자대학교,관련,관련,llm,O,서울여대 동아리가 의류 교환 캠퍼스 행사에 참여함,"대학 캠퍼스서 옷 교환 행사 이어져... 다시입다연구소, 가을학기 '21%파...",https://www.handmk.com/news/articleView.html?idxno=44369
+서울여대 → 서울여자대학교,무관,관련,llm,X,서울여대 교수의 복지 관련 코멘트가 인용됨,24년 뒤 기초연금 수급자 두 배 뛰는데…노인 눈치에 개혁 뒷전,https://www.joongang.co.kr/article/25471804
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","한 교실에서 출발한 네 개의 붓, 선과 색으로 갈라지다",https://www.womentimes.co.kr/news/articleView.html?idxno=107209
+서울여대 → 서울여자대학교,관련,관련,llm,O,서울여대가 주관한 임팩톤@경주 워크숍 내용,"서울여대, 세계경주포럼 '임팩톤@경주' 콘텐츠 기획 워크숍 개최",http://www.enewstoday.co.kr/news/articleView.html?idxno=2482831
+서울여대 → 서울여자대학교,무관,무관,llm,O,학술회의 발표자로 서울여대 교수가 언급됨,"""국경을 넘은 지식의 대이동, 한국의 지성도를 흔들다""… 단국대 동양학...",http://www.dailysmart.co.kr/news/articleView.html?idxno=131267
+서울여대 → 서울여자대학교,무관,무관,llm,O,도예가 박종진이 서울여대에서 학생들을 가르침,"기꺼이 쌓은 것을 무너뜨리는, 도예가 박종진의 작업",https://www.harpersbazaar.co.kr/article/1910723
+서울여대 → 서울여자대학교,관련,관련,llm,O,서울여대 재학 시절 배우 고윤정의 축제 주점 일화,"고윤정, 대학 축제 때 주점 여신-술 부르는 미모",https://www.mediafine.co.kr/news/articleView.html?idxno=93041
+서울여대 → 서울여자대학교,관련,무관,llm,X,여대 편입 대비 학원 프로그램을 다룬 기사,"아이비김영 편입학원 '김영편입', 여대 편입 대비 '여학생 전용관' 운영",https://www.enetnews.co.kr/news/articleView.html?idxno=55427
+서울여대 → 서울여자대학교,무관,무관,llm,O,AI안전연구소장인 서울여대 교수의 인터뷰 포함,"[티조챗] ""안경 쓴 죄로 매 교시 검사받아라?""…D-31 수능 '스마트 안경...",https://news.tvchosun.com/site/data/html_dir/2026/10/19/2026101990107.html
+서울여대 → 서울여자대학교,관련,관련,llm,O,수시 먹통 관련 대학별 리베이트 중 서울여대 언급,[스트레이트] '수시 먹통'의 그림자‥대학들의 '2백억 리베이트',https://n.news.naver.com/mnews/article/214/0001529797?sid=102
+서울여대 → 서울여자대학교,관련,무관,rule,X,"검색어·별칭(서울여대, SWU)이 기사에 없음",대입캘린더 (26/10/23~),https://www.veritas-a.com/news/articleView.html?idxno=632286
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",[단독] 상위15개대 수시 전형료 중대 51억5679만원 '최다'.. 성대 경희대...,https://www.veritas-a.com/news/articleView.html?idxno=632186
+서울여대 → 서울여자대학교,무관,무관,llm,O,원자력 용어 SWU(분리작업단위)에 대한 기사임,"LIS 테크놀로지스, 오크리지 시설 보안 절차 계획 승인",https://www.tokenpost.kr/news/policy/423000
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",[2027대입] 상위 15개대 '4%부터 15%까지 널뛰기 절대평가' 영어 반영방...,https://www.veritas-a.com/news/articleView.html?idxno=632046
+서울여대 → 서울여자대학교,관련,관련,llm,O,서울여대 학생들이 '2026 UIA 임팩톤@경주'에 참여함,"한신대, ‘2026 UIA 임팩톤@경주’ 참가",https://dhnews.co.kr/news/view/1065578042148191
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","해커톤의 진화, “하루 만에 끝내는 대회”에서 “키워 내는 과정”으로...",https://www.dt.co.kr/article/12089027?ref=naver
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",[단독] [2027대입잣대] 외대등 상위 6개 대학 학점포기제 도입.. '낮은 필...,https://www.veritas-a.com/news/articleView.html?idxno=631067
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","동덕여대, 3년 뒤부터 '남녀공학 대학교' 된다... 그러면 일본은?",https://www.wikitree.co.kr/articles/1165223
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","구름, 서울대학교 빅데이터혁신융합대학과 '2026 IRB 순위결정전' 개최…...",https://www.kyosu.net/news/articleView.html?idxno=211051
+서울여대 → 서울여자대학교,관련,무관,rule,X,"검색어·별칭(서울여대, SWU)이 기사에 없음",[유성룡의 입시포인트] 2026학년도 전국 4년제 대학 신입생 충원율,https://edu.chosun.com/site/data/html_dir/2026/10/07/2026100780078.html
+서울여대 → 서울여자대학교,관련,관련,llm,O,서울여대가 '2026 International Green Gown Awards'에서 수상함,"서울여대, 국내 대학 최초 '2026 International Green Gown Awards' 학생참...",https://news.unn.net/news/articleView.html?idxno=598345
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",[단독] [2027정시] 상위15개대 2026정시 계열별 입결 톱5.. '의약/첨단학...,https://www.veritas-a.com/news/articleView.html?idxno=630604
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","대학생은 뭘 사길래…""매출 확 갈린다"" 편의점들 캠퍼스 쟁탈전",https://www.mt.co.kr/living/2026/10/06/2026100521124630318
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","‘4년 만의 솔로 컴백’ 레오, 이래서 ‘완성형 아티스트’…뮤지션의...",https://www.sportsseoul.com/news/read/1639383?ref=naver
+서울여대 → 서울여자대학교,관련,무관,rule,X,"검색어·별칭(서울여대, SWU)이 기사에 없음",“48대1의 바늘구멍 통과 가능할까”…수시 논술 오늘부터 ‘스타트’,https://www.sedaily.com/article/20097609?ref=naver
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",일반전형 과반 '논술'로… 내신 부담에 지원자 몰렸다,https://www.newscj.com/news/articleView.html?idxno=3437357
+서울여대 → 서울여자대학교,관련,관련,llm,O,서울여대 하계 졸업식 풍경을 다룸,취업난·딥페이크…인기 잃은 졸업앨범에 담긴 '사회의 민낯',https://www.thescoop.co.kr/news/articleView.html?idxno=311663
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",[Beauty+] 모공 올인원 이니스프리·마이퍼스트콜라겐 팝업 바이오던스,https://kpenews.com/View.aspx?No=4246352
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",수시 일반전형 지원자 54% '논술' 도전…메디컬·반도체 강세,https://www.newsis.com/view/NISX20260930_0003808144
+서울여대 → 서울여자대학교,무관,무관,llm,O,원자력 토론회 기사로 분리작업단위(SWU) 약어가 쓰임,농축 우라늄 공급망 불안…“국내 생산시 年 1조 수입대체 효과”,https://www.sedaily.com/article/20096202?ref=naver
+서울여대 → 서울여자대학교,관련,관련,llm,O,서울여대 캠퍼스에서 동아제약 행사가 진행됨,매일유업 '매일 도파민 충전소' 운영→동아제약 '젤파민 충전소' 진행,https://www.slist.kr/news/articleView.html?idxno=769522
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","수능 전 논술고사 이번 주 시작…""기출 중심으로 막판 대비해야""",https://www.news1.kr/society/education/6303652
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","""수도권 문화 자산, 지역을 품다""… 성신여대박물관·영월군, '옛 세계지...",http://www.dailysmart.co.kr/news/articleView.html?idxno=130238
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","스카이입시교육학원, 중앙대(창의형)·연세대 추석·개천절 인문·수리...",http://www.e2news.com/news/articleView.html?idxno=334535
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","손승연 ""팬들과 음악으로 교감하는 시간"" 11월 팬콘서트 연다",https://www.topstarnews.net/news/articleView.html?idxno=16208121
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",[Who Is ?] 조원영 동덕여자대학교 법인 이사장,https://www.businesspost.co.kr/BP?command=article_view&num=447624
+서울여대 → 서울여자대학교,관련,관련,llm,O,서울여대 대학생기후행동 지부의 탄소중립 활동을 다룸,병뚜껑 1200개가 마라톤 메달로… 청년들이 바꾼 서울 캠퍼스,https://www.newscj.com/news/articleView.html?idxno=3434843
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","한양여대, 2027년 글로벌비즈니스서비스과 신설, 외국인 인재 양성 본격...",https://www.etnews.com/20260922000419
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음","[김종두 칼럼] 수능 전 인문논술, 한 편의 답안을 완성하는 힘",https://www.cfnews.kr/news/article.html?no=112250
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",AI학업장려 대출 60개大로 확대…부산·전남·충남대는 전 학과 지원,https://www.sedaily.com/article/20093444?ref=naver
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",성신여대 공예과 도자전 '공공마켓' 오픈런 진풍경.. '오전 8시부터 줄서...,https://www.veritas-a.com/news/articleView.html?idxno=628811
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",SKY는 ‘제시문’ 중앙대는 ‘학생부’…대학별 면접 맞춤대비 필수,https://www.sedaily.com/article/20093133?ref=naver
+서울여대 → 서울여자대학교,관련,관련,llm,O,청년의 날 치어리딩 챔피언십에 서울여대 SWURS가 참가함,춤추고 응원하고…광안리 뒤흔든 ‘청년의 날’,https://www.ekn.kr/web/view.php?key=20260919022146940
+서울여대 → 서울여자대학교,관련,관련,llm,O,풀리캠퍼스 도입 대학으로 서울여대가 언급됨,"[대학 AI 교육 혁신, 현장에서 답을 찾다 ⑥] 배재대, AI 첨삭으로 신입...",https://www.econovill.com/news/articleView.html?idxno=750106
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",[단독] [2027수시경쟁률] '증원 효과 끝났나' 상위14개대 무전공 27.68대...,https://www.veritas-a.com/news/articleView.html?idxno=628399
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",성신여대 우즈베키스탄 국립음악예술대와 협약.. '중앙아시아 문화예술...,https://www.veritas-a.com/news/articleView.html?idxno=628475
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",[단독] [2027수시경쟁률] 상위15개대 경쟁률 '급등' 모집단위..서강대 시...,https://www.veritas-a.com/news/articleView.html?idxno=628304
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",[단독] [2027정시] '정시 학생부 반영' 7개대 6684명 경쟁률 하락할까.. ...,https://www.veritas-a.com/news/articleView.html?idxno=628153
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",[2027수시경쟁률] 상위15개대 전형별 '인기 학과'는?.. 약학 미디어 의예...,https://www.veritas-a.com/news/articleView.html?idxno=628030
+서울여대 → 서울여자대학교,관련,관련,llm,O,서울여대 일반대학원 신설 및 보안 인재 양성을 다룸,LG유플러스·토스 등 25개 기업…대학 연계 ‘보안 인재’ 양성,https://www.sedaily.com/article/20090928?ref=naver
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",‘수시 먹통’ 후폭풍...“미리 접수한 사람만 바보”,https://www.sedaily.com/article/20090361?ref=naver
+서울여대 → 서울여자대학교,무관,무관,rule,O,"검색어·별칭(서울여대, SWU)이 기사에 없음",[단독] [2027수시경쟁률] 상위15개대 막판 소나기 지원 18.5% '비슷'.. 고...,https://www.veritas-a.com/news/articleView.html?idxno=627580
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 광고로 이름을 알린 정다빈 근황,"정다빈, 새 드라마 앞두고 야외 화보 같은 근황",https://www.topstarnews.net/news/articleView.html?idxno=16273013
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,국내 아이스크림 시장을 주도하는 배스킨라빈스 언급,하늘길 뚫은 백미당·가맹 나선 벤슨…아이스크림 판로 확대 경쟁,https://www.edaily.co.kr/News/Read?newsId=04801926645644408&mediaCodeNo=257&utm_source=naver&utm_medium=referral&utm_campaign=news_syndication&utm_content=original_article
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 공주신관점의 후원금 기탁,"충남 공주시 월송동 지역사회보장협의체, 동절기 특화사업 추진",https://www.ccdn.co.kr/news/articleView.html?idxno=1110104
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스의 아이스크림 및 음료 가격 인상,"파리바게뜨·파스쿠찌 가격 줄인상…상미당홀딩스, 수익성 반등할까",https://www.newsis.com/view/NISX20261110_0003861954
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,사우디아라비아 배스킨라빈스 제품 및 가격 언급,사우디아라비아 아이스크림 시장동향,http://dream.kotra.or.kr/kotranews/cms/news/actionKotraBoardDetail.do?SITE_NO=3&MENU_ID=190&CONTENTS_NO=2&bbsGbn=254&bbsSn=254&pNttSn=244864
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스의 죠리퐁 협업 아이스크림 출시,"54살 크라운 죠리퐁, '흑당밀크'로 젊어졌다…10년 만에 신제품",https://www.newsworks.co.kr/news/articleView.html?idxno=902538
+베라 → 브랜드 배스킨라빈스,무관,무관,llm,O,엔비디아 GPU인 베라루빈 관련 내용으로 무관,"12월2일 예산안 심사 카운트다운, 국회 문턱 넘으려면",https://www.mt.co.kr/tech/2026/11/10/2026110423122682128
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,홈플러스 하남점 내 입점한 배스킨라빈스 휴업,[현장속으로]월급 밀리고 매장은 텅텅…광주 홈플러스도 회생 '먹구름',https://www.namdonews.com/news/articleView.html?idxno=928690
+베라 → 브랜드 배스킨라빈스,무관,무관,rule,O,"검색어·별칭(베라, 배스킨라빈스, Baskin-Robbins)이 기사에 없음","[유통레이더] 트립닷컴, 롯데월드, 놀유니버스, 번개장터, 삼양라운드스...",https://daily.hankooki.com/news/articleView.html?idxno=1423013
+베라 → 브랜드 배스킨라빈스,무관,무관,llm,O,검색어 글자가 다른 브랜드명에 포함됨,[잘먹잘살+]LG생건·동서식품·BBQ·CJ온스타일·CJ ENM·여기어때·GS25·...,https://www.businessplus.kr/news/articleView.html?idxno=119515
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스의 핑크드림 캠페인 다룸,"허희수 상미당홀딩스 사장, 참여형 ESG '핑크드림 캠페인' 강화",https://www.sisaon.co.kr/news/articleView.html?idxno=205899
+베라 → 브랜드 배스킨라빈스,무관,무관,rule,O,"검색어·별칭(베라, 배스킨라빈스, Baskin-Robbins)이 기사에 없음","""이익 압도한 투자""…한화M&S 라이프 부문에 쌓인 난제 [김동선 독립경...",https://www.newsway.co.kr/news/view?ud=2026110517351786043
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 국내 진출 40주년 제품 재해석,단종됐는데 다시 불티난다…돌아온 캪틴큐·롱치킨버거·볶음너구리의 ...,https://www.segye.com/newsView/20261108501735?OutUrl=naver
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스의 패션 브랜드 협업 상품 소개,저당 단백질바부터 식이섬유 콜라까지…유통업계 신제품 경쟁,https://www.segye.com/newsView/20261107502272?OutUrl=naver
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 등 연말 케이크 출시 예정 언급,"""미리 크리스마스""…연말 시즌 케이크 대전 돌입",https://view.asiae.co.kr/article/2026110514515540329
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스의 겨울 시즌 메뉴와 협업 상품,"풀무원·오리온·해태제과 등 식품·외식업계, 겨울 맞아 신제품 내놓는...",http://www.dailypop.kr/news/articleView.html?idxno=104244
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스의 소비자 공모전 선정 아이디어,"[기자의눈] ""주문하신 광고 나왔습니다""…달라진 마케팅 공식",https://www.asiatoday.co.kr/kn/view.php?key=20261105010001847
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스와 젤라또 피케 협업 굿즈 출시,신세계면세점 CJ제일제당 롯데GRS 外(여기 유통 이슈),https://www.newsclaim.co.kr/news/articleView.html?idxno=3081610
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 신제품 및 굿즈 출시,"배스킨라빈스, 젤라또 피케와 협업 … 한정판 파자마·파우치 출시",http://www.worktoday.co.kr/news/articleView.html?idxno=91539
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스와의 협업 언급,[VIDEO] Inside the lab behind a K-beauty best-seller,https://www.koreatimes.co.kr/path/A2026110316420004006
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 아이스크림 가격 인상,"""먹거리값 어디까지 오르나"" 외식·가공식품 줄인상에 연말 '비상'",https://www.newsis.com/view/NISX20261104_0003853653
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 매장 운영 현황 언급,"하겐다즈, 매출 1138억원에도 신규 가맹 출점 제동 … 정보공개서 등록...",https://biz.newdaily.co.kr/site/data/html/2026/11/04/2026110400102.html
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 매장 근무자 장학금 지원,"유통업계, 청년 꿈 응원…꾸준한 장학금 지원으로 상생",https://www.cnbizm.com/news/articleView.html?idxno=320306
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 장학금 관련 내용 포함,"[교육 트렌드] 서울시교육청, 4~6일 ‘2026 서울학생 예술몽땅 페스티벌...",https://www.ibabynews.com/news/articleView.html?idxno=156502
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 매장 근무자 장학금 내용 포함,[똑똑한유통] 롯데웰푸드 ‘악당 칸쵸 찾기’·하림 캠핑 간편식…상미...,https://www.ekn.kr/web/view.php?key=20261103021184982
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 계열 브랜드 장학금 지급,"[비즈&] 대한항공, 미국행 노선 에볼라 서약서 제출 의무화 外",http://www.yonhapnewstv.co.kr/news/MYH20261103172442mWQ
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 아이스크림 쿠폰 증정 이벤트 언급,"[금융 이모저모] 신한은행, 삼성자산운용과 손잡고 퇴직연금 자산관리 ...",https://www.goodkyung.com/news/articleView.html?idxno=293049
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 쿠폰 지급 내용 언급,"[보험·카드24시] 동양생명, 보험료 면제와 치료보장 더한 종신보험 출...",https://news.dealsitetv.com/articles/177955
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 파인트 아이스크림 쿠폰 지급 이벤트,"당구 우승엔 아이스크림, 하노이 마트엔 할인…안 닿는 곳 없는 카드 혜...",https://www.m-i.kr/news/articleView.html?idxno=2013754
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 파인트 아이스크림 쿠폰 제공 내용,"[카드 & Now]현대카드, '소중한주' 캠페인 실시 등",https://www.ebn.co.kr/news/articleView.html?idxno=1730269
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 매장 근무 대학생 장학금 지원,"[TOP's Pick] [유통] CJ ONE, 11월 ‘원더위크’ 개최 外",https://www.topdaily.kr/articles/112658
+베라 → 브랜드 배스킨라빈스,무관,무관,llm,O,알로에 베라 성분 언급으로 무관,"[유통레이더] 아성다이소, 파파존스, CJ제일제당, 골프존, 소노시즌, 씰...",https://daily.hankooki.com/news/articleView.html?idxno=1421059
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 파인트 아이스크림 쿠폰 제공,[더밸류 브리핑] 오늘의 카드사 소식…하나카드·비씨카드·NH농협카드,http://www.thevaluenews.co.kr/news/view.php?idx=202922
+베라 → 브랜드 배스킨라빈스,무관,무관,rule,O,"검색어·별칭(베라, 배스킨라빈스, Baskin-Robbins)이 기사에 없음","[금융권 이모저모]KB자산운용, 수익률 7% 달성 시 채권형 전환하는 펀드...",https://www.businessplus.kr/news/articleView.html?idxno=119182
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 파인트 아이스크림 모바일 쿠폰 제공,"[금융zip] 신협, 금융취약계층 위한 연 최고 7.0% '동행사랑적금' 특판 ...",https://www.getnews.co.kr/news/articleView.html?idxno=885788
+베라 → 브랜드 배스킨라빈스,관련,무관,rule,X,"검색어·별칭(베라, 배스킨라빈스, Baskin-Robbins)이 기사에 없음",[류준형의 시선전환] 치킨 값만 정조준…다른 먹거리는 문제 없나,https://www.news2day.co.kr/article/20261103500071
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 파인트 아이스크림 쿠폰 증정 이벤트,[금융레이더] 한화손보/NH농협카드/카카오페이,https://www.dnews.co.kr/uhtml/view.jsp?idxno=202611030858409950311
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 파인트 아이스크림 쿠폰 지급 이벤트,"NH농협카드, 김보미 LPBA 첫 우승 기념 이벤트…5000명에 아이스크림 증...",https://www.megaeconomy.co.kr/news/newsview.php?ncode=1065573294186939
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스가 케이지 프리 운동에 동참,"연 6억 개 달걀 쓰는 CJ에 국제 동물단체 ""케이지 사육 그만""",https://www.busan.com/view/busan/view.php?code=2026110218044361391
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,SPC 계열 배스킨라빈스 매장 포인트 지원,아침 굶는 아이들 위해 3억 후원…켈로그가 시작한 식품업계의 변화,https://www.segye.com/newsView/20261102516926?OutUrl=naver
+베라 → 브랜드 배스킨라빈스,무관,무관,llm,O,엔비디아 GPU 베라 루빈에 대한 언급임,"삼성SDS, 구미 AI 데이터센터 착공…영남 60조 투자 본격화",http://www.choicenews.co.kr/news/articleView.html?idxno=172821
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 가격 인상 소식 포함,"""디저트 소비 늘자 기대감도 쑥"" 빵·과자 제조업, 4분기 반등할까",https://www.newsis.com/view/NISX20261102_0003850086
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,이벤트 경품으로 배스킨라빈스 쿠폰 제공,"꽃파는총각, 연말 선물 수요 맞춰 꽃·식물 할인전 진행",https://www.megaeconomy.co.kr/news/newsview.php?ncode=1065574225675844
+베라 → 브랜드 배스킨라빈스,무관,무관,rule,O,"검색어·별칭(베라, 배스킨라빈스, Baskin-Robbins)이 기사에 없음","꽃파는총각, 연말연시 맞아 ‘소중한 마음이 피어나는 계절 선물전’ 진...",https://www.thepowernews.co.kr/view.php?ud=2026110209502782436cf2d78c68_7
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스의 호빵맨 협업 제품 출시,"식품업계, 문화 콘텐츠·협업 신제품 확대…해외시장 공략도 강화",https://www.webeconomy.co.kr/news/articleView.html?idxno=2354958
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 신제품 출시 내용이 핵심임,[리테일 위클리] 식품부터 뷰티까지…소비자 입맛 잡는 신제품 경쟁,https://www.seoultimes.news/news/article.html?no=2000101632
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 제품 재해석 출시가 언급됨,'양주부터 우지라면까지'…'구관이 명관' 단종 제품이 돌아왔다,https://www.jasm.co.kr/news/view/323688/?sc=Naver
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 할로윈 할인 행사가 포함됨,할로윈 맞아 무료 도넛·햄버거까지…외식업체 할인 행사,https://www.radiokorea.com/news/article.php?uid=508339
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 제품 재해석 출시가 언급됨,추억과 호기심의 만남···캡틴큐·볶음너구리 '뉴트로' 열풍,https://www.sisajournal-e.com/news/articleView.html?idxno=424728
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,카카오페이 굿딜 할인 브랜드로 언급됨,[돈MORE]머니 전쟁 붙은 간편결제…어떤 '페이' 쓸까,https://news.bizwatch.co.kr/article/finance/2026/10/30/0042
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 40주년 제품 출시 사례가 나옴,"추억을 소환하는 식품업계의 귀환, 다시 돌아온 인기 제품들이 시장을 ...",https://www.gokorea.kr/news/articleView.html?idxno=883571
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 11월 이달의 맛 출시가 다뤄짐,[똑똑한소비] 남양유업 식이섬유 더한 락토프리 멸균우유·스타벅스 쓱...,https://www.ekn.kr/web/view.php?key=20261030025223523
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 호빵맨 협업 제품 출시 소식임,[A 오늘의 유통] 투썸플레이스·배스킨라빈스·코레일유통물류 外,https://www.asiaa.co.kr/news/articleView.html?idxno=268654
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 신제품 출시 기사,"배스킨라빈스, 호빵맨 협업 11월 이달의 맛 '도우와줘요 호빵맨' 출시",http://www.breaknews.com/1247201
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,과거 배스킨라빈스 광고 연구 언급,귀한 먹거리에서 겨울 시즌의 ‘상징’으로…달라진 크리스마스의 맛,https://www.segye.com/newsView/20261029505057?OutUrl=naver
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,SPC그룹 계열사로 배스킨라빈스 언급,[재계뷰] SPC그룹 경영 전면 1년 맞은 상미당홀딩스 허진수 부회장이 글...,https://www.getnews.co.kr/news/articleView.html?idxno=885245
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스의 핼러윈 행사 중단,"이태원 참사 4년, 핼러윈 마케팅 기지개 켜나...유통가 여전히 신중",https://www.newsworker.co.kr/news/articleView.html?idxno=511047
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배달앱 할인 브랜드로 배스킨라빈스 언급,"배달 3사, 프랜차이즈·생태계 묶는 ‘2차전’ 점화…“쿠폰 싸움은 끝...",https://www.ceoscoredaily.com/page/view/2026102716451261299
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 가격 인상 소식,가을 제철 밥상은 사치?…꽃게·전어 가격 2배,https://biz.sbs.co.kr/article_hub/20000342487?division=NAVER
+베라 → 브랜드 배스킨라빈스,무관,무관,rule,O,"검색어·별칭(베라, 배스킨라빈스, Baskin-Robbins)이 기사에 없음","[가전 트렌드] 마포구, 가정용 음식물쓰레기 감량기 구매비 최대 17만50...",https://www.ibabynews.com/news/articleView.html?idxno=156233
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 매장에서 발생한 응급 상황,스포츠안전관리사 자격 빛난 계명대 학생의 용기,http://www.hansbiz.co.kr/news/articleView.html?idxno=876698
+베라 → 브랜드 배스킨라빈스,무관,무관,llm,O,발리 지역 이름 베라와 언급,"발리 짱구 해변, 월클 미식으로 무장한 뉴 핫플 '에타 더 플레이스'",https://www.gukjenews.com/news/articleView.html?idxno=3734142
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 가맹점 소송 언급,피자헛 이후 몰아치는 후폭풍…프랜차이즈 본사 ‘차액가맹금 소송’ 초...,https://www.megaeconomy.co.kr/news/newsview.php?ncode=1065577762177373
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,디저트 카페 브랜드 배스킨라빈스 순위,"성심당, 올 3분기 디저트 카페 왕좌 등극… 2위 설빙·3위 배스킨라빈스",https://www.thebigdata.co.kr/view.php?ud=2026102615423344549511086197_23
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 굿즈 증정 행사,"""장원영 하나로 9개 브랜드 뭉쳤다""…확 바뀐 스타 마케팅 [권용훈의 트...",https://www.hankyung.com/article/202610264554i
+베라 → 브랜드 배스킨라빈스,무관,무관,llm,O,프랑스 식품업체 관련 내용,“레시피도 바꿔드려요”…韓 시장 노크하는 프랑스 식품업체들 [현장],https://www.ddaily.co.kr/page/view/2026102616460980489
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,아이스크림 시장 경쟁자로 배스킨라빈스 언급,"김동선표 '벤슨', 가맹사업 확장···수익성 확보는 과제",http://www.enewstoday.co.kr/news/articleView.html?idxno=2484515
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,경품으로 배스킨라빈스 버라이어티팩 언급,"테팔, 11월 25일까지 온·오프라인 할인 행사…900여 명 경품 증정",http://www.dailysmart.co.kr/news/articleView.html?idxno=131504
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,경품으로 배스킨라빈스 상품권 언급,"HD현대오일뱅크, '햅쌀드림밥' 행사 올해도 전개…내달 23일까지",https://www.news1.kr/industry/general-industry/6331516
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배달 플랫폼 배스킨라빈스 할인 행사이벤트,"맥도날드 신메뉴 3000원 할인…배민·쿠팡이츠, 외식 쿠폰 경쟁",https://www.segye.com/newsView/20261026503230?OutUrl=naver
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 입점 및 현장 마케팅,"[현장] ""온 가족이 하루 종일 즐긴다""...슈퍼레이스, 레이스 넘어 '마케...",https://www.ebn.co.kr/news/articleView.html?idxno=1729047
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,나성동 베라(배스킨라빈스) 언급,세종시 나성동서 로또 1등 터졌다,https://www.jbnews.com/news/articleView.html?idxno=1514320
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,워크샵 바이 배스킨라빈스 소개,"햄버거도 아이스크림도 연구실서 탄생…유통업계, 맛 개발 경쟁",https://www.segye.com/newsView/20261025501351?OutUrl=naver
+베라 → 브랜드 배스킨라빈스,무관,무관,llm,O,타 브랜드 기사 속 베라 라이트 다운 언급,"[유통레이더] 쿠팡, 이마트, 롯데마트, 세라젬, 무신사, 삼양식품, 도미...",https://daily.hankooki.com/news/articleView.html?idxno=1417707
+베라 → 브랜드 배스킨라빈스,무관,무관,rule,O,"검색어·별칭(베라, 배스킨라빈스, Baskin-Robbins)이 기사에 없음","[유통소식] 이마트, 캠핑용품·가전제품 할인",http://www.4th.kr/news/articleView.html?idxno=2120263
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 국내 진출 40주년 및 역사,아이스크림 전문점 40년…달라진 디저트 소비와 기념일 문화,https://www.polinews.co.kr/news/articleView.html?idxno=746519
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 캐시워크 퀴즈 및 쿠폰,[캐시워크 종합] 10월 22일 목요일 오후 3시 현재 출제되고 있는 모든 문...,http://www.bizwnews.com/news/articleView.html?idxno=149683
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 상품권 증정 이벤트,[대학 뉴스브리핑] 삼육대·광운대·한성대,https://www.asiatime.co.kr/article/20261022500281
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 그래이맛 콘테스트 수상작 출시,"집밥도 취향대로 바꾼다…식품업계, 소비자 레시피 상품화 확대",https://www.shinailbo.co.kr/news/articleView.html?idxno=5074543
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 차액가맹금 소송 언급,치킨·커피 이어 편의점까지…'차액가맹금 소송' 유통가 전방위 확산,https://news.tf.co.kr/read/economy/2379277.htm
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 차액가맹금 소송 언급,차액가맹금 소송 확산···프랜차이즈 수익모델 흔들린다,https://www.seoulfn.com/news/articleView.html?idxno=640615
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 네이버페이 단말기 제휴,"[기획] 오프라인 정조준 네이버페이, '커넥트'로 간편페이 시장 확장",https://www.startuptoday.co.kr/news/articleView.html?idxno=816683
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,한국 진출 40주년 배스킨라빈스 역사 집중 조명,'써티원'으로 문 연 프리미엄 아이스크림 대명사…'배라'의 40년 [옛날신...,https://www.sisaon.co.kr/news/articleView.html?idxno=205349
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 이달의 맛 출시 사례,소비자가 만들고 기업이 출시한다…식품업계 '모디슈머'의 진화,https://www.updownnews.co.kr/news/articleView.html?idxno=319235
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 아이스크림 신제품 개발,소비자 레시피가 신제품으로…식품업계 '참여형 R&D' 확대,https://www.pointdaily.co.kr/news/articleView.html?idxno=322946
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 40주년 기념 제품 출시,"배스킨라빈스, 한국 진출 40주년…추억의 '아이엠, 샘' 재출시",http://www.thefirstmedia.net/news/articleView.html?idxno=211375
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,쿠팡이츠 배스킨라빈스 할인 행사 참여,[유통家 단신] bhc·쿠팡이츠·오뚜기·대상 등,https://www.ezyeconomy.com/news/articleView.html?idxno=241003
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 할인 행사 언급,[소비자생활] 교원투어ㆍ정관장ㆍ쿠팡,http://www.smarttimes.co.kr/news/articleView.html?idxno=49885
+베라 → 브랜드 배스킨라빈스,무관,무관,rule,O,"검색어·별칭(베라, 배스킨라빈스, Baskin-Robbins)이 기사에 없음","쿠팡이츠 11월1일까지 할인쿠폰 증정 행사, 유료멤버십 회원 최대 8천 원...",https://www.businesspost.co.kr/BP?command=article_view&num=449826
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 40주년 기념 캠페인,"식음료·헬스케어 업계, '원물 영양·K-스낵·스토리텔링' 내세워 외연 ...",http://www.dailypop.kr/news/articleView.html?idxno=103543
+베라 → 브랜드 배스킨라빈스,무관,관련,llm,X,배스킨라빈스 릴레이 할인전,"쿠팡이츠, 와우회원 역대급 릴레이 할인전 개최",http://www.breaknews.com/1244233
+베라 → 브랜드 배스킨라빈스,무관,무관,llm,O,바네사 베라 론칭(패션 브랜드로 무관),"[신상브리핑] K2, 동아오츠카, 해태제과, 롯데웰푸드, 씰리침대, 코오롱...",https://daily.hankooki.com/news/articleView.html?idxno=1415071
+베라 → 브랜드 배스킨라빈스,무관,무관,llm,O,엔비디아 GPU 베라 루빈(AI 기술로 무관),토종 AI 모델 ‘세계 최고급’ 도전으로 판 키운다…정부 4.7조에 민간 ...,https://www.mk.co.kr/article/12168404
+베라 → 브랜드 배스킨라빈스,무관,무관,llm,O,베라루빈 GPU 언급(AI 기술로 무관),"[독파모 재편] ② ""최종 2곳 인센티브 고민""…프론티어 사업자 2∼3월 선...",https://www.yna.co.kr/view/AKR20261002169100017?input=1195m
+베라 → 브랜드 배스킨라빈스,무관,무관,rule,O,"검색어·별칭(베라, 배스킨라빈스, Baskin-Robbins)이 기사에 없음",[게임뉴스] 웹젠 및 위메이드커넥트 소식 외,https://www.gamevu.co.kr/news/articleView.html?idxno=61171
+베라 → 브랜드 배스킨라빈스,무관,무관,llm,O,알로에베라잎 추출물(식물 성분으로 무관),"[신상브리핑] 배달의민족, 소노시즌, 이디야커피, 현대그린푸드, CJ제일...",https://daily.hankooki.com/news/articleView.html?idxno=1410293
+베라 → 브랜드 배스킨라빈스,무관,무관,llm,O,베라루빈 GPU 언급(AI 기술로 무관),"[단독] 정부, '독파모' 개편 검토…미래대응기금으로 4.7조 투자",http://www.wowtv.co.kr/NewsCenter/News/Read?articleId=A202609280206&t=NN
+베라 → 브랜드 배스킨라빈스,무관,무관,llm,O,엔비디아 반도체 베라루빈 언급으로 무관,"현대엔지니어링, 데이터센터 정조준…올해 1.9조 수주 '눈앞'",http://www.economytalk.kr/news/articleView.html?idxno=424369
+베라 → 브랜드 배스킨라빈스,무관,무관,llm,O,바이오 약물 베라히알루로니다제 언급으로 무관,"알테오젠, 정맥 대신 피하주사 가능한 제형 특허 유럽에 등록",https://www.tjb.co.kr/news05/bodo/view/id/104000
+베라 → 브랜드 배스킨라빈스,관련,관련,llm,O,배스킨라빈스 아이스크림 라떼 출시 내용임,"배스킨라빈스, 인기 아이스크림 활용 ‘크림 라떼’ 4종 출시",http://www.breaknews.com/1236877
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 자회사 하만,"하만 ‘드롭스’, 틱톡처럼 넘기지만 영상 대신 10~30초 곡 클립 듣는다...",https://www.wikitree.co.kr/articles/1173526
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자와 SK하이닉스 주가,"“누가 간첩을 들이래”...‘불륜랠리’에 젠슨황 키스캠 밈까지, 패러...",https://www.mk.co.kr/article/12204460
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성전자 주식 종목 언급,“주식 올라라” 가상 법당에서 절하고 기도까지…잊힌줄 알았던 메타버...,https://biz.heraldcorp.com/article/10932563?ref=naver
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 반도체 공장 배치,"김정관 장관 ""반도체 공장 배치 이달 마무리...투자 의지 확고""",https://www.ikbc.co.kr/article/view/kbc202611100082
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성전자 주요 시설 인접,[패트롤] 경기도-동두천시-양주시-의정부시-포천시,https://www.ekn.kr/web/view.php?key=20261110024407968
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 초기업노조 요구안,"삼성전자 초기업노조, 호남 반도체 메가프로젝트에 '사전 합의' 요구…...",https://www.joongangenews.com/news/articleView.html?idxno=562799
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 반도체 수출 호조,대기업 수출 103% 늘었는데 중기는 10%…심화되는 양극화,https://www.khan.co.kr/article/202611102109015
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성전자 증권 재산 보유,"이태현 KBS 사장 후보자 24일 청문회…李 ""KBS 최고의 콘텐츠 전문가""",https://www.mediatoday.co.kr/news/articleView.html?idxno=338343
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 주가 반등과 실적 관련 내용,4거래일 만에 반등…코스피·코스닥서 매수 사이드카,https://news.kbs.co.kr/news/pc/view/view.do?ncd=8709132&ref=A
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성 C랩 출신 스타트업의 헬스케어 솔루션 언급,"[EBN 오늘(10일) 이슈 종합] 美 AI DC 투자 지형 변화…SKT·KT, 글로벌 빅...",https://www.ebn.co.kr/news/articleView.html?idxno=1731156
+삼전 → 기업 삼성전자,무관,무관,rule,O,"검색어·별칭(삼전, 삼성전자, Samsung)이 기사에 없음",[11월11일자] 비즈니스포스트 아침의 주요기사,https://www.businesspost.co.kr/BP?command=article_view&num=451681
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자와 현대차그룹의 로봇 분야 협력,발 대신 바퀴…피겨 선수처럼 '360도 폴짝',https://news.sbs.co.kr/news/endPage.do?news_id=N1008839748&plink=ORI&cooper=NAVER
+삼전 → 기업 삼성전자,관련,무관,rule,X,"검색어·별칭(삼전, 삼성전자, Samsung)이 기사에 없음",대한항공우·진에어 등 13개 상한가…상승 종목 속출,http://www.kjdaily.com/article.php?aid=1794311477691869276
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성전자 평택캠퍼스를 중심으로 한 주거지 개발,[진단] 평택 고덕에 쌓는 주거 기반… 우미건설의 장기 포석,http://www.economytalk.kr/news/articleView.html?idxno=425229
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자와 하이닉스 주가 반등을 가정한 증시 전망,"""내년 증시 상반기까지 불확실성...하반기 안정화 전망""",https://www.digitaltoday.co.kr/news/articleView.html?idxno=714272
+삼전 → 기업 삼성전자,무관,무관,llm,O,삼성전자가 아닌 삼성화재의 보험사 인수 기사임,"[M&A분석] 삼성화재, 영국 로이즈 캐노피우스 경영권 완전인수...잘한 일...",https://www.moneystorm.kr/news/articleView.html?idxno=8283
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자와 SK하이닉스 기초자산 ETF 언급,"리스크 이미 반영된 한국 증시, 조만간 바닥 확인 가능[이상헌의 밸류체...",https://www.khan.co.kr/article/202611102026005
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성전자·삼성카드와 협업한 가전 제휴형 상조상품,"보람그룹, 소비자 소리 반영한 '상조 4.0'로 라이프케어로의 첫 혁신 일...",https://www.s-journal.co.kr/news/articleView.html?idxno=45223
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자의 토큰화 주식을 다룸,[D·CON 2026 현장] 김형년 두나무 부회장 “삼전·하이닉스 토큰화 주식...,https://www.megaeconomy.co.kr/news/newsview.php?ncode=1065610654848943
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 주가 변동성 분석,“레버리지 ETF가 주범?…개인 단타 막으면 오히려 변동성↑” [투자360...,https://biz.heraldcorp.com/article/10932706?ref=naver
+삼전 → 기업 삼성전자,무관,무관,llm,O,삼성 라이온즈 야구팀 내용임,Samsung's Koo wins it all — then apologizes for taking so long,https://www.koreajoongangdaily.com/sports/samsungs-koo-wins-it-all-then-apologizes-for-taking-so-long/12965667
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 주가 및 실적 상승,[Closing Market] KOSPI Rebounds 4% as Tech Stocks Surge,https://www.businesskorea.co.kr/news/articleView.html?idxno=280950
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 중국 공장과 반도체 제재,U.S. Tightens Tech Curbs on China After Nvidia Scandal,https://www.businesskorea.co.kr/news/articleView.html?idxno=280947
+삼전 → 기업 삼성전자,관련,관련,llm,O,모건스탠리의 삼성전자 목표가 하향,Morgan Stanley cuts Samsung and SK Hynix targets on supply outlook,https://econotimes.com/Morgan-Stanley-cuts-Samsung-and-SK-Hynix-targets-on-supply-outlook-1774387
+삼전 → 기업 삼성전자,관련,관련,llm,O,모건스탠리의 삼성전자 목표가 하향,"AIDC 규제 현실화? '반도체 겨울' 예고했던 모건스탠리, 삼전닉스 목표...",https://www.ajunews.com/view/20261110161427912
+삼전 → 기업 삼성전자,무관,무관,llm,O,삼전닉스 주가 언급은 스쳐 지나가는 내용임,방탄소년단부터 미래에셋까지 [전성인 칼럼],https://www.hani.co.kr/arti/opinion/column/1286678.html
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 영업이익과 성과급 등 회계 기준 변화 다룸,IFRS18부터 PRS까지… 재무제표 바꿀 변수 쏟아진다,https://www.fnnews.com/news/202611101813149773
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 등 반도체 기업 언급,"정진욱 ""'반도체' 광주에 삼성전자고, 하이닉스고...삼전닉스 자녀, 전국...",https://www.ikbc.co.kr/article/view/kbc202611100077
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 목표주가 상하향 리포트 언급,연초엔 9건 올리더니 이젠 8건 내린다…증권가 목표주가 줄하향,https://www.asiatoday.co.kr/kn/view.php?key=20261110010003855
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 RX사업실 및 이재용 회장 행보 보도,李在镕看中的RX机器人业务发力 三星加快招揽全球机器人人才,https://cn.asiatoday.co.kr/view.php?key=20261110001743172
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 등에 몰린 반도체 ETF 투자 위험 분석,‘분산투자’로 알았는데 ‘삼전닉스 몰빵’…불장 막차 탄 퇴직연금의...,https://www.seoul.co.kr/news/economy/2026/11/10/20261110500349?wlog_tag3=naver
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성증권의 담보유지비율 인하 조치 다룸,Regulators ease margin loan rules as Kospi slide raises forced-selling fe...,https://www.koreajoongangdaily.com/business/regulators-ease-margin-loan-rules-as-kospi-slide-raises-forcedselling-fears/12965170
+삼전 → 기업 삼성전자,무관,관련,llm,X,국내 반도체 주가와 삼성전자 관련 내용 포함,'사면초가' 젠슨 황...FBI 조사·주주 집단소송까지 [이슈ON],https://www.ytn.co.kr/_ln/0104_202611101710519198
+삼전 → 기업 삼성전자,무관,관련,llm,X,반도체 마이스터고와 삼성전자 연계성 언급,[2027마이스터고] 5개 반도체고 교원 1인당 학생 수..충남 5.59명 '최소' ...,https://www.veritas-a.com/news/articleView.html?idxno=636044
+삼전 → 기업 삼성전자,무관,관련,llm,X,반도체 마이스터고와 대기업 취업 관련 내용임,대학 졸업장 대신 '삼전닉스'…반도체 호황에 지역 반도체고 경쟁률 '껑...,https://www.imaeil.com/page/view/2026111016450491173
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자(Samsung Electronics) 실적 및 주가 상승 언급,Technology Shares Lift Global Markets as Oil Falls Ahead of U.S. Inflatio...,https://econotimes.com/Technology-Shares-Lift-Global-Markets-as-Oil-Falls-Ahead-of-U-S-Inflation-Data-1774299
+삼전 → 기업 삼성전자,관련,관련,llm,O,모간스탠리의 삼성전자 목표가 하향 조정 내용,"[GAM] '메모리 저승사자' 모간스탠리 숀 킴, 삼전닉스 목표가 큰 폭 하향",https://www.newspim.com/news/view/20261110001367
+삼전 → 기업 삼성전자,관련,관련,llm,O,글로벌 IB의 한국 반도체주(삼성전자 등) 전망 분석,"삼전닉스 급락은 ""과했다""면서도…월가 두 거물이 엇갈린 이유",https://www.mt.co.kr/stock/2026/11/10/2026111016193939364
+삼전 → 기업 삼성전자,관련,관련,llm,O,엔비디아 스캔들에 따른 삼성전자 영향 우려,[증시 인사이트] 코스피 5200선 회복…외국인·기관 순매수,https://biz.sbs.co.kr/article_hub/20000345465?division=NAVER
+삼전 → 기업 삼성전자,무관,무관,rule,O,"검색어·별칭(삼전, 삼성전자, Samsung)이 기사에 없음",[사사건건] 젠슨 황 불륜 상대는 중국 스파이?…AI·반도체 업계 영향은...,https://news.kbs.co.kr/news/pc/view/view.do?ncd=8708807&ref=A
+삼전 → 기업 삼성전자,무관,관련,llm,X,코스피 시황 및 삼성전자·하닉 관련 증시 동향,[OBS 뉴스 오늘2] '만스피' 꿈 다시 꿀 수 있나?…'젠슨 황 스캔들' 덮쳤...,https://www.obsnews.co.kr/news/articleView.html?idxno=1543245
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 HBM 완판 및 장기계약 관련 리스크 다룸,삼성·SK 'HBM 완판' 선언했지만… 젠슨 황 리스크에 장기계약 '경고등',https://www.hankookilbo.com/news/article/A2026111015030001446?did=NA
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자와 SK하이닉스 토큰의 해외 거래 언급,"""기술 다 갖췄는데""… 업계 호소에도 정치권 ""입법 먼저"" vs ""혁신 우선""",https://www.dt.co.kr/article/12094299?ref=naver
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 현금 자산과 반도체 실적 다룸,삼전 현금 214조···몰려드는 기업예금에 은행권 생산적금융 탄력받나,https://www.seoulfn.com/news/articleView.html?idxno=642421
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 주가 급등과 반도체주 상승 다룸,10일 '삼전닉스' 동반 급등…코스피 4%대 반등,http://www.breaknews.com/1249884
+삼전 → 기업 삼성전자,무관,무관,llm,O,삼성 갤럭시 NPU 언급이 있으나 스쳐 지나감,[AI 모델 신작] 가상 세계 실시간 탐험부터 22MB 이미지 분석 AI까지 6종,https://www.aitimes.com/news/articleView.html?idxno=217237
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 주가 상승과 반도체주 동향 다룸,반도체주 급등에 코스피 5200선 복귀… 외인·기관 쌍끌이 매수 [MTN 마감...,https://news.mtn.co.kr/article/2026111015452578240
+삼전 → 기업 삼성전자,관련,관련,llm,O,외국인의 삼성전자 등 반도체주 매도 다룸,"삼전닉스 털어낸 외국인, 실적·배당주 담았다",https://www.hankyung.com/article/2026111067461
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 주가 상승 및 목표가 하향 다룸,[셀럽의 한 수] 오늘 밤 美 CPI '촉각' 오늘 급반등 내일도 이어질까,https://biz.sbs.co.kr/article_hub/20000345386?division=NAVER
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 등 반도체 대형주 흐름 다룸,[오후장 체크포인트] 국내증시 반격 시작? 삼전닉스 '불기둥',https://biz.sbs.co.kr/article_hub/20000345384?division=NAVER
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성SDI 배터리 공급 계약 다룸,"Samsung SDI, LG Energy Solution secure BMW battery cell deals",https://www.koreaherald.com/article/10932364?ref=naver
+삼전 → 기업 삼성전자,관련,관련,llm,O,모건스탠리의 삼성전자 목표가 하향 조정 내용,"'메모리 겨울' 외쳤던 모건스탠리, 삼전닉스 목표가 대폭 하향...매도 신...",https://www.livebiz.today/news/articleView.html?idxno=206368
+삼전 → 기업 삼성전자,무관,무관,llm,O,연세대학교 삼성관 언급으로 대상과 무관,"이신우 대구한의대 교수, 한국조리학회 최우수 지도자상 수상… AI·푸드...",http://www.breaknews.com/1249829
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자의 2나노 파운드리 공정 활용,DEEPX's AI chip built on Samsung's 2-nanometer foundry process wins CES a...,https://en.yna.co.kr/view/AEN20261110006600320?input=2106m
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자의 HBM 공급 및 엔비디아와의 관계,'No permanent friends': Nvidia’s two-track play may reduce Korean chipm...,https://www.koreajoongangdaily.com/business/no-permanent-friends-nvidias-twotrack-play-may-reduce-korean-chipmakers-to-subcontractors/12963911
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 및 SK하이닉스의 HBM 시장 지위,'Honey trap': Nvidia spy scandal puts Korea on alert,https://www.koreatimes.co.kr/path/A2026111012300002933
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성의 베트남 스마트폰 등 생산 역할,"USTR Extends Vietnam IP Probe Deadline to Feb. 28, 2027",https://econotimes.com/USTR-Extends-Vietnam-IP-Probe-Deadline-to-Feb-28-2027-1774224
+삼전 → 기업 삼성전자,무관,무관,llm,O,삼성화재의 영국 보험사 인수 건,Samsung Fire bets W2.26tr on UK insurer,https://www.koreaherald.com/article/10932256?ref=naver
+삼전 → 기업 삼성전자,무관,무관,llm,O,삼성카드 참여 언급으로 스쳐 지나감,'코리아 핀테크 위크 2026' 25일 개막…140개 기업·기관 참여,http://www.breaknews.com/1249798
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 주주환원 및 실적 관련 내용,"삼전닉스 200조 주주환원에…""장기 주가는 실적과 비전이 좌우""",https://www.newsway.co.kr/news/view?ud=2026111013594720763
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성SDI 배터리 공급 계약 언급,Yonhap News Summary,https://en.yna.co.kr/view/AEN20261110006000320?input=2106m
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성전자 TV 사업과 LCD 패널 가격,"TV businesses of Samsung, LG face mounting pressure from rising LCD panel...",https://www.koreatimes.co.kr/path/A2026111012490001573
+삼전 → 기업 삼성전자,무관,무관,llm,O,삼성페이 언급이 있으나 토스 중심의 내용,Toss's Early Apple Pay Bet Could Pay Off as Toss Bank Prepares to Join th...,https://www.insightkorea.co.kr/news/articleView.html?idxno=258491
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성 갤럭시 스마트폰과 AI 관련 내용,[기자수첩] AI는 토큰 순차 계산기라는 헛소리···삼성 CPU에 설치된 단...,https://www.womaneconomy.co.kr/news/articleView.html?idxno=260913
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성SDI의 AI 데이터센터용 배터리,Samsung SDI's backup battery for AI data centers wins CES award,https://www.koreaherald.com/article/10932079?ref=naver
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성전자 HBM 제품 공급 관련 언급,Democratic Control of Congress Adds Regulatory Risks for Korean Exporters,https://www.businesskorea.co.kr/news/articleView.html?idxno=280895
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자와 엔비디아 공급망 및 주가,[오늘의 삼전닉스] '젠슨 황 스캔들'이 반도체 공급망에 악영향 미칠까...,https://economist.co.kr/article/view/ecn202611100028
+삼전 → 기업 삼성전자,무관,무관,llm,O,에버랜드 판다 관련 내용으로 삼성전자와 무관,"Everland’s newest panda Shubao draws 50,000 visitors in 10 days",https://www.koreatimes.co.kr/path/A2026111010520001758
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자의 스타트업 지원 사업 다룸,"Samsung supports 1,000 startups, helping attract 2.2 tln won in investmen...",https://en.yna.co.kr/view/AEN20261110004100320?input=2106m
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성의 GSAT 등 대기업 인적성검사 언급,Cracking Korea’s conglomerate aptitude tests: What international job se...,https://www.koreajoongangdaily.com/korea/cracking-koreas-conglomerate-aptitude-tests-what-international-job-seekers-need-to-know/12963799
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 노조의 대표이사 불신임 투표 보도,"""삼전 대표이사 불신임 98.8%…직원들, 신뢰 저버린 무능 사퇴해""",https://www.lawleader.co.kr/news/articleView.html?idxno=20365
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 MX사업부와 폴더블폰 관련 내용,"""힌지 전문가 웃기시네!"" 삼전, 애플CEO 정면 저격 [여의도 Pick!]",https://news.mtn.co.kr/article/2026111009065746379
+삼전 → 기업 삼성전자,관련,관련,llm,O,엔비디아 CEO 관련 기사이나 삼성전자 회장 언급됨,깐부의 불륜 스캔들…그 거취에 삼전닉스 골치 아파졌다,https://www.joongang.co.kr/article/25477176
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 주식 및 연대 관련 내용 포함,"빈센트 ""젠슨황 없는 엔비디아? 물러나도 지금은 아닐 것""[한판승부]",https://www.nocutnews.co.kr/news/6604338?utm_source=naver&utm_medium=article&utm_campaign=20261109214538
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성전자와 현대차 그룹 교류 행사 보도,■11월 9일(월) 경제캘린더,https://www.ytn.co.kr/_ln/0102_202611090501583722
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자가 현대차그룹 경영진을 초청한 교류 행사를 다룸,"삼성전자, 현대차 경영진 초청해 ‘감사데이’... 그룹 간 첫 교류 행사",https://www.chosun.com/economy/industry-company/2026/11/08/GLELPM3YIJE55NC7KD2BAVODCY/?utm_source=naver&utm_medium=referral&utm_campaign=naver-news
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 주가와 실적 전망을 다룬 증권가 분석 기사,"KB증권 ""삼전닉스, 바닥 찍고 곧 W자 반등"" 그래서 목표주가 얼마?",https://www.theguru.co.kr/news/article.html?no=109256
+삼전 → 기업 삼성전자,무관,무관,llm,O,애플 아이폰 내구성 논란 기사로 삼성전자는 단순 태그 언급,329만원 주고 산 아이폰 화면이 ‘쩍’…“도저히 못 사겠다” 신뢰도까...,https://www.sedaily.com/article/20110876?ref=naver
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자의 3분기 실적 컨퍼런스콜과 주주환원 문제를 다룸,삼성전자 컨콜 추가환원 질문 왜 빠졌을까.. '약속대련' 때문? [이슈체크...,https://news.mtn.co.kr/article/2026110320020965070
+삼전 → 기업 삼성전자,무관,관련,llm,X,이재용 삼성전자 회장의 AI 합성 댄스 영상 관련 밈을 다룸,"""삼전닉스 걱정은 잊어"" 이재용·최태원 완벽한 칼군무에 '시선 집중'",https://view.asiae.co.kr/article/2026110208274764125
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자와 SK하이닉스의 사상 최대 분기 실적 발표를 다룸,"[주간브리핑] SK하이닉스, 분기 매출 첫 100조 돌파…iM증권, 3Q 증권사 ...",http://www.srtimes.kr/news/articleView.html?idxno=216340
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 반도체 실적과 스포츠단 운영을 다룬 칼럼,'삼성 스포츠'의 명가부활은 가능할까? [유병철의 스포츠 렉시오],https://news.tf.co.kr/read/sports/2383305.htm
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자와 SK하이닉스의 대규모 배당과 계열사 배당금 수혜 보도,[단독] 삼전닉스 통큰 배당에 지분 보유한 계열사들 7조 배당금 '잭팟'....,http://www.consumernews.co.kr/news/articleView.html?idxno=767126
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 주가 및 실적 하락,"""하닉은 오르는데 삼전은 왜 떨어져?"" 역대급 실적보다 '이것'에 실망",https://www.edaily.co.kr/News/Read?newsId=05015126645617840&mediaCodeNo=257&utm_source=naver&utm_medium=referral&utm_campaign=news_syndication&utm_content=original_article
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 3분기 반도체 및 실적,"삼전 3분기 반도체 106.5조원벌 때, 스마트폰·가전은 8000억원 적자",https://www.chosun.com/economy/tech_it/2026/10/29/OMB6KCQGPZCOJFSIKCDJIRVVCA/?utm_source=naver&utm_medium=referral&utm_campaign=naver-news
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성전자와 우리은행의 삼성월렛 제휴,"우리은행·삼성전자, 전세계 마스터카드 가맹점에 ‘삼성월렛 머니’ 결...",https://biz.heraldcorp.com/article/10917815?ref=naver
+삼전 → 기업 삼성전자,관련,관련,llm,O,공정위의 삼성전자 GOS 과징금,"[줌업] 공정위, 삼성전자 GOS 200억 과징금에… '공방 격화'",https://www.startuptoday.co.kr/news/articleView.html?idxno=817280
+삼전 → 기업 삼성전자,관련,관련,llm,O,이재용 삼성전자 회장 취임 4주년,100조 신화 쓴 JY… 다음 격전지는 ‘휴머노이드’,https://www.munhwa.com/article/11626601?ref=naver
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 갤럭시 및 반도체주 동향,[N2 증시 풍향계] ‘삼전·닉스’ 끌고 ‘소부장’ 밀고 반도체株 대거...,https://www.news2day.co.kr/article/20261027500081
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 배당 및 자사주 매입,"[뉴공 아카이브]박시동 경제평론가·12시에 만나요 진행자, 이광수 광수...",http://www.ddanzi.com/897732799
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼성전자 목표가 및 갤럭시 감산,[전국 주요 신문 톱뉴스](26일 조간),https://www.yna.co.kr/view/AKR20261026011900011?input=1195m
+삼전 → 기업 삼성전자,무관,관련,llm,X,이재용 회장 및 삼성의 로봇사업 등 삼성전자 관련 내용 다룸,머니투데이 오프라인 헤드라인-22일,https://www.mt.co.kr/society/2026/10/22/2026102122193439584
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자의 글로벌 프로모션 삼성위크 2026 다룸,"창립기념일 앞둔 삼전, 글로벌 '삼성위크 2026' 프로모션 실시",https://www.nocutnews.co.kr/news/6594624?utm_source=naver&utm_medium=article&utm_campaign=20261021103008
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 갤럭시 제품을 다룬 대만 택시기사 사연 소개,삼성전자도 놀란 '갤럭시 덕질' 택시기사…“갤Z가 좋아서” 20대 넘게 ...,https://www.etnews.com/20261020000379
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자의 갤럭시 버즈 온 개발 배경 및 오픈형 이어폰 시장 참여,“귀 막지 않고 음악 듣는다”…오픈형 이어폰 시장 참전한 삼전,https://www.donga.com/news/It/article/all/20261020/134874265/1
+삼전 → 기업 삼성전자,무관,관련,llm,X,이재용 삼성전자 회장 및 삼전닉스 ETF 관련 언급 포함,"국민의힘 장동혁·정점식, 이재명 정권 헌정 파괴 및 국정 난맥상 규탄",http://www.breaknews.com/1244130
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 DX부문의 AP 탑재 철회 및 메모리값 영향 다룸,엑시노스 품은 울트라 '없던 일로'…메모리값 폭등에 PC·스마트폰 '충격...,https://www.mt.co.kr/industry/2026/10/16/2026101522493126583
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼전닉스 주가 급락 및 반도체·소부장 하락 언급,"""전세계 돈 끌어온다""더니…증시 덮친 '15%' 공포의 정체 [빈난새의 빈틈...",https://www.hankyung.com/article/202610153352i
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 메모리사업부와 MX사업부의 성과급 격차 다룸,"같은 삼전인데 메모리 12억, 폰 0원? 내후년 성과급 격차 '넘사벽'",https://it.chosun.com/news/articleView.html?idxno=2023092171695
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 반도체 및 완제품 실적과 갤럭시 다룸,"""DS 웃고 DX 울고""… 마이크론이 예고한 메모리 공급난에 삼전 희비",https://it.chosun.com/news/articleView.html?idxno=2023092171229
+삼전 → 기업 삼성전자,관련,관련,llm,O,삼성전자 갤럭시 Z폴드 8 카메라 기능 다룸,접는 폰의 진화… 이젠 ‘사진의 질’까지 잡았다,https://www.donga.com/news/Economy/article/all/20260930/134762226/2
+삼전 → 기업 삼성전자,무관,관련,llm,X,삼전닉스 표현으로 삼성전자 주식 투자 언급,“주식으로 돈 벌었다 자랑 나오면 화제 돌려라” 추석에 주식 중독 극...,https://weekly.donga.com/3/all/11/6394684/1
