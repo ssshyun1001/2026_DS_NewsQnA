@@ -31,10 +31,9 @@
 │   ├── build_labeled_set.py  라벨링 → labeled_set_N.json (검색어 단위로 나눔)
 │   ├── exp_a_filtering.py    실험 A: 필터링 방법 비교 (labeled_set_*.json 기준, 결과 evalset/results/)
 │
-├── experiments/          [7단계] 실험 (python evaluate.py exp-b / exp-c / make-qa / sim)
+├── experiments/          [7단계] 실험 (python evaluate.py exp-b / make-qa / sim)
 │   ├── exp_b_retrieval.py  실험 B: 검색 방식 비교
-│   ├── exp_c_answers.py    실험 C: 답변 신뢰성 비교
-│   ├── qa_set.py / .yaml   실험 B·C 질문 세트
+│   ├── qa_set.py / .yaml   실험 B 질문 세트
 │   ├── similarity.py       유사도 확인 (기준값 없이 청크 유사도 보기)
 │   └── common.py           지표 계산, 결과 저장
 │

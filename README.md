@@ -132,10 +132,6 @@ Google Cloud Run 배포용 `Dockerfile`이 포함되어 있습니다 (CPU판 tor
 - Multi-Query를 더하면 0.68 → 0.70이지만 시간이 2배 이상 → 시간 대비 효율은 HyDE 단독이 가장 좋습니다.
 - 87문항 전체(수집 + 검색 종합) 기준 Recall@5는 base 0.345 → both 0.460.
 
-### 실험 C — 답변 신뢰성 (`python evaluate.py exp-c`)
-
-LLM 단독 / 기본 RAG(필터 없음) / QuPicT의 정답률 · 근거 일치율 · 환각 비율 · 출처 정확도를 LLM 채점으로 비교합니다. 코드 준비 완료, 골든셋 전체 실행 예정.
-
 ---
 
 ## 시작하기
@@ -169,7 +165,7 @@ python tests/check_db.py                            # DB 점검 (LLM·API 호출
 | `web.py` | 서비스 (브라우저) | `python web.py [--host 0.0.0.0] [--port 8080]` |
 | `run.py` | 서비스 (터미널) | `python run.py 강남 30` · `--memory`(DB 없이 FAISS) · `--timing`(단계별 시간표) |
 | `admin.py` | 서비스 DB 관리 | `collect 검색어` · `collect-all` · `filter-all [--redo]` · `index-all` · `status` · `init-db` |
-| `evaluate.py` | 평가 | `exp-a` · `exp-b` · `exp-c` · `sim` · `make-qa` (명령 없이 실행하면 번호 메뉴) |
+| `evaluate.py` | 평가 | `exp-a` · `exp-b` · `sim` · `make-qa` (명령 없이 실행하면 번호 메뉴) |
 | `evalset/build_labeled_set.py` | 정답 라벨링 | 검색어마다 의미 선택 → 대표 기사 150건에 관련/무관 라벨 → JSON 누적 |
 
 모든 일괄 명령은 **아직 처리하지 않은 것만** 처리합니다. 중간에 끊겨도 다시 실행하면 이어서 하고, LLM 비용이 두 번 들지 않습니다.
@@ -202,7 +198,7 @@ python tests/run_offline.py   # 단계별 오프라인 테스트 18묶음 — AP
 │   └── ocr.py · concurrency.py · timing.py
 ├── web/                    웹 화면 (index.html · app.js · style.css)
 ├── evalset/                정답 JSON 평가셋 + 실험 A
-├── experiments/            실험 B · C, 골든셋(qa_set.csv), 중복 제거 확인 도구
+├── experiments/            실험 B, 골든셋(qa_set.csv), 중복 제거 확인 도구
 ├── tests/                  오프라인 테스트, DB 점검
 ├── old/                    이전 버전 평가 스크립트 (현재 구조에 맞게 수정)
 └── docs/

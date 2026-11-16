@@ -1,8 +1,8 @@
 """
-실험 B·C용 질문 세트 (골든셋) — "질문 + 정답 + 정답 근거 기사"
+실험 B용 질문 세트 (골든셋) — "질문 + 정답 + 정답 근거 기사"
 
 파일: experiments/qa_set.csv (git에 올려서 팀이 같이 쓴다. 엑셀로 열고 고쳐도 된다)
-실험 B · C · 유사도 확인은 이 CSV를 바로 읽는다. 다른 CSV로 돌리려면 --qa 파일.csv
+실험 B · 유사도 확인은 이 CSV를 바로 읽는다. 다른 CSV로 돌리려면 --qa 파일.csv
 
   열 (첫 줄 = 열 이름. 한글 이름도 됨: 검색어 / 의미 / 질문 / 정답 / 근거 기사)
     query    필수  검색어                                   예: 강남
@@ -10,7 +10,7 @@
     sense    선택  의미 이름 (DB topic과 같게)             예: 방송인 강남
                    비우면 읽을 때 DB에서 채운다: 그 검색어의 topic이 하나면 그것,
                    여러 개면 근거 기사가 '관련'으로 들어 있는 topic
-    answer   선택  정답 (없으면 실험 C는 근거 기사만 보고 채점)
+    answer   선택  정답
     evidence 선택  정답 근거 기사 link. 여러 개면 ; 로 구분 (없으면 실험 B · 유사도 확인에서 빠짐)
     id       선택  비우면 "검색어-001"처럼 붙인다
 
@@ -22,7 +22,6 @@
 만들기: python evaluate.py make-qa [--target 강남] [--suggest]
   topic의 '관련' 기사를 하나씩 보여 주고, 그 기사로 답할 수 있는 질문과 정답을 입력한다 (CSV 끝에 추가).
   --suggest를 주면 LLM이 질문·정답 초안을 먼저 써 준다 (사람이 확인하고 Enter로 받거나 고쳐 쓴다).
-  최근 사건을 묻는 질문을 넣으면 "LLM 단독 답변의 한계"(실험 C)가 잘 드러난다.
 """
 from __future__ import annotations
 
@@ -44,7 +43,7 @@ class QAItem:
     query: str
     sense: str
     question: str
-    answer: str = ""                                    # 비어 있으면 실험 C는 근거 기사만 보고 채점
+    answer: str = ""
     evidence: list[str] = field(default_factory=list)   # 비어 있으면 실험 B · 유사도 확인에서 빠짐
 
 
@@ -336,6 +335,6 @@ def resolve_rows(rows: list[dict[str, str]], lookup=None,
             if e and e.representative and e.representative not in evidence:
                 evidence.append(e.representative)
         if not row["answer"] and not evidence:
-            report.warnings.append(f"{line}번 줄: 정답 · 근거 기사가 모두 없어 실험 B · C에서 빠집니다")
+            report.warnings.append(f"{line}번 줄: 정답 · 근거 기사가 모두 없어 실험 B에서 빠집니다")
         items.append(QAItem(row["id"] or next_id(items, query), query, sense, question, row["answer"], evidence))
     return items, report

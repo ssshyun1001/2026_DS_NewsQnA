@@ -127,5 +127,5 @@ class Answer(BaseModel):
     sources: list[Article]
     # sources와 같은 순서로, 근거가 된 부분: "본문" / "이미지 설명" / "본문 + 이미지 설명" (청크 검색일 때만)
     source_kinds: list[str] = Field(default_factory=list)
-    # 답변 본문에서 실제로 인용한 기사 번호 (1부터, "(기사 N)"에서 찾음). 실험 C의 '출처 정확도'에 쓴다
+    # 답변 본문에서 실제로 인용한 기사 번호 (1부터, "(기사 N)"에서 찾음). 답변 아래 출처에 인용한 기사만 보여 줄 때 쓴다
     cited: list[int] = Field(default_factory=list)

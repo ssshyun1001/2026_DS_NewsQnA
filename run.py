@@ -17,7 +17,7 @@ QuPicT 서비스 실행 파일 — 사용자가 검색어로 뉴스를 모으고
 
 다른 용도의 실행 파일
     python admin.py ...       서비스 DB 관리: 12개 대상 미리 수집·판정·인덱싱, 현황, 테이블 만들기
-    python evaluate.py ...    평가: 정답 라벨, 질문 세트, 실험 A·B·C, 유사도 확인
+    python evaluate.py ...    평가: 정답 라벨, 질문 세트, 실험 A·B, 유사도 확인
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ MOVED_COMMANDS = {
     "collect-all": "admin.py", "filter-all": "admin.py", "index-all": "admin.py",
     "status": "admin.py", "init-db": "admin.py",
     "label": "evaluate.py", "make-qa": "evaluate.py", "exp-a": "evaluate.py",
-    "exp-b": "evaluate.py", "exp-c": "evaluate.py", "sim": "evaluate.py",
+    "exp-b": "evaluate.py", "sim": "evaluate.py",
 }
 
 
