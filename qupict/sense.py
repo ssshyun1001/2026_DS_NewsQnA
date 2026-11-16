@@ -198,15 +198,15 @@ def load_sense_candidates(query: str) -> tuple[SenseCandidates, str]:
 
     돌려주는 값: (후보 목록, 출처) — 출처는 "DB", "LLM → DB 저장", "LLM (DB 없음)" 등
 
-      - DATABASE_URL이 비어 있으면 DB 없이 LLM만 쓴다 (DB를 안 띄운 팀원도 실행 가능)
+      - FIRESTORE_PROJECT가 비어 있으면 DB 없이 LLM만 쓴다 (DB를 안 띄운 팀원도 실행 가능)
       - DB 연결에 실패해도 멈추지 않고 LLM으로 계속한다 (경고만 출력)
       - LLM이 후보를 하나도 못 만들면 저장하지 않는다 (다음 실행 때 다시 시도하도록)
     """
     query = query.strip()
-    if not settings.database_url:
+    if not settings.has_db:
         return generate_sense_candidates(query), "LLM (DB 없음)"
 
-    from qupict import db  # DB 패키지(psycopg)가 없는 환경에서도 이 파일을 import할 수 있게 여기서 불러온다
+    from qupict import db  # DB 패키지(google-cloud-firestore)가 없는 환경에서도 이 파일을 import할 수 있게 여기서 불러온다
 
     try:
         cached = db.get_sense_candidates(query)
@@ -254,7 +254,7 @@ def _trim_custom(candidates: SenseCandidates) -> SenseCandidates:
 def remember_selection(candidates: SenseCandidates, selected: SelectedSense) -> None:
     """고른 의미를 DB에 기록한다: 고른 횟수 +1, 처음 보는 직접 입력 의미는 저장 (→ 다음부터 후보로 나온다).
     DB가 없거나 실패해도 멈추지 않는다 (경고만 출력)."""
-    if not settings.database_url:
+    if not settings.has_db:
         return
     from qupict import db
 

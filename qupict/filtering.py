@@ -591,13 +591,7 @@ async def filter_articles(
 def _labeled_links(topic_id: int) -> set[str]:
     """사람이 정답 라벨을 붙인 기사 link (중복으로 바꾸지 않게 지킬 기사)."""
     from qupict import db
-    with db.connect() as conn:
-        rows = conn.execute(
-            """SELECT a.link FROM article_topics at JOIN articles a ON a.id = at.article_id
-               WHERE at.topic_id = %s AND at.label IS NOT NULL""",
-            (topic_id,),
-        ).fetchall()
-    return {r["link"] for r in rows}
+    return db.labeled_links(topic_id)
 
 
 async def dedup_topic(topic_id: int, terms: list[str] | None = None) -> dict[str, str]:

@@ -26,7 +26,7 @@ QuPicT는 이 문제를 **수집 이전 단계에서** 풉니다.
 | **의미를 먼저 고른다** | 검색어 → LLM이 의미 후보(최대 3개) 제시 → 사용자가 선택. 고른 의미의 연관어로 검색하고, 고르지 않은 의미의 연관어는 배제어가 됨 |
 | **근거 없는 답은 하지 않는다** | 수집·판정을 통과한 기사의 청크만 근거로 쓰고, 유사도 0.5 미만은 버림. 답변에 `(기사 N)` 출처를 붙이고 실제로 인용한 기사만 보여 줌 |
 | **LLM은 꼭 필요한 곳에만** | 중복 제거(임베딩·형태소·글자 n-gram), 1차 필터(규칙 점수), 많이 보도된 기사 요약(문장 추출)은 **LLM 없이** 처리. 같은 입력이면 항상 같은 결과 |
-| **한 번 모은 것은 다시 쓴다** | 기사·판정·청크·의미 후보를 PostgreSQL(pgvector)에 저장. 같은 검색어면 저장된 기사로 **바로 답하고**, 새 기사만 뒤에서 수집 |
+| **한 번 모은 것은 다시 쓴다** | 기사·판정·청크·의미 후보를 Firestore(벡터 검색)에 저장. 같은 검색어면 저장된 기사로 **바로 답하고**, 새 기사만 뒤에서 수집 |
 | **감이 아니라 숫자로 정한다** | 정답 라벨 988건, 골든셋 118문항으로 필터링·검색 방식을 비교하고 그 결과로 기본값을 정함 |
 
 ---
@@ -49,7 +49,7 @@ QuPicT는 이 문제를 **수집 이전 단계에서** 풉니다.
  [3] 관련성 판정    filtering.py  1차 규칙 점수(연관어 − 배제어)로 분명한 무관만 제거
    │                               → 2차 LLM이 "고른 의미 vs 다른 의미" 대조 → 관련/무관/보류 + 근거
    ▼
- [4] 인덱싱         indexing.py   500자 청크 + 이미지 속 글자(OCR) → 임베딩 → pgvector
+ [4] 인덱싱         indexing.py   500자 청크 + 이미지 속 글자(OCR) → 임베딩 → Firestore
    │
    ▼
  [5] 검색·답변      retrieval.py  원 질문 + HyDE 가상 문장 → 청크 검색 → 근거 인용 답변
@@ -140,14 +140,15 @@ LLM 단독 / 기본 RAG(필터 없음) / QuPicT의 정답률 · 근거 일치율
 
 ## 시작하기
 
-**요구 사항**: Python 3.11 / 3.12 (3.13은 `numpy==1.26.4` 설치 실패), PostgreSQL + pgvector
+**요구 사항**: Python 3.11 / 3.12 (3.13은 `numpy==1.26.4` 설치 실패), Google Cloud Firestore (gcloud CLI로 로그인)
 
 ```bash
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env                                # API 키, DB 주소 입력
-docker compose up -d                                # 로컬 PostgreSQL + pgvector (팀 공용 DB를 쓰면 생략)
-python admin.py init-db                             # 테이블 생성
+cp .env.example .env                                # API 키, FIRESTORE_PROJECT 입력
+gcloud auth application-default login               # Firestore 로그인 (키 파일 없이 본인 Google 계정)
+gcloud auth application-default set-quota-project qupict
+python admin.py init-db                             # 검색 인덱스 만들기 (처음 한 번, 몇 분 걸림)
 python tests/check_db.py                            # DB 점검 (LLM·API 호출 없음)
 ```
 
@@ -156,7 +157,7 @@ python tests/check_db.py                            # DB 점검 (LLM·API 호출
 | `OPENAI_API_KEY`, `OPENAI_BASE_URL` | OpenAI 호환 API (비우면 OpenAI 공식, 학교 팩트챗 Gateway 지원) |
 | `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDING_MODEL` | 채팅 모델 / `text-embedding-3-small` (1536차원) |
 | `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` | 네이버 클라우드 플랫폼 **API HUB** 뉴스 검색 키 (개발자센터 키는 401) |
-| `DATABASE_URL` | PostgreSQL 주소 (로컬 Docker 또는 Supabase) |
+| `FIRESTORE_PROJECT` | Firestore가 있는 GCP 프로젝트 id (`qupict`). 비우면 DB 없이 메모리 버전 |
 | `RELEVANCE_SIMILARITY_THRESHOLD` | 답변 근거 최소 유사도 (기본 0.5) |
 | `IMAGE_TEXT` | 이미지 처리: `ocr`(기본, EasyOCR·비용 0) / `vlm`(LLM 설명) / `off` |
 | `DEDUP_BY`, `DEDUP_RULE`, `DEDUP_*_THRESHOLD` | 중복 제거 기준·규칙·임계값 |
@@ -176,7 +177,7 @@ python tests/check_db.py                            # DB 점검 (LLM·API 호출
 ### 테스트
 
 ```bash
-python tests/run_offline.py   # 단계별 오프라인 테스트 18묶음 — API 크레딧 0, DB 없이도 실행
+python tests/run_offline.py   # 단계별 오프라인 테스트 18묶음 — API 크레딧 0, DB 없이도 실행 (DB는 가짜 Firestore)
 ```
 
 ---
@@ -186,14 +187,14 @@ python tests/run_offline.py   # 단계별 오프라인 테스트 18묶음 — AP
 ```text
 2026_DS_NewsQnA/
 ├── web.py · run.py · admin.py · evaluate.py   실행 파일 (서비스 / DB 관리 / 평가)
-├── schema.sql                                  DB 테이블 6개
-├── Dockerfile · docker-compose.yml             Cloud Run 배포 / 로컬 PostgreSQL + pgvector
+├── Dockerfile                                  Cloud Run 배포
+├── tools/                                      일회성 도구 (Supabase → Firestore 데이터 이전)
 ├── qupict/                 파이프라인: 단계 하나 = 파일 하나
 │   ├── sense.py            [0] 검색어 → 의미 후보 → 선택
 │   ├── collect.py          [1] 의미 기반 검색 + 본문·언론사·이미지 수집
 │   ├── filtering.py        [2·3] 중복 제거 → 규칙 점수 → LLM 판정
 │   ├── indexing.py         [4] 청크 · 이미지 글자(OCR) · 임베딩
-│   ├── retrieval.py        [5] pgvector 검색 + HyDE · Multi-Query
+│   ├── retrieval.py        [5] Firestore 벡터 검색 + HyDE · Multi-Query
 │   ├── qa.py               [5] 근거 인용 답변, 대화 기억
 │   ├── hot.py              많이 보도된 기사 Top 5 + 한 줄 요약 (LLM 없음)
 │   ├── pipeline.py         단계 묶음, 할 일 없는 단계 건너뛰기
@@ -211,17 +212,18 @@ python tests/run_offline.py   # 단계별 오프라인 테스트 18묶음 — AP
 
 ### DB 설계 요점
 
-| 테이블 | 내용 |
+DB는 Google Cloud Firestore (서울 `asia-northeast3`, `(default)` DB)입니다. 컬렉션 구조는 `qupict/db.py` 맨 위 설명에 있습니다.
+
+| 컬렉션 | 내용 |
 | --- | --- |
 | `query_senses` | 검색어별 의미 후보 캐시 (LLM 후보 + 직접 입력, 선택 횟수) |
-| `topics` | 검색어 + 고른 의미, 배제어, 대조할 다른 의미 |
-| `articles` | 기사 본문·언론사·발행일·임베딩 (`link` UNIQUE — 여러 topic이 공유) |
-| `article_images` | 이미지 주소·캡션·OCR/설명 (파일 자체는 저장하지 않음) |
+| `topics` · `topic_keys` | 검색어 + 고른 의미, 배제어, 대조할 다른 의미 (번호는 `counters/topics`) |
+| `articles` | 기사 본문·언론사·발행일·임베딩 + 이미지(주소·캡션·OCR/설명, 파일은 저장 안 함). 문서 id = link 해시 — 여러 topic이 공유 |
 | `article_topics` | topic별 판정(관련/무관/보류 + 근거), 중복 표시, 정답 라벨 |
-| `article_chunks` | 청크 + 임베딩 (HNSW 인덱스) |
+| `chunks` | 청크 + 임베딩. `search_keys`(topic · 판정)와 발행일로 거른 뒤 벡터 검색(`find_nearest`, 코사인) |
 
 - 기사는 한 번만 저장하고, **기간은 발행일 기준**으로 조회할 때 정합니다 → 같은 topic을 기간만 바꿔 재사용.
-- 시스템 판정(`status`)과 사람의 정답(`label`)을 별도 컬럼으로 두어 실험에서 직접 비교합니다.
+- 시스템 판정(`status`)과 사람의 정답(`label`)을 별도 필드로 두어 실험에서 직접 비교합니다.
 
 ---
 

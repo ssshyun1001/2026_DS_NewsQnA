@@ -19,7 +19,7 @@ import re
 import threading
 
 OCR_LANGS = ["ko", "en"]
-OCR_MODEL_NAME = "easyocr"          # DB(article_images.described_model)에 남기는 이름 — VLM 설명과 구분용
+OCR_MODEL_NAME = "easyocr"          # DB(기사 문서 images.{이미지}.described_model)에 남기는 이름 — VLM 설명과 구분용
 MIN_CONFIDENCE = 0.4                # 이 값보다 자신 없는 글자 조각은 버린다
 MIN_TEXT_CHARS = 15                 # 글자(한글·영문·숫자)가 이보다 적으면 "글자 없는 이미지"로 본다
                                     #   (사진 구석의 언론사 워터마크 "ⓒ뉴스1" 같은 것만 있는 경우를 거르려고)

@@ -246,30 +246,11 @@ def _normalize(text: str) -> str:
 def db_lookup(query: str, links: list[str]) -> tuple[list[str], list[EvidenceRow]]:
     """(그 검색어의 topic 의미 이름들, 근거 기사가 들어 있는 topic · 판정). DB는 읽기만 한다."""
     from qupict import db
-    with db.connect() as conn:
-        senses = [r["sense_name"] for r in conn.execute(
-            "SELECT sense_name FROM topics WHERE query = %s ORDER BY id", (query,)).fetchall()]
-        if not links:
-            return senses, []
-        # 기사 대신 기사 속 이미지 주소를 적은 근거 → 그 이미지가 실린 기사 (주소 뒤 ?type=... 은 무시)
-        via: dict[str, str] = {}
-        for r in conn.execute(
-                """SELECT DISTINCT ON (split_part(i.url, '?', 1)) split_part(i.url, '?', 1) AS base, a.link
-                   FROM article_images i JOIN articles a ON a.id = i.article_id
-                   WHERE split_part(i.url, '?', 1) = ANY(%s)""",
-                ([link.split("?")[0] for link in links],)).fetchall():
-            via[r["base"]] = r["link"]
-        image_of = {via[link.split("?")[0]]: link for link in links if link.split("?")[0] in via}
-        rows = conn.execute(
-            """SELECT a.link, t.sense_name, at.status, rep.link AS representative
-               FROM article_topics at
-               JOIN articles a ON a.id = at.article_id
-               JOIN topics t ON t.id = at.topic_id
-               LEFT JOIN articles rep ON rep.id = at.duplicate_of
-               WHERE t.query = %s AND a.link = ANY(%s)""",
-            (query, [*links, *image_of])).fetchall()
-    found = [EvidenceRow(r["link"], r["sense_name"], r["status"], r["representative"], image_of.get(r["link"]))
-             for r in rows]
+    # 기사 대신 기사 속 이미지 주소를 적은 근거는 db.evidence_lookup이 그 이미지가 실린 기사로 바꿔 준다 (image_of)
+    senses, rows, image_of = db.evidence_lookup(query, links)
+    if not links:
+        return senses, []
+    found = [EvidenceRow(link, sense_name, status, rep, image_of.get(link)) for link, sense_name, status, rep in rows]
     # 이미지가 실린 기사가 이 검색어 topic에 없어도 기사 link로는 바꿔 둔다 (경고는 resolve_rows가 낸다)
     in_topic = {e.link for e in found}
     found += [EvidenceRow(art, "", None, None, img) for art, img in image_of.items() if art not in in_topic]

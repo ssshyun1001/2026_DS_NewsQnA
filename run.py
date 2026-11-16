@@ -13,7 +13,7 @@ QuPicT 서비스 실행 파일 — 사용자가 검색어로 뉴스를 모으고
     [2·3단계] 필터링      qupict/filtering.py
     [4단계] 인덱싱        qupict/indexing.py
     [5단계] 검색 · 답변   qupict/retrieval.py · qupict/qa.py
-    저장                  qupict/db.py (서비스 DB)
+    저장                  qupict/db.py (서비스 DB, Firestore)
 
 다른 용도의 실행 파일
     python admin.py ...       서비스 DB 관리: 12개 대상 미리 수집·판정·인덱싱, 현황, 테이블 만들기
@@ -220,7 +220,7 @@ def start_image_text_in_background(topic_id: int, log: Callable[[str], None] = p
 
 # 준비(수집 → 필터링 → 인덱싱)가 끝난 뒤 "준비 완료"를 알리기 전에 기다리는 시간(초).
 # 팀 결정(2026-11-13): 준비 직후 첫 질문에서 저장된 내용을 가끔 못 찾는 것 같아 여유를 둔다.
-# 참고: 저장은 각 단계 안에서 commit까지 끝난 뒤 다음 단계로 넘어가므로(db.connect), 이 대기가 없어도
+# 참고: 저장은 각 단계 안에서 쓰기(batch commit)가 끝난 뒤 다음 단계로 넘어가므로, 이 대기가 없어도
 #   저장 자체는 끝나 있다. 원인이 확인되면 0으로 줄여도 된다.
 PREPARE_SETTLE_SECONDS = 3
 
@@ -353,8 +353,8 @@ def cmd_ask(words: list[str], memory: bool, max_articles: int = 100) -> None:
     topic = " ".join(words) if words else read_line("검색어를 입력하세요: ")
     if period_days is None:
         period_days = read_period_days()
-    if not memory and not settings.database_url:
-        print("DATABASE_URL이 없어 DB 없이(메모리 버전으로) 실행합니다.")
+    if not memory and not settings.has_db:
+        print("FIRESTORE_PROJECT가 없어 DB 없이(메모리 버전으로) 실행합니다.")
         memory = True
     from qupict.collect import warm_up_parser
     warm_up_parser()        # 크롤링 해석용 프로세스(약 2초)를 의미를 고르는 동안 미리 띄워 둔다

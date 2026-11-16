@@ -32,7 +32,7 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Iterable, Optional
 
 from qupict.schemas import Article
@@ -96,46 +96,15 @@ def top_duplicated_db(topic_id: int, period_days: Optional[int] = None, limit: i
     """[DB 버전] topic의 대표 기사 중 중복이 많이 묶인 순으로 limit건. 중복이 하나도 없는 기사는 빠진다.
     period_days: 대표 기사 발행일이 최근 며칠 이내인 것만 (질문 검색과 같은 기간).
     묶인 기사들의 제목 · 본문(members, 한 줄 요약용)과 링크 · 언론사 · 날짜(similar, 화면 목록용)도
-    함께 가져온다 (같은 연결에서 쿼리 한 번 더)."""
+    함께 가져온다 (db.duplicate_groups)."""
     from qupict import db
 
-    params: dict = {"topic_id": topic_id, "statuses": list(statuses), "limit": limit}
-    period = ""
-    if period_days is not None:
-        now = datetime.now(timezone.utc)
-        period = "AND a.pub_date BETWEEN %(since)s AND %(until)s"
-        params.update(since=now - timedelta(days=period_days), until=now)
-    with db.connect() as conn:
-        rows = conn.execute(
-            f"""SELECT a.id, a.title, a.link, a.press, a.pub_date, a.description, a.content,
-                       count(*) AS duplicates
-                FROM article_topics at
-                JOIN articles a ON a.id = at.article_id
-                JOIN article_topics d ON d.topic_id = at.topic_id AND d.duplicate_of = at.article_id
-                WHERE at.topic_id = %(topic_id)s AND at.duplicate_of IS NULL
-                  AND at.status = ANY(%(statuses)s) {period}
-                GROUP BY a.id
-                ORDER BY duplicates DESC, a.pub_date DESC NULLS LAST, a.id
-                LIMIT %(limit)s""",
-            params,
-        ).fetchall()
-        members: dict[int, list[tuple[str, str]]] = {}
-        similar: dict[int, list[SimilarArticle]] = {}
-        if rows:
-            for m in conn.execute(
-                """SELECT at.duplicate_of AS rep, a.title, a.content, a.link, a.press, a.pub_date
-                   FROM article_topics at
-                   JOIN articles a ON a.id = at.article_id
-                   WHERE at.topic_id = %s AND at.duplicate_of = ANY(%s)""",
-                (topic_id, [r["id"] for r in rows]),
-            ).fetchall():
-                members.setdefault(m["rep"], []).append((m["title"], m["content"] or ""))
-                similar.setdefault(m["rep"], []).append(
-                    SimilarArticle(m["title"], m["link"], m["press"], m["pub_date"]))
-    return [HotArticle(title=r["title"], link=r["link"], press=r["press"], pub_date=r["pub_date"],
-                       description=r["description"] or "", content=r["content"] or "",
-                       duplicates=r["duplicates"], members=members.get(r["id"], []),
-                       similar=_latest_first(similar.get(r["id"], []))) for r in rows]
+    return [HotArticle(title=g.representative.title, link=g.representative.link, press=g.representative.press,
+                       pub_date=g.representative.pub_date, description=g.representative.description or "",
+                       content=g.representative.content or "", duplicates=g.duplicates,
+                       members=[(m.title, m.content or "") for m in g.members],
+                       similar=_latest_first([SimilarArticle(m.title, m.link, m.press, m.pub_date) for m in g.members]))
+            for g in db.duplicate_groups(topic_id, period_days, limit, statuses)]
 
 
 def top_duplicated(articles: list[Article], duplicates: dict[str, str], limit: int = TOP_N,

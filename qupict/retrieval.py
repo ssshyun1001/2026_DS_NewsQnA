@@ -1,14 +1,14 @@
 """
 [5단계] 검색 — 질문에 답할 근거 청크 찾기
 
-  search_topic(topic_id, question, selected)   DB 버전 (pgvector): 질문 답변은 이걸 쓴다
+  search_topic(topic_id, question, selected)   DB 버전 (Firestore 벡터 검색): 질문 답변은 이걸 쓴다
   build_in_memory_store / retrieve_relevant_articles
                                                FAISS 메모리 버전: 기존 방식, 실험 B의 비교 대상으로 남겨 둠
 
-## DB 버전 (pgvector)
+## DB 버전 (Firestore 벡터 검색)
 
   1) 검색 문장 만들기   원 질문 + HyDE 가상 기사 문장, Multi-Query 변형 질문들
-  2) SQL 조건 + 벡터 검색   topic(검색어 × 고른 의미) · 판정(관련·보류) · 발행일 기간으로 먼저 좁히고,
+  2) 조건 + 벡터 검색       topic(검색어 × 고른 의미) · 판정(관련·보류) · 발행일 기간으로 먼저 좁히고,
                             그 안에서 청크 임베딩 유사도로 찾는다 (db.search_chunks)
   3) 합치기             같은 청크는 여러 검색 문장 중 가장 높은 유사도를 쓴다 (max-pooling)
   4) 기준 미달 버리기   유사도가 RELEVANCE_SIMILARITY_THRESHOLD 미만이면 근거로 쓰지 않는다
@@ -184,7 +184,7 @@ def build_search_texts(question: str, context: str, use_hyde: bool = True,
 
 
 # ---------------------------------------------------------------------------
-# DB 버전 (pgvector)
+# DB 버전 (Firestore 벡터 검색)
 # ---------------------------------------------------------------------------
 
 def search_topic(
@@ -237,23 +237,10 @@ def searchable_stats(topic_id: int, period_days: int | None = None,
     (기사 수, 가장 오래된 발행일). 없으면 (0, None).
     web.py는 준비를 시작할 때 이 값으로 "DB에 저장된 기사로 바로 답할 수 있는지" 본다.
 
-    db.py에 이 조회가 없어서 여기에 두었다 (읽기 전용 SELECT 하나. DB 담당이 db.py로 옮겨도 된다).
-    기간 계산은 db.search_chunks와 같은 db._window를 쓴다."""
+    실제 조회는 db.searchable_stats (기간 계산은 db.search_chunks와 같은 db._window)."""
     from qupict import db
 
-    since, until = db._window(period_days, None)
-    with db.connect() as conn:
-        row = conn.execute(
-            """SELECT count(*) AS n, min(a.pub_date) AS oldest
-               FROM articles a
-               JOIN article_topics at ON at.article_id = a.id
-               WHERE at.topic_id = %(topic_id)s AND at.status = ANY(%(statuses)s) AND at.duplicate_of IS NULL
-                 AND EXISTS (SELECT 1 FROM article_chunks c WHERE c.article_id = a.id AND c.embedding IS NOT NULL)
-                 AND (%(since)s::timestamptz IS NULL
-                      OR a.pub_date BETWEEN %(since)s::timestamptz AND %(until)s::timestamptz)""",
-            {"topic_id": topic_id, "statuses": list(statuses), "since": since, "until": until},
-        ).fetchone()
-    return (row["n"], row["oldest"]) if row else (0, None)
+    return db.searchable_stats(topic_id, period_days, statuses)
 
 
 def search_vectors(topic_id: int, vectors: list[list[float]], per_vector: int,
@@ -264,7 +251,7 @@ def search_vectors(topic_id: int, vectors: list[list[float]], per_vector: int,
     같은 청크가 여러 문장에서 나오면 가장 높은 유사도를 쓴다 (max-pooling).
     search_topic과 유사도 확인 도구(experiments/similarity.py)가 같이 쓴다.
 
-    문장마다 DB 검색(= DB 연결 1번, 약 1.6초)을 동시에 보낸다. 합치는 순서는 예전과 같아서
+    문장마다 DB 검색(find_nearest 1번)을 동시에 보낸다. 합치는 순서는 예전과 같아서
     (문장 순서대로) 결과도 같다.
     """
     from qupict import db

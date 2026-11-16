@@ -13,10 +13,10 @@
 | LLM 연결 | `qupict/llm.py` | ✅ 학교 팩트챗 Gateway로 연결 완료 |
 | 네이버 뉴스 API | `qupict/collect.py` | ✅ 연결 확인 (NCP API HUB) |
 | 0단계 의미 선택 | `qupict/sense.py` | ✅ 구현 + 실제 9개 검색어로 확인 + **DB 캐싱 연결**. 의미·연관어는 **LLM 후보만** 사용 (`targets.yaml` 삭제) |
-| DB | `schema.sql`, `qupict/db.py` | ✅ 테이블 6개 + 단계별 저장·조회 함수 + 점검 스크립트 (아래 7) |
+| DB | `qupict/db.py` | ✅ **Google Cloud Firestore**(서울) + 벡터 검색. 단계별 저장·조회 함수 + 점검 스크립트 (아래 9, 2026-11-16 Supabase에서 옮김) |
 | 1단계 수집 개편 | `qupict/collect.py` | ✅ 의미 기반 검색(**"검색어 + 연관어"·별칭만**, 검색어 단독 검색 안 함) + 본문·언론사·이미지 수집 |
 | 2·3단계 필터링 개편 | `qupict/filtering.py` | ✅ 중복 제거 → 규칙 점수 → LLM 관련/무관/보류 + 근거, DB 저장 |
-| 4·5단계 인덱싱·검색·답변 | `indexing.py`, `retrieval.py`, `qa.py` | ✅ 청크·이미지 설명·임베딩 저장, pgvector 검색, 청크 기반 답변 |
+| 4·5단계 인덱싱·검색·답변 | `indexing.py`, `retrieval.py`, `qa.py` | ✅ 청크·이미지 설명·임베딩 저장, Firestore 벡터 검색, 청크 기반 답변 |
 | 실행 파일 | `run.py` · `admin.py` · `evaluate.py` | ✅ 용도별로 분리: 서비스(질문하기) / 서비스 DB 관리(일괄 수집·판정·인덱싱·현황) / 평가(라벨·실험) |
 | 정답 평가셋 (JSON) | `evalset/` | ✅ 라벨링 도구(`build_labeled_set.py`) + **실험 A를 정답 JSON으로 평가** (`exp_a_filtering.py`, DB 안 씀) |
 | 실험 코드 (7단계) | `experiments/` | ✅ 실험 B·C + 질문 세트 도구 (`make-qa` · `exp-b` · `exp-c`), 강남으로 시험 실행 |
@@ -25,9 +25,23 @@
 | 많이 보도된 기사 Top 5 | `qupict/hot.py` | ✅ 중복이 많이 묶인 기사 5건 + 한 줄 요약. **LLM 없이** 묶음이 공통으로 쓴 기사 속 문장을 고름 (아래 1-0) |
 | 오프라인 테스트 | `tests/offline/` | ✅ 18개 묶음, `python tests/run_offline.py` (크레딧 0, DB 없이도 됨) |
 
-최근 변경 사항은 바로 아래 **최신**(웹 화면·질문 시점·배포, 11-16), **1-0**(웹·질문, 11-14~15), **1-1**(중복 제거, 11-14~15), **1-2**(11-09)에 모아 두었습니다.
+최근 변경 사항은 바로 아래 **DB 이전**(Supabase → Firestore, 11-16), **최신**(웹 화면·질문 시점·배포, 11-16), **1-0**(웹·질문, 11-14~15), **1-1**(중복 제거, 11-14~15), **1-2**(11-09)에 모아 두었습니다.
 
 **데이터 수집 전에 만들 수 있는 코드는 모두 만들었습니다.** 남은 일은 **모여서 12개 대상 수집 + 정답 라벨링 + 질문 세트 만들기**, 그리고 실험 실행입니다 (아래 3-6, 12).
+
+### DB 이전 (2026-11-16): Supabase(PostgreSQL + pgvector) → Google Cloud Firestore
+
+**왜**: 웹 사이트가 가끔 DB를 못 불러왔습니다. 확인해 보니 Supabase DB가 **싱가포르**(`ap-southeast-1`)에 있어 서울 Cloud Run과 멀었고(연결 약 1.4초 · 왕복 약 80ms), 세션 모드 풀러라 동시 연결 수 한도(약 15)에 걸릴 수 있었습니다. Cloud Run과 같은 GCP 프로젝트(`qupict`)의 Firestore로 옮겼습니다.
+
+- **위치**: Firestore `(default)` DB, 서울 `asia-northeast3`, Native 모드 · Standard. 연결 개념이 없어 동시 연결 한도가 없고, 1주일 안 쓰면 멈추는 일도 없습니다
+- **속도 (측정 2026-11-16, 로컬 → 서울)**: 문서 읽기 왕복 약 66ms, 벡터 검색 1번 약 0.1~0.2초
+- **비용**: 무료 한도 하루 읽기 5만 · 쓰기 2만 · 저장 1GiB (`(default)` DB만). 질문 1번 ≈ 읽기 100~250
+- **코드**: `qupict/db.py`를 Firestore로 다시 썼습니다 (함수 이름 · 인자는 그대로). 다른 파일에 흩어져 있던 SQL 조회(현황 · 남은 일 세기 · 많이 보도된 기사 · 실험용 조회 등)도 모두 `db.py` 함수로 옮겼습니다. `schema.sql` · `docker-compose.yml`(로컬 PostgreSQL)은 지웠습니다
+- **벡터 검색**: `find_nearest`(코사인, 정확한 KNN). 청크 문서의 `search_keys`(= "topic id:판정")와 발행일로 먼저 거른 뒤 찾습니다. 유사도 = 1 − 거리로 예전 pgvector 값과 같습니다
+- **데이터 이전**: `tools/migrate_supabase_to_firestore.py`로 6,355건을 옮겼습니다 (임베딩 그대로, topic id 그대로). **14개 topic 모두 벡터 검색 결과가 예전 DB와 같은 청크 · 같은 순서**(유사도 차 0.0001 이하), 질문 가능 기사 수 · 남은 일 개수도 같음을 확인했습니다
+- **바뀐 값**: `image_id`가 숫자 → 문자열(`"기사키/이미지키"`), `.env`의 `DATABASE_URL` → `FIRESTORE_PROJECT=qupict`, 실험 B의 검색 엔진 이름 `pgvector` → `db`
+- **로컬 인증**: 조직 정책상 서비스 계정 키(JSON)를 만들 수 없어서 본인 Google 계정으로 로그인합니다 (아래 3-4)
+- **배포**: Cloud Run 환경변수에 `FIRESTORE_PROJECT=qupict`, 서비스 계정에 `Cloud Datastore 사용자` 역할 (편집자면 이미 있음). `DATABASE_URL`은 새 코드가 배포된 뒤 지웁니다
 
 ### 최신 변경 (2026-11-16): 웹 화면 · 질문 시점 · 배포
 
@@ -176,21 +190,20 @@
 ├── web.py              웹 서비스: python web.py → 브라우저에서 http://localhost:8000 (화면은 web/)
 ├── admin.py            서비스 DB 관리: collect · collect-all · filter-all · index-all · status · init-db
 ├── evaluate.py         평가: label · make-qa · exp-a · exp-b · exp-c · sim
-├── schema.sql          DB 테이블 6개 (python admin.py init-db)
-├── docker-compose.yml  로컬 PostgreSQL + pgvector (docker compose up -d)
 ├── Dockerfile          배포 이미지 (Google Cloud Run이 main merge마다 이걸로 만들어 배포). .dockerignore로 .env 등 제외
 ├── requirements.txt
+├── tools/              일회성 도구: migrate_supabase_to_firestore.py (Supabase → Firestore 데이터 이전)
 ├── .env.example        API 키 설정 예시 (.env로 복사해서 사용)
 ├── qupict/             파이프라인 코드: 단계 하나 = 파일 하나
 │   ├── config.py       설정값
 │   ├── schemas.py      단계 사이에 주고받는 데이터 형태
 │   ├── llm.py          LLM·임베딩 연결 (여기 한 곳에서만 만듦)
-│   ├── db.py           DB 연결 + 단계별 저장·조회 함수
+│   ├── db.py           DB(Firestore) 단계별 저장·조회 함수 + 벡터 검색
 │   ├── sense.py        [0단계] 검색어 → 의미 후보 → 선택
 │   ├── collect.py      [1단계] 의미 기반 검색 + 본문·언론사·이미지 수집
 │   ├── filtering.py    [2·3단계] 중복 제거 → 1차 규칙 필터 → 2차 LLM 검증
 │   ├── indexing.py     [4단계] 이미지 설명 → 청크 → 임베딩 저장
-│   ├── retrieval.py    [5단계] pgvector 검색 (+HyDE·Multi-Query), FAISS는 비교 실험용
+│   ├── retrieval.py    [5단계] Firestore 벡터 검색 (+HyDE·Multi-Query), FAISS는 비교 실험용
 │   ├── qa.py           [5단계] 답변 생성
 │   └── hot.py          많이 보도된 기사 Top 5 + 한 줄 요약 (LLM 없이, 웹 화면용)
 ├── web/                웹 화면 (서버가 /static/으로 내보냄)
@@ -245,8 +258,7 @@ pip install -r requirements.txt
 | `OPENAI_CHAT_MODEL` | 그대로 둠 | `claude-haiku-5-5` |
 | `OPENAI_EMBEDDING_MODEL` | 그대로 둠 | `text-embedding-3-small` (1536차원) |
 | `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | 네이버 클라우드 플랫폼 (아래 4-1) | 팀에서 하나를 같이 써도 됨 |
-| `DATABASE_URL` | **DB 담당에게 개인 메시지로 받기** (팀 공용 Supabase, 아래 9-3) | 혼자 실험할 땐 로컬 Docker 주소 `postgresql://qupict:<비밀번호>@localhost:5432/qupict` |
-| `POSTGRES_PASSWORD` | 각자 정함 | 로컬 Docker를 쓸 때만 (아래 3-4) |
+| `FIRESTORE_PROJECT` | `qupict` (그대로) | 비밀 값이 아님. 로그인은 아래 3-4 |
 
 ### 3-3. 잘 되는지 확인
 
@@ -255,48 +267,47 @@ python -m qupict.sense 애플
 ```
 → "기업 Apple / 과일 사과" 후보가 나오고 번호로 고를 수 있으면 성공입니다.
 
-### 3-4. DB 띄우기 (Docker)
+### 3-4. DB 연결하기 (Firestore)
 
-> 팀 공용 DB(9-3)를 쓰면 1~3번은 건너뛰고 `pip install`과 점검(5번)만 하면 됩니다. 로컬 Docker는 혼자 실험할 때 씁니다.
+DB는 GCP 프로젝트 `qupict`의 Firestore 하나를 팀이 같이 씁니다 (아래 9-3). 비밀번호 · 키 파일 없이 **본인 Google 계정으로 로그인**합니다.
 
-1. [Docker Desktop](https://www.docker.com/products/docker-desktop/) 설치 후 실행
-2. `.env`에 `POSTGRES_PASSWORD`와 `DATABASE_URL`을 채움 (두 곳 비밀번호 같게)
-3. 컨테이너 실행 (pgvector가 들어 있는 PostgreSQL 17)
+1. 프로젝트 주인에게 GCP 프로젝트 `qupict`에서 **`Cloud Datastore 사용자`** 역할을 받기 (인덱스를 만들 사람은 `Cloud Datastore 색인 관리자`도)
+2. gcloud CLI 설치 (설치 후 터미널을 새로 열기)
 
 ```bash
-docker compose up -d
+winget install Google.CloudSDK
 ```
 
-4. 패키지 다시 설치 (`psycopg`, `pgvector` 추가됨) → 테이블 만들기
+3. 로그인 — 브라우저 동의 화면에서 **모두 선택**에 체크해야 합니다 (빠뜨리면 `cloud-platform scope is required but not consented` 오류)
+
+```bash
+gcloud auth application-default login
+```
+
+```bash
+gcloud auth application-default set-quota-project qupict
+```
+
+4. `.env`에 `FIRESTORE_PROJECT=qupict` → 패키지 설치 → 점검 (LLM·네이버 API는 안 부름, 크레딧 0)
 
 ```bash
 pip install -r requirements.txt
 ```
 
 ```bash
-python admin.py init-db
-```
-
-5. 점검 (LLM·네이버 API는 안 부름, 크레딧 0)
-
-```bash
 python tests/check_db.py
 ```
-→ 마지막에 `🎉 전부 통과 (20개)`가 나오면 성공입니다. 점검용 가짜 데이터는 자동으로 지워집니다.
+→ 마지막에 `🎉 전부 통과 (21개)`가 나오면 성공입니다. 점검용 가짜 데이터(`__DB점검__`)는 자동으로 지워집니다.
 
 | 증상 | 확인할 것 |
 | --- | --- |
-| `DB에 연결하지 못했습니다` / connection refused | Docker Desktop이 켜져 있는지, `docker compose ps`에서 `qupict-postgres`가 `healthy`인지 |
-| password authentication failed | `DATABASE_URL` 비밀번호 = `POSTGRES_PASSWORD`인지. 컨테이너를 처음 만든 뒤 비밀번호를 바꿨다면 볼륨에 예전 비밀번호가 남아 있음 → `docker compose down -v` 후 다시 `up -d` (**데이터가 지워짐**) |
-| `No module named 'psycopg'` | `pip install -r requirements.txt` |
-| 5432 포트 사용 중 | PC에 다른 PostgreSQL이 켜져 있음 → 끄거나 `docker-compose.yml` 포트를 `5433:5432`로 바꾸고 URL도 5433으로 |
+| `FIRESTORE_PROJECT가 설정되지 않았습니다` | `.env`에 `FIRESTORE_PROJECT=qupict` |
+| `DefaultCredentialsError` / `Reauthentication is needed` | 3번 로그인 다시 |
+| `403 Permission denied` / `PERMISSION_DENIED` | 1번 역할을 받았는지 |
+| `검색 인덱스 3개 준비됨` 실패 / 검색 때 `FailedPrecondition ... index` | `python admin.py init-db` 후 몇 분 기다리기 (GCP 콘솔 → Firestore → 색인) |
+| 서비스 계정 키 만들기가 막힘 (`iam.disableServiceAccountKeyCreation`) | 정상입니다. 키 대신 3번 로그인을 씁니다 |
 
-DB 안을 직접 보고 싶으면:
-
-```bash
-docker exec -it qupict-postgres psql -U qupict -d qupict
-```
-→ `\dt`(테이블 목록), `\dx`(확장 — `vector`가 보이면 정상), `SELECT count(*) FROM articles;`, `\q`(나가기)
+DB 안을 직접 보고 싶으면 GCP 콘솔 → **Firestore → Firestore Studio**에서 컬렉션 · 문서를 볼 수 있습니다.
 
 ### 3-5. 실행 명령 모음 (실행 파일 3개)
 
@@ -442,7 +453,7 @@ python admin.py status
 | DB에 후보 있음 | DB 것 사용 (LLM 비용 0) |
 | DB에 없음 | LLM으로 만들고 DB에 저장 |
 | LLM이 후보를 못 만듦 (예: 베라) | 저장하지 않음 → 다음에 다시 시도 |
-| `DATABASE_URL` 없음 / DB 연결 실패 | 멈추지 않고 LLM만 사용 (경고 출력) |
+| `FIRESTORE_PROJECT` 없음 / DB 연결 실패 | 멈추지 않고 LLM만 사용 (경고 출력) |
 
 - 실제 확인 (팀 공용 DB, "애플" 3번): 1회차 LLM → DB 저장, 2·3회차 DB에서 읽음. LLM 호출 1번, 세 번 모두 같은 결과
 - `run.py`, `admin.py`, `python -m qupict.sense`, 라벨링 스크립트 모두 이 함수를 씁니다. DB 없이 LLM만 부르려면 `generate_sense_candidates`
@@ -538,7 +549,7 @@ python admin.py status
 
 ### 이미지 파일 내려받기
 
-- **팀 결정: 이미지 파일은 DB에 저장하지 않습니다.** Supabase 무료 용량(500MB)을 아끼기 위해서입니다. DB(`article_images`)에는 주소·캡션·LLM 설명만 저장합니다.
+- **팀 결정: 이미지 파일은 DB에 저장하지 않습니다.** DB 용량을 아끼기 위해서입니다 (예전 Supabase 무료 500MB). DB(기사 문서의 `images`)에는 주소·캡션·LLM 설명만 저장합니다.
 - 1단계(수집)는 주소·캡션만 저장하고, 파일은 **4단계에서 "관련" 기사의 이미지 설명을 만들 때만** `download_images()`로 받아 LLM에 보내고 버립니다.
 - 받은 파일은 `ArticleImage.data`(바이트)와 `content_type`에 들어 있습니다 (메모리에서만 사용).
 - 실제로 받아 보니 5KB 미만 파일은 기자 프로필 사진, 작은 그래픽, 미리보기 자리 이미지였습니다 → 버리도록 함.
@@ -554,7 +565,7 @@ print(result.summary())   # 검색 30건 → DB 재사용 12건 + 새로 저장 
 1. 고른 의미를 `topics`에 저장 (같은 검색어·의미면 기존 topic 재사용)
 2. 네이버 검색 (무료라 매번 다시 함)
 3. **DB에 이미 있는 기사는 크롤링하지 않고** `article_topics`로 연결만 함
-4. 새 기사만 크롤링 → `articles`, `article_images`, `article_topics`에 저장
+4. 새 기사만 크롤링 → `articles`(이미지 포함), `article_topics`에 저장
 5. 돌려주는 `CollectResult`: topic id, 검색·재사용·새로 저장·본문 실패 건수, 이미지 수
 
 이후 단계는 `db.get_topic_articles(topic_id, period_days=...)`로 기사를 꺼내 씁니다.
@@ -622,9 +633,9 @@ print(outcome.summary())   # 중복 0건 | 규칙 무관 0건 | LLM 관련 6 · 
 
 | 순서 | 하는 일 | 저장 |
 | --- | --- | --- |
-| 1 | **이미지 설명**: 관련·보류 기사의 이미지를 LLM이 2~3문장으로 설명 (기사당 최대 2장) | `article_images.llm_description` |
+| 1 | **이미지 설명**: 관련·보류 기사의 이미지를 LLM이 2~3문장으로 설명 (기사당 최대 2장) | `articles`의 `images.{이미지}.llm_description` |
 | 2 | **청크**: 본문을 약 500자씩 문장 단위로 자름 (앞 청크의 마지막 문장을 겹쳐서 시작). 이미지 설명은 1장 = 청크 1개 | |
-| 3 | **임베딩**: 청크마다 (기사 제목 + 청크)로 임베딩 | `article_chunks` (source = body / image) |
+| 3 | **임베딩**: 청크마다 (기사 제목 + 청크)로 임베딩 | `chunks` (source = body / image) |
 
 - 청크가 없는 기사 + 이번에 이미지 설명이 새로 생긴 기사만 처리 → 여러 번 실행해도 안전
 - `describe_images=False`: 이미지 설명 없이 (LLM 비용 0) / `rebuild=True`: 청크 규칙을 바꿨을 때 전부 다시
@@ -635,7 +646,7 @@ print(outcome.summary())   # 중복 0건 | 규칙 무관 0건 | LLM 관련 6 · 
 
 ```text
 질문 → [원 질문 + HyDE 가상 문장, Multi-Query 변형 질문 2개]
-     → 각 문장으로 pgvector 검색: SQL 조건(topic · 관련/보류 · 최근 N일) 안에서 청크 유사도
+     → 각 문장으로 DB 벡터 검색: 조건(topic · 관련/보류 · 최근 N일) 안에서 청크 유사도 (예전 pgvector, 지금 Firestore)
      → 같은 청크는 가장 높은 유사도로 합침, 0.5 미만 버림 → 상위 5개
      → 기사별로 묶어 (기사 N) 번호 → LLM 답변 + 출처 (근거 종류: 본문 / 이미지 설명)
 ```
@@ -653,79 +664,50 @@ print(outcome.summary())   # 중복 0건 | 규칙 무관 0건 | LLM 관련 6 · 
 | "밥값 내기에서 얼마를 냈어?" | 1,519싱가포르달러(150만 원대) — 정답 |
 | "괌 영상 사진에는 어떤 모습이?" | 이미지 청크 5개 검색 → "(기사 1, 이미지)" 인용, 출처 `[이미지 설명]` |
 
-- 질문 1개당 약 8~14초 (HyDE·Multi-Query LLM 2번 + DB 검색 3번 + 답변). DB가 싱가포르 리전이라 DB 검색이 느린 편
+- 질문 1개당 약 8~14초 (HyDE·Multi-Query LLM 2번 + DB 검색 3번 + 답변). 당시 DB(Supabase)가 싱가포르 리전이라 DB 검색이 느린 편이었음 → 지금은 서울 Firestore (위 DB 이전)
 
-### DB 담당에게 (4단계)
+## 9. DB (`qupict/db.py`, Google Cloud Firestore)
 
-- `indexing.described_images()`: "기사별로 이미 설명이 있는 이미지" 조회가 `db.py`에 없어서 `indexing.py`에 SELECT 하나를 넣었습니다. 원하면 `db.py`로 옮겨 주세요.
+2026-11-16에 Supabase(PostgreSQL + pgvector)에서 Firestore로 옮겼습니다 (위 "DB 이전"). 아래 규칙은 그대로입니다.
 
-## 9. DB (`schema.sql`, `qupict/db.py`)
+### 9-1. 컬렉션 (예전 테이블 → Firestore)
 
-### 9-1. 테이블
-
-| 테이블 | 내용 | 단계 |
+| 컬렉션 / 문서 id | 내용 | 단계 |
 | --- | --- | --- |
-| `query_senses` | 검색어별 의미 후보: LLM 후보 + "기타"로 직접 입력해 저장된 의미, 고른 횟수 (같은 검색어면 재사용) | 0 |
-| `topics` | 검색어 + 고른 의미 (사람이 고친 별칭·정의 포함), 배제어, 대조할 다른 의미, 마지막 수집 시각 | 0 |
-| `articles` | 제목, 링크, 발행일, 언론사, 본문, 수집 시각, 기사 임베딩 | 1 |
-| `article_images` | 이미지 주소, 원래 캡션, LLM 설명 | 1·4 |
-| `article_topics` | topic별 기사 판정: 찾은 검색어, 중복 표시, 판정(관련/무관/보류)·단계·근거, 정답 라벨 | 2·3 |
-| `article_chunks` | 청크 텍스트(본문/이미지 설명) + 임베딩 (HNSW 인덱스) | 4·5 |
+| `query_senses/{hash(검색어, 이름)}` | 검색어별 의미 후보: LLM 후보 + "기타"로 직접 입력해 저장된 의미, 고른 횟수 | 0 |
+| `topics/{정수 id}` · `topic_keys` · `counters/topics` | 검색어 + 고른 의미, 배제어, 대조할 다른 의미, 마지막 수집 시각. 번호는 `counters/topics`에서 트랜잭션으로 발급 | 0 |
+| `articles/{link 해시}` | 제목, 링크, 발행일, 언론사, 본문, 수집 시각, 기사 임베딩, 청크 수 + **`images` 맵**(이미지 주소 · 캡션 · LLM 설명/OCR 글자) — 예전 `article_images` | 1·4 |
+| `article_topics/{topic id}_{기사 키}` | topic별 기사 판정: 찾은 검색어, 중복 표시(대표 기사 키), 판정 · 단계 · 근거, 정답 라벨. 조인 대신 link · 발행일 · 청크 유무를 복사해 둠 | 2·3 |
+| `chunks/{기사 키}_{번호}` | 청크 텍스트(본문/이미지) + 임베딩 + `search_keys`("topic id:판정", 대표 기사로 판정된 topic만) + 출처 표시용 제목 · 언론사 · 발행일 | 4·5 |
+
+**검색 인덱스** (`python admin.py init-db`가 만듦, 처음 한 번): `article_topics`(topic_id + pub_date), `chunks` 벡터 인덱스 2개(search_keys [+ pub_date] + embedding 1536차원). 나머지 조건은 Firestore가 자동으로 만드는 인덱스로 됩니다.
 
 ### 9-2. 정한 규칙
 
 | 규칙 | 내용 | 이유 |
 | --- | --- | --- |
-| 기사는 한 번만 저장 | `articles.link`가 UNIQUE. 여러 topic에 걸린 기사는 `article_topics`로 연결 | 본문·이미지 설명·청크·임베딩을 한 번만 만듦 (크레딧 절약) |
+| 기사는 한 번만 저장 | 기사 문서 id = link 해시. 여러 topic에 걸린 기사는 `article_topics`로 연결 | 본문·이미지 설명·청크·임베딩을 한 번만 만듦 (크레딧 절약) |
 | 기간 = 발행일 | topic에는 기간을 저장하지 않음. 조회할 때 **[질문한 시각 − N일, 질문한 시각]** 안에 발행된 기사만 | 같은 topic을 기간만 바꿔 다시 쓸 수 있음. 과거 시점 기준 재현도 가능 (`now=` 인자) |
 | 같은 topic 재사용 | (검색어, 의미 이름)이 같으면 같은 topic. 다시 요청하면 검색은 다시 하되, **DB에 있는 기사는 크롤링 안 하고 새 기사만** 가져와 저장 | 수집은 한 번만, 최신 기사만 추가 |
-| 중복 표시 | `duplicate_of`(대표 기사)에 값이 있으면 중복. 중복 기사는 따로 판정하지 않고 **대표 기사의 판정을 복사**해 받음 (`db.copy_duplicate_judgments`). 예전 제약 "중복 행의 판정은 비움"은 2026-11-13에 지움 | 판정이 빈 행이 없게. 검색·청크에는 대표 기사만 씀 (`duplicate_of IS NULL`) |
-| 판정 ≠ 정답 | `status`(시스템 판정, `stage` = rule/llm)와 `label`(사람이 붙인 정답)은 별도 컬럼 | 실험에서 둘을 비교 |
+| 중복 표시 | `duplicate_of`(대표 기사)에 값이 있으면 중복. 중복 기사는 따로 판정하지 않고 **대표 기사의 판정을 복사**해 받음 (`db.copy_duplicate_judgments`) | 판정이 빈 행이 없게. 검색·청크에는 대표 기사만 씀 |
+| 판정 ≠ 정답 | `status`(시스템 판정, `stage` = rule/llm)와 `label`(사람이 붙인 정답)은 별도 필드 | 실험에서 둘을 비교 |
+| 판정과 검색 대상 | 판정 · 중복 표시를 바꾸는 함수는 그 기사 청크의 `search_keys`도 같이 바꿈 (`db._sync_search_keys`) | 조인 없이 topic · 판정으로 검색을 거르기 위해 |
 | 필터 다시 돌리기 | `reset_topic_filter`로 판정만 지우고 다시 실행 (정답 라벨은 유지) | 규칙 수정 → 해당 단계만 재실행 |
-| 임베딩 1536차원 | `text-embedding-3-small`. 모델을 바꾸면 `schema.sql`의 `vector(1536)`도 바꿔야 함 | |
+| 임베딩 1536차원 | `text-embedding-3-small`. 모델을 바꾸면 `db.EMBEDDING_DIM`과 벡터 인덱스(`init-db`)도 바꿔야 함 (Firestore 최대 2048) | |
 
-### 9-3. 팀 공용 DB (Supabase)
+### 9-3. 팀 공용 DB (Firestore)
 
-프로젝트를 다 같이 하므로 **DB는 팀 공용 하나**를 씁니다. 한 명이 수집한 기사·판정·라벨을 모두가 같이 봅니다 ("수집은 한 번만").
-로컬 Docker(3-4)는 혼자 실험할 때만 씁니다. 코드는 `.env`의 `DATABASE_URL`만 보므로 **주소만 바꾸면 공용 ↔ 로컬 전환**이 됩니다.
-
-**왜 Supabase**: pgvector 지원, 서울 리전, 무료(500MB — 9개 대상 × 100건이면 임베딩 포함 약 100~200MB 예상), 웹 화면(Table Editor)에서 표로 데이터를 보고 라벨도 직접 고칠 수 있음.
-
-**만들기 (DB 담당 1명이 한 번)**
-
-1. [supabase.com](https://supabase.com) 가입 → **New project**
-   - Region: **Northeast Asia (Seoul)**
-   - Database Password: 강한 비밀번호 (팀에 전달할 값, 따로 보관)
-2. 프로젝트 화면 위쪽 **Connect** → **Session pooler** 주소 복사 (`...pooler.supabase.com:5432/postgres`)
-   - Direct connection은 IPv6 전용이라 학교·집 네트워크에서 안 될 수 있음 → **Session pooler 사용**
-3. 자기 `.env`의 `DATABASE_URL`을 그 주소로 바꾸고 (`[YOUR-PASSWORD]` 자리에 비밀번호, 끝에 `?sslmode=require`)
-
-```bash
-python admin.py init-db
-```
-
-```bash
-python tests/check_db.py
-```
-→ `🎉 전부 통과`면 완료. (점검 스크립트는 `__DB점검__` 표시가 붙은 가짜 데이터만 만들고 지우므로 공용 DB에서 돌려도 안전합니다)
-
-4. 팀원 초대: **Organization Settings → Team → Invite** (웹 화면에서 데이터 보기용)
-
-**팀원 (각자)**
-
-1. DB 담당에게 `DATABASE_URL`을 **개인 메시지로** 받기 (단톡방·이슈·PR·코드에 올리지 않기)
-2. `.env`의 `DATABASE_URL`을 바꾸고 `python tests/check_db.py`로 확인
-
-**주의할 것**
+DB는 팀 공용 하나(GCP 프로젝트 `qupict`의 Firestore `(default)`, 서울)를 씁니다. 한 명이 수집한 기사·판정·라벨을 모두가 같이 봅니다. 연결 방법은 위 3-4.
 
 | 항목 | 내용 |
 | --- | --- |
-| 일시 정지 | 무료 플랜은 **7일 동안 접속이 없으면 정지**됩니다. 대시보드에서 Restore하면 데이터 그대로 돌아옵니다 |
-| 같이 쓰는 DB | `reset_topic_filter`, 테이블 삭제(`DROP`), `docker compose down -v` 같은 지우는 작업은 **팀에 먼저 말하기**. 실험은 가능하면 로컬 DB에서 |
-| 테이블 구조 변경 | `schema.sql`은 `IF NOT EXISTS`라서 **이미 있는 테이블의 컬럼 추가·변경은 반영 안 됩니다.** 바꿀 때는 DB 담당이 `ALTER TABLE`을 공용 DB에 직접 실행하고 `schema.sql`도 같이 고칩니다 |
-| 비용·크레딧 | 같은 topic을 두 사람이 동시에 수집하지 않기 (DB는 안전하지만 LLM 크레딧이 두 번 듦) |
-| 로컬 데이터 옮기기 | 주소를 바꿔도 데이터는 안 옮겨집니다. 필요하면 `pg_dump`로 내보내 공용 DB에 넣기 (DB 담당에게 요청) |
-| 서비스 단계 | 사용자가 많아지면 커넥션 풀(`psycopg_pool`)과 마이그레이션 도구(Alembic 등)를 추가해야 합니다. 지금 팀 개발에는 필요 없음 |
+| 권한 | 프로젝트 주인이 팀원에게 `Cloud Datastore 사용자` 역할을 줍니다 (IAM). 키 파일은 쓰지 않습니다 (조직 정책으로 막혀 있음) |
+| 비용 | 무료 한도: 하루 읽기 5만 · 쓰기 2만 · 삭제 2만, 저장 1GiB. 넘으면 결제 계정에 과금. `admin.py collect-all` · 실험처럼 많이 읽는 일은 몰아서 돌리지 않기 |
+| 같이 쓰는 DB | `reset_topic_filter`, 문서 삭제 같은 지우는 작업은 **팀에 먼저 말하기** |
+| 구조 변경 | 테이블 정의가 없어서 새 필드는 저장할 때 생깁니다. 이미 있는 문서에 값을 채워야 하면 `tools/`에 일회성 스크립트를 만들어 돌립니다 |
+| 비용·크레딧 | 같은 topic을 두 사람이 동시에 수집하지 않기 (LLM 크레딧이 두 번 듦) |
+| 데이터 보기 | GCP 콘솔 → Firestore → Firestore Studio |
+| 예전 Supabase | 이전 확인용으로 남겨 둠 (읽기만). 사이트가 새 코드로 바뀌기 전 Supabase에 새로 쌓인 데이터는 `python tools/migrate_supabase_to_firestore.py --force`로 다시 맞춥니다 |
 
 ### 9-4. 단계별로 쓰는 함수 (각 단계 담당)
 
@@ -733,7 +715,7 @@ python tests/check_db.py
 
 | 단계 | 함수 | 하는 일 |
 | --- | --- | --- |
-| 공통 | `init_db()` | 테이블 만들기 (`python admin.py init-db`) |
+| 공통 | `init_db()` | 검색 인덱스 만들기 (`python admin.py init-db`) |
 | 0 | `get_sense_candidates(query)` / `save_sense_candidates(c)` / `record_sense_use(query, sense, includes)` | 의미 후보 캐시 읽기 / 저장 / 고른 의미 기록 (횟수 +1, 새 직접 입력 저장) |
 | 0 | `save_topic(selected)` → topic id, `get_topic(query, sense_name)` | topic 만들기·재사용 / 읽기 |
 | 1 | `collect.collect_to_db(selected, period_days)` → topic id | **1단계 DB 버전 (완성)**: topic 저장 → 검색 → 이미 있는 기사는 연결만 → 새 기사만 크롤링·저장 |
@@ -792,11 +774,11 @@ python tests/check_db.py
 - **다른 파일로 돌리기**: `python evaluate.py exp-b --qa 골든셋.csv` (exp-c · sim도 같음). `make-qa`는 이 CSV 끝에 질문을 추가합니다.
 - **읽을 때 DB로 확인** (DB는 읽기만, CSV 파일은 안 고침):
   - `sense`가 비었거나 DB 의미 이름과 다르면 (예: `기업 애플` ↔ DB `기업 Apple`, `삼성전자(기업)` ↔ `기업 삼성전자`) 이름에 같은 단어가 가장 많은 의미 → 근거 기사가 '관련' · '보류'로 든 topic → 하나뿐인 topic 순으로 정합니다
-  - 근거에 **기사 대신 이미지 주소**를 적었으면 그 이미지가 실린 기사 link로 바꿉니다 (`article_images`)
+  - 근거에 **기사 대신 이미지 주소**를 적었으면 그 이미지가 실린 기사 link로 바꿉니다 (기사 문서의 `image_bases`)
   - 근거 기사가 중복 기사면 **대표 기사 link를 더합니다** (검색에는 대표 기사만 나옴)
   - `[질문 세트 건너뜀]`: 수집 안 된 검색어 · 의미를 정할 수 없는 줄 (평가에서 뺌) / `[질문 세트 확인]`: 근거 기사가 그 topic에 없거나 '무관'이라 검색에 안 나오는 줄 (평가에는 넣음 → 0점)
 - **실행**: `python evaluate.py` 를 명령 없이 실행하면 번호 메뉴가 뜹니다 (PyCharm 실행 버튼). `experiments/exp_b_retrieval.py` 등을 바로 실행해도 됩니다.
-- **속도**: DB 연결은 커넥션 풀(`db.connect`)이 돌려 씁니다 (새 연결은 1번에 약 1.7초라, 풀 없이 질문당 검색 10번이면 연결에만 17초). CSV 확인도 검색어마다 DB를 한 번만 읽습니다. 진행 상황 `[2/87] G007 (남은 시간 약 N분)` 표시.
+- **속도**: DB 클라이언트 하나를 계속 씁니다 (예전 Supabase는 새 연결 1번에 약 1.7초라 커넥션 풀을 썼음). CSV 확인도 검색어마다 DB를 한 번만 읽습니다. 진행 상황 `[2/87] G007 (남은 시간 약 N분)` 표시.
 
 ### 실험 B 결과: 팀 골든셋 118문항 (2026-11-16)
 
@@ -851,7 +833,7 @@ python tests/check_db.py
 - [ ] **중복 제거 `noun` 기준 고치기** — 제목 고유명사가 검색어뿐이면 유사도 1.0이 돼서 잘못 묶임 (1-1). 11-15에 "2개 이상" 규칙과 임계값 0.4로 일부 막았지만, noun + 다른 기준 하나만 넘어도 묶이므로 남은 후보: noun 계산에서 검색어·별칭 빼기
 - [ ] **유사도 기준 0.5 유지 여부** — 질문 세트가 생기면 실험 B로 0.4·0.45·0.5 비교 후 결정
 
-- [x] **이미지 파일 DB 저장 안 함** — 4단계에서 관련 기사의 이미지만 그때 받아서 LLM에 보냄 (Supabase 용량 절약). DB 변경 없음
+- [x] **이미지 파일 DB 저장 안 함** — 4단계에서 관련 기사의 이미지만 그때 받아서 LLM에 보냄 (DB 용량 절약). DB 변경 없음
 - [x] **네이버 뉴스 링크는 DB에 저장하지 않음** — 크롤링할 때만 쓰고(검색 결과에 있음), 출처·중복 확인은 `link`로 함. `articles.naver_link` 칸은 쓰지 않으므로 지워도 됨 (DB 담당 선택)
 
 - [x] 눈·후드·마스크 — 의미별로 2개씩 넣어 "고르는 의미에 따라 결과가 달라지는지" 확인 (위 ②)
@@ -861,8 +843,8 @@ python tests/check_db.py
 - [ ] **정답 라벨 종류 맞추기 (DB 담당)** — 기획안 실험은 정답을 `관련 / 무관 / 동음이의어`로 나누는데 ("동음이의어 유입률" 지표), 지금 `article_topics.label`은 `관련 / 무관 / 보류`만 허용. 라벨에 `동음이의어`를 추가할지 정하기
 - [ ] PR #1 리뷰 후 머지 여부
 - [x] DB 구조 — 기사 한 번만 저장, 기간 = 발행일, topic 재사용 시 새 기사만 추가, 중복은 `duplicate_of`로만 표시
-- [x] 팀 공용 DB 사용 — Supabase (9-3)
-- [ ] **Supabase 프로젝트 만들 사람(계정) 정하기**, 만든 뒤 팀원에게 `DATABASE_URL` 전달
+- [x] 팀 공용 DB 사용 — Supabase → 2026-11-16 **Firestore**(GCP `qupict`, 서울)로 이전 (9-3)
+- [ ] 팀원에게 GCP `qupict`의 `Cloud Datastore 사용자` 역할 주기 (각자 3-4대로 로그인)
 - [ ] 줄바꿈(LF/CRLF) 통일 — 지금 `git diff`에 내용이 안 바뀐 파일도 전부 바뀐 걸로 나옴. `.gitattributes` 추가 필요
 
 ---
