@@ -322,6 +322,15 @@ button.ghost { background: transparent; color: var(--accent-text); border: 1px s
 }
 @keyframes blink { 50% { opacity: 0; } }
 
+/* 답변 맨 위: 어느 때 저장된 기사를 참고한 답변인지 (작은 글씨, 아래 선으로 본문과 나눔).
+   왼쪽 막대 색: db = 노랑 (DB에 저장해 둔 기사로 먼저 답함, 아직 새 기사가 안 들어감), fresh = 남색 (새로 모은 기사까지) */
+.basis {
+  font-size: 12.5px; color: var(--muted); white-space: normal;
+  margin-bottom: 8px; padding: 0 0 6px 8px; border-bottom: 1px solid var(--line);
+  border-left: 3px solid var(--accent-text);
+}
+.basis.db { border-left-color: var(--highlight); }
+
 /* 답변 아래 출처 목록 */
 .srcs { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; white-space: normal; }
 .srcs a { color: var(--accent-text); text-decoration: none; }
