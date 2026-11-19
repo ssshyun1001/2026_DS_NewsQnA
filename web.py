@@ -121,7 +121,7 @@ class Basis:
     def payload(self) -> dict:
         if self.stage == "db":
             when = f"{_when(self.db_collected_at)}까지 수집해 " if self.db_collected_at else "예전에 "
-            note = (f"{when}DB에 저장해 둔 기사 {self.db_articles}건을 참고한 답변입니다. "
+            note = (f"{when}DB에 저장해 둔 기사를 참고한 답변입니다. "
                     "새 기사는 아직 모으는 중입니다.")
         else:
             note = f"{_when(self.fresh_at)}에 새로 모은 기사까지 참고한 답변입니다." if self.fresh_at else ""

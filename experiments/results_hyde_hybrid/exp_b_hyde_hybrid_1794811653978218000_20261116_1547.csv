@@ -1,9 +1,0 @@
-﻿engine,variant,questions,recall@5,mrr,avg_seconds,id,hit@5,reciprocal_rank,rank,seconds
-db,base,1,0.0,0.0,2.578,,,,,
-db,hyde,1,0.0,0.0,3.522,,,,,
-db,hybrid,1,0.0,0.0,2.585,,,,,
-db,hyde_hybrid,1,0.0,0.0,3.529,,,,,
-db,base,,,,,G001,False,0.0,,2.578
-db,hyde,,,,,G001,False,0.0,,3.522
-db,hybrid,,,,,G001,False,0.0,,2.585
-db,hyde_hybrid,,,,,G001,False,0.0,,3.529
