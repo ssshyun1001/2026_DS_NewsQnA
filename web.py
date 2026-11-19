@@ -539,9 +539,8 @@ def _open_from_db(job: Job, selected: SelectedSense, period_days: int, current: 
         basis.db_articles, basis.db_collected_at = count, record.last_collected_at
         threading.Thread(target=warm_up_search, args=(record.id,), daemon=True).start()   # 키워드 인덱스 미리
         open_early()
-        when = f" (마지막 수집 {_when(record.last_collected_at)})" if record.last_collected_at else ""
-        log(f"DB에 저장된 기사 {count}건{when}으로 지금 먼저 답합니다. "
-            "새 기사 수집 · 정리가 끝나면 그 기사까지 넣어 답합니다.")
+        when = f" (마지막 수집 {_when(record.last_collected_at)})하여 참고한 답변입니다" if record.last_collected_at else ""
+        log(f"새 기사 수집 · 정리가 끝나면 그 기사까지 넣어 답합니다.")
     except Exception as e:
         traceback.print_exc()
         job.db_articles = 0
