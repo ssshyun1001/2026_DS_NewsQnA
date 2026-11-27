@@ -26,9 +26,7 @@
 │   ├── bm25.py           [5단계] 하이브리드의 키워드(BM25) 검색 · RRF 합치기
 │   └── qa.py             [5단계] 근거 기반 답변 + 출처
 │
-├── old/                  예전 평가·라벨링 스크립트 (지금 구조에 맞게 고침, 아래 표)
-│
-├── evalset/              정답 JSON 평가셋 (DB 안 씀)
+├── evalset/              정답 JSON 평가셋 (DB 사용 안함)
 │   ├── build_labeled_set.py  라벨링 → labeled_set_N.json (검색어 단위로 나눔)
 │   ├── exp_a_filtering.py    실험 A: 필터링 방법 비교 (labeled_set_*.json 기준, 결과 evalset/results/)
 │
@@ -41,21 +39,13 @@
 └── tests/                오프라인 테스트 (python tests/run_offline.py, 크레딧 0)
 ```
 
-`old/`는 예전 평가·라벨링 스크립트를 **지금 구조(`qupict/`)에 맞게 고친 것**입니다. DB 없이도 돌아가고(파일·메모리), 프로젝트 맨 위 폴더에서 실행합니다.
-
 | 파일 | 하는 일 | 실행 | 같은 일을 하는 run.py 명령 |
 | --- | --- | --- | --- |
-| `evalset/build_labeled_set.py` (옮김) | 검색어 반복 입력(q=종료) → LLM 의미 고르기 → 수집 → 중복 제거 → 최신 대표 기사 150건에 1 관련 / 2 무관 라벨 → `evalset/labeled_set_N.json`에 검색어 단위로 나눠 누적 | `python evalset/build_labeled_set.py` | `run.py label` (DB에 저장) |
-| `eval_filter.py` | `labeled_set_*.json`으로 V0 필터 없음 / V1 규칙 필터 / V2 규칙 + LLM 검증 비교 (Precision·Recall·F1·Accuracy) | `python old/eval_filter.py` | `run.py exp-a` (방법 6가지) |
-| `eval_retrieval.py` | 골든셋(제논·당근·서울여대·강남 39문항)으로 Base / HyDE / Multi-Query / Both 검색 성공률 (키워드 포함 여부) | `python old/eval_retrieval.py 강남` | `run.py exp-b` (Recall@5·MRR) |
-| `debug_similarity.py` | 기준값 없이 질문과의 유사도 출력 (HyDE 없음 / HyDE) | `python old/debug_similarity.py 강남 "방송인 강남" "질문"` | `run.py sim` (방식 4가지, 질문 세트 전체) |
-| `_common.py` | 위 스크립트 공용: 의미 정하기 (LLM 의미 후보에서 이름으로 찾기 → 없으면 후보에서 고르기) | — | — |
+| `evalset/build_labeled_set.py` | 검색어 반복 입력(q=종료) → LLM 의미 고르기 → 수집 → 중복 제거 → 최신 대표 기사 150건에 1 관련 / 2 무관 라벨 → `evalset/labeled_set_N.json`에 검색어 단위로 나눠 누적 | `python evalset/build_labeled_set.py` | `run.py label` (DB에 저장) |
 
 - 예전 "검증 키워드" 자리는 **고른 의미 이름**(예: `방송인 강남`)이 대신합니다.
-- `eval_retrieval.py`·`debug_similarity.py`는 DB에 topic이 있으면 실제 서비스 검색(DB 벡터 검색)을 쓰고, 없거나 `--memory`를 주면 예전처럼 그 자리에서 수집합니다.
-- `eval_retrieval.py`의 골든 질문은 2026년 7월 기사로 만든 것이라, 최근 30일 기사만 있는 DB에서는 성공률이 낮게 나옵니다 (`[DEBUG]` 줄로 확인).
 
-DB는 팀 공용 Firestore(GCP `qupict`) 하나를 씁니다. 연결 방법은 README "시작하기" (로컬 PostgreSQL · `docker-compose.yml`은 2026-11-16에 없앰).
+DB는 팀 공용 GCP의 Firestore(`qupict`) 하나를 씁니다. 연결 방법은 README "시작하기" (로컬 PostgreSQL · `docker-compose.yml`은 2026-11-16에 없앰).
 
 ## 실행
 
@@ -103,7 +93,7 @@ python run.py ask 서울여대  # 5단계 (질문하기)
 - **중복은 `duplicate_of` 하나로 표시**: 값이 있으면 중복이고, 판정은 대표 기사의 판정을 복사해 받습니다 (`db.copy_duplicate_judgments`).
 - **판정과 정답 라벨은 따로**: `status`(시스템 판정, `stage` = rule/llm)와 `label`(사람이 붙인 정답)은 같은 값(관련/무관/보류)을 쓰는 서로 다른 필드입니다.
 - **임베딩은 1536차원** (`text-embedding-3-small`). 모델을 바꾸면 `db.EMBEDDING_DIM`과 벡터 인덱스(`python admin.py init-db`)도 바꿔야 합니다.
-- **DB 위치**: 팀 공용 DB는 Firestore(GCP `qupict`, 서울 `asia-northeast3`) 하나를 같이 씁니다 (2026-11-16 Supabase에서 옮김). 코드는 `.env`의 `FIRESTORE_PROJECT`를 봅니다. 연결 방법은 README "시작하기".
+- **DB 위치**: 팀 공용 DB는 Firestore(GCP `qupict`, 서울 리전 `asia-northeast3`) 하나를 같이 씁니다 (2026-11-16 Supabase에서 옮김). 코드는 `.env`의 `FIRESTORE_PROJECT`를 봅니다. 연결 방법은 README "시작하기".
 
 ## DB 담당에게: 0단계에서 저장할 값
 

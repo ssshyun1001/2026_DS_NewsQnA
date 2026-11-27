@@ -12,8 +12,6 @@ __pycache__/
 **/__pycache__/
 
 # 서비스 실행에 필요 없는 폴더 (실험 · 평가 · 예전 코드 · 문서 · 테스트)
-old/
-tools/
 experiments/
 evalset/
 docs/

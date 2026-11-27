@@ -7,21 +7,21 @@
 
 ## 지금 상태 (2026-11-27)
 
-| 영역 | 상태 |
-| --- | --- |
+| 영역 | 상태                                                                                         |
+| --- |--------------------------------------------------------------------------------------------|
 | 파이프라인 | ① 의미 구분 → ② 수집 → ③ 중복 제거 · 규칙/LLM 판정 → ④ 청크 · OCR · 임베딩 → ⑤ 이슈 Top 5 → ⑥ Hybrid 검색 + 근거 답변 |
-| LLM | 학교 팩트챗 Gateway, 채팅 `gemini-3.5-flash-lite`, 임베딩 `text-embedding-3-small`(1536차원) |
-| DB | Google Cloud Firestore (GCP `qupict`, 서울 `asia-northeast3`) + 벡터 검색 |
-| 검색 | Hybrid (벡터 + BM25, RRF). HyDE · Multi-Query · Reranker는 실험 비교용 |
-| 웹 | `python web.py`, Cloud Run 배포 (main merge 시 자동), 최소 0 · 최대 1 인스턴스 |
-| 평가 | 실험 A(필터링, 라벨 988건), 실험 B(검색, 골든셋 87문항) |
-| 테스트 | `python tests/run_offline.py` 19묶음 |
+| LLM | 학교 팩트챗 Gateway, 채팅 `gemini-3.5-flash-lite`, 임베딩 `text-embedding-3-small`(1536차원)           |
+| DB | Google Cloud Firestore (GCP `qupict`, 서울 리전 `asia-northeast3`) + 벡터 검색                     |
+| 검색 | Hybrid (벡터 + BM25, RRF) 사용. HyDE · Multi-Query · Reranker는 실험 비교용                          |
+| 웹 | `python web.py`, Cloud Run 배포 (main merge 시 자동), 최소 0 · 최대 1 인스턴스                          |
+| 평가 | 실험 A(필터링, 라벨 988건), 실험 B(검색, 골든셋 87문항)                                                     |
+| 테스트 | `python tests/run_offline.py` 18묶음                                                         |
 
 ### 남은 일
 
 - [ ] **화면 상태 줄의 기사 수**: `web/app.js:234`에 아직 `DB에 저장된 기사 N건으로 먼저 답합니다.`가 나옴 (답변 위 시점 줄 · 로그에서는 11-19에 뺌)
 - [ ] **불필요한 코드 정리**
-  - 지울 후보: `old/` 폴더, `tests/offline/check_old.py`(지우면 테스트 18묶음), `tools/migrate_supabase_to_firestore.py`(이전 끝남, `psycopg` 없어 실행 안 됨), `requirements.txt`의 `pyyaml`(쓰는 곳 없음)
+  - 지울 후보: `requirements.txt`의 `pyyaml`(쓰는 곳 없음). `old/` · `check_old.py` · `tools/migrate_supabase_to_firestore.py`는 11-27에 지움
   - 코드 안: `web.py:542` 안 쓰는 `when` 변수, `db.close_pool()` · `ocr.uses_gpu()`(호출 없음), `db.save_image_description` · `db.save_chunks`(테스트만 사용), `concurrency.py` 주석이 Supabase 기준
   - 맞출 것: 메모리 모드(`run.py --memory`, `retrieve_relevant_articles`)의 기본값이 아직 HyDE + Multi-Query 켜짐
   - 결과 파일: `experiments/results*/`, `evalset/results/`(특히 `llm_cache.json`) 중 남길 것 정하기
