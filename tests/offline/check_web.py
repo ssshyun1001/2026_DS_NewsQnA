@@ -264,9 +264,9 @@ def main() -> None:
     job2 = client.post("/api/prepare", json={"query": "강남", "period_days": 30, "sense_index": 0}).json()
     early = wait_job(job2["job_id"], lambda j: j["session_id"] or j["status"] == "error")
     assert early["status"] == "running" and early["db_articles"] == 6, early     # 수집이 끝나기 전에 질문을 받는다
-    assert early["basis"] == {"stage": "db", "note": "11월 16일 15:20까지 수집해 DB에 저장해 둔 기사 6건을 참고한 답변입니다. "
+    assert early["basis"] == {"stage": "db", "note": "11월 16일 15:20까지 수집해 DB에 저장해 둔 기사를 참고한 답변입니다. "
                                                      "새 기사는 아직 모으는 중입니다."}, early["basis"]
-    assert any("DB에 저장된 기사 6건 (마지막 수집 11월 16일 15:20)으로 지금 먼저 답합니다." in x for x in early["logs"])
+    assert any("새 기사 수집 · 정리가 끝나면 그 기사까지 넣어 답합니다." in x for x in early["logs"]), early["logs"]
     sid2 = early["session_id"]
     # 근거가 DB에 없는 질문: 답하지 않는다 (LLM을 부르지 않고, 대화 기록에도 남기지 않음)
     calls.pop("subject", None)

@@ -1,5 +1,5 @@
 """
-유사도 확인 도구 — 기준값 없이 실제 유사도 보기  (old/debug_similarity.py를 지금 구조로 옮김)
+유사도 확인 도구 — 기준값 없이 실제 유사도 보기
 
 왜 필요한가
   질문 답변은 유사도가 기준값(RELEVANCE_SIMILARITY_THRESHOLD, 기본 0.5) 미만인 청크를 버린다.

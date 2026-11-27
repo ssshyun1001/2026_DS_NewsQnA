@@ -150,7 +150,7 @@ def main() -> None:
     if args.limit is not None and args.limit < 1:
         parser.error("--limit은 1 이상이어야 합니다")
     datasets = {
-        "original": Path(__file__).with_name("qa_set_hyde_hybrid.csv"),
+        "original": Path(__file__).with_name("qa_set.csv"),
         "varied": Path(__file__).with_name("qa_set_hyde_hybrid_varied.csv"),
     }
     if args.qa is not None:

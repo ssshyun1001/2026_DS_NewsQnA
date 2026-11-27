@@ -17,7 +17,7 @@ build_labeled_set.py — 평가용 정답 라벨링 도구 (DB 없이 JSON 파�
     같은 검색어는 처음 만든 후보를 DB(query_senses)에 저장해 두고 다시 쓴다 (재현성).
   - 라벨은 공용 DB에 쓰지 않는다.
 
-저장 형식 (항목 하나 = 기사 하나, old/eval_filter.py가 읽는다):
+저장 형식 (항목 하나 = 기사 하나, evalset/exp_a_filtering.py가 읽는다):
   {"title", "url", "description", "content", "query",
    "sense": {"name", "definition", "aliases", "related_terms", "excluded_terms", "other_senses": [...]},
    "label": true(관련) / false(무관)}
