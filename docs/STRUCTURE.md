@@ -28,7 +28,7 @@
 │
 ├── old/                  예전 평가·라벨링 스크립트 (지금 구조에 맞게 고침, 아래 표)
 │
-├── evalset/              정답 JSON 평가셋 (DB 안 씀)
+├── evalset/              정답 JSON 평가셋 (DB 사용 안함)
 │   ├── build_labeled_set.py  라벨링 → labeled_set_N.json (검색어 단위로 나눔)
 │   ├── exp_a_filtering.py    실험 A: 필터링 방법 비교 (labeled_set_*.json 기준, 결과 evalset/results/)
 │
@@ -55,7 +55,7 @@
 - `eval_retrieval.py`·`debug_similarity.py`는 DB에 topic이 있으면 실제 서비스 검색(DB 벡터 검색)을 쓰고, 없거나 `--memory`를 주면 예전처럼 그 자리에서 수집합니다.
 - `eval_retrieval.py`의 골든 질문은 2026년 7월 기사로 만든 것이라, 최근 30일 기사만 있는 DB에서는 성공률이 낮게 나옵니다 (`[DEBUG]` 줄로 확인).
 
-DB는 팀 공용 Firestore(GCP `qupict`) 하나를 씁니다. 연결 방법은 README "시작하기" (로컬 PostgreSQL · `docker-compose.yml`은 2026-11-16에 없앰).
+DB는 팀 공용 GCP의 Firestore(`qupict`) 하나를 씁니다. 연결 방법은 README "시작하기" (로컬 PostgreSQL · `docker-compose.yml`은 2026-11-16에 없앰).
 
 ## 실행
 
@@ -103,7 +103,7 @@ python run.py ask 서울여대  # 5단계 (질문하기)
 - **중복은 `duplicate_of` 하나로 표시**: 값이 있으면 중복이고, 판정은 대표 기사의 판정을 복사해 받습니다 (`db.copy_duplicate_judgments`).
 - **판정과 정답 라벨은 따로**: `status`(시스템 판정, `stage` = rule/llm)와 `label`(사람이 붙인 정답)은 같은 값(관련/무관/보류)을 쓰는 서로 다른 필드입니다.
 - **임베딩은 1536차원** (`text-embedding-3-small`). 모델을 바꾸면 `db.EMBEDDING_DIM`과 벡터 인덱스(`python admin.py init-db`)도 바꿔야 합니다.
-- **DB 위치**: 팀 공용 DB는 Firestore(GCP `qupict`, 서울 `asia-northeast3`) 하나를 같이 씁니다 (2026-11-16 Supabase에서 옮김). 코드는 `.env`의 `FIRESTORE_PROJECT`를 봅니다. 연결 방법은 README "시작하기".
+- **DB 위치**: 팀 공용 DB는 Firestore(GCP `qupict`, 서울 리전 `asia-northeast3`) 하나를 같이 씁니다 (2026-11-16 Supabase에서 옮김). 코드는 `.env`의 `FIRESTORE_PROJECT`를 봅니다. 연결 방법은 README "시작하기".
 
 ## DB 담당에게: 0단계에서 저장할 값
 
