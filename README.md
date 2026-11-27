@@ -74,13 +74,19 @@ QuPicT는 이 문제를 **수집 이전 단계에서** 풉니다.
 로컬에서 실행하려면:
 
 ```bash
-python web.py           
+python web.py           # http://127.0.0.1:8000 (--host · --port로 변경)
 ```
 
-1. 검색어 입력 → 의미 고르기 (후보 옆에 "직접 입력 · N회 선택" 표시)
+1. 검색어와 기간 입력 → 의미 고르기 (후보마다 정의 · 별칭 · 연관어 표시, 맨 아래 "기타 (직접 입력)")
 2. 수집 · 중복 제거 · 판정 · 인덱싱 진행 상황을 로그로 표시 (줄마다 경과 시간, "DB 재사용 N건 + 새로 저장 M건")
-3. **많이 보도된 기사 Top 5** — 비슷한 기사가 가장 많이 묶인 사안 5건과 한 줄 요약 (LLM 없이 기사 속 문장 그대로)
-4. 질문하기 — 준비가 끝나기 전에도, 저장된 기사가 있으면 바로 답변
+3. **많이 보도된 기사 Top 5** — 비슷한 기사가 가장 많이 묶인 사안 5건과 한 줄 요약 (LLM 없이 기사 속 문장 그대로). 따로 돌아서 질문을 막지 않음
+4. 질문하기 — **준비와 동시에** 시작
+   - 이 검색어 · 의미로 DB에 저장된 기사가 있으면 그 기사로 먼저 답하고, 준비가 끝나면 새 기사까지 넣어 이어서 답함 (앞 대화 유지)
+   - 답변마다 **어느 시점의 기사를 참고했는지** 표시 ("○○까지 수집해 DB에 저장해 둔 기사를 참고한 답변입니다" / "○○에 새로 모은 기사까지 참고한 답변입니다")
+   - 저장된 기사에 근거가 없으면 답하지 않고, 새 기사를 저장한 뒤 자동으로 다시 질문
+   - 저장된 기사가 아예 없으면 준비가 끝난 뒤 답함
+
+여러 사용자가 동시에 써도 서로 기다리지 않도록 작업 · 대화를 사용자별로 나누고, 같은 대상은 한 번만 준비합니다. 페이지를 나가면 그 사용자의 작업 · 대화는 서버 메모리에서 지웁니다.
 
 DB 재사용으로 체감 속도가 크게 달라졌습니다.
 
@@ -89,8 +95,7 @@ DB 재사용으로 체감 속도가 크게 달라졌습니다.
 | 이미 준비한 검색어로 질문 받기 시작 (방송인 강남) | 약 13초 | **1.1초** |
 | 같은 검색어 다시 준비 (당근) | 20.1초 | **5.2초** |
 
-Google Cloud Run 배포용 `Dockerfile`이 포함되어 있습니다 (CPU판 torch로 이미지 크기 절감).
-
+Google Cloud Run 배포용 `Dockerfile`이 포함되어 있습니다 (Python 3.12, CPU판 torch로 이미지 크기 절감). GitHub `main`에 push하면 Cloud Run이 이 파일로 다시 빌드 · 배포합니다.
 
 ---
 
@@ -102,18 +107,18 @@ Google Cloud Run 배포용 `Dockerfile`이 포함되어 있습니다 (CPU판 tor
 
 9개 topic(검색어 × 의미), **사람이 직접 라벨링한 기사 988건** 기준 (`evalset/labeled_set_*.json`).
 
-| 방법 | Precision | Recall | F1 | 무관 유입률 |
+| 방법 | Precision | Recall | F1 | LLM 호출 |
 | --- | ---: | ---: | ---: | ---: |
-| baseline (API 결과 그대로) | 0.412 | 1.000 | 0.584 | 0.588 |
-| 1-a 별칭 포함 여부 | 0.439 | 0.963 | 0.604 | 0.561 |
-| 1-b 검증 키워드 (이전 버전 방식)\* | 0.786 | 0.527 | 0.631 | 0.214 |
-| 1-c 규칙 점수만 | 0.482 | 0.774 | 0.594 | 0.518 |
-| 2-b LLM 판정만 | 0.578 | 0.953 | **0.720** | 0.422 |
-| **제안 (규칙 → LLM)** | **0.585** | 0.929 | 0.718 | **0.415** |
+| baseline (API 결과 그대로) | 0.412 | 1.000 | 0.584 | 0 |
+| 1-a 별칭 포함 여부 | 0.439 | 0.963 | 0.604 | 0 |
+| 1-b 검증 키워드 (이전 버전 방식)\* | 0.786 | 0.527 | 0.631 | 0 |
+| 1-c 규칙 점수만 | 0.482 | 0.774 | 0.594 | 0 |
+| 2-b LLM 판정만 | 0.578 | 0.953 | **0.720** | 126 |
+| **제안 (규칙 → LLM)** | **0.585** | 0.929 | 0.718 | **115** |
 
 \* 1-b는 검증 키워드를 정할 수 있는 topic(349건)만 평가. Precision은 높지만 관련 기사의 절반 가까이를 놓칩니다.
 
-- 제안 방식은 Recall 0.93을 유지하면서 무관 기사 유입을 **58.8% → 41.5%** 로 줄였습니다.
+- 제안 방식은 Recall 0.93을 유지하면서 Precision을 **0.412 → 0.585** 로 올렸고, 규칙 점수로 분명한 무관을 먼저 걸러 LLM만 쓸 때보다 호출 수가 적습니다 (126 → 115).
 - 동음이의어가 뚜렷한 **방송인 강남**은 baseline Precision 0.105 → 제안 방식 **1.000** (F1 0.19 → 1.00).
 - 반대로 지역 강남·과일 사과처럼 다른 의미와 경계가 넓은 topic은 개선 폭이 작아, 남은 과제로 두었습니다.
 
@@ -152,21 +157,23 @@ python tests/check_db.py                            # DB 점검 (LLM·API 호출
 | 환경변수 | 설명 |
 | --- | --- |
 | `OPENAI_API_KEY`, `OPENAI_BASE_URL` | OpenAI 호환 API (비우면 OpenAI 공식, 학교 팩트챗 Gateway 지원) |
-| `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDING_MODEL` | 채팅 모델 / `text-embedding-3-small` (1536차원) |
+| `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDING_MODEL` | 채팅 모델 (`.env.example`: `claude-haiku-5-5`) / `text-embedding-3-small` (1536차원) |
 | `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` | 네이버 클라우드 플랫폼 **API HUB** 뉴스 검색 키 (개발자센터 키는 401) |
 | `FIRESTORE_PROJECT` | Firestore가 있는 GCP 프로젝트 id (`qupict`). 비우면 DB 없이 메모리 버전 |
 | `RELEVANCE_SIMILARITY_THRESHOLD` | 답변 근거 최소 유사도 (기본 0.5) |
 | `IMAGE_TEXT` | 이미지 처리: `ocr`(기본, EasyOCR·비용 0) / `vlm`(LLM 설명) / `off` |
-| `DEDUP_BY`, `DEDUP_RULE`, `DEDUP_*_THRESHOLD` | 중복 제거 기준·규칙·임계값 |
+| `DEDUP_BY`, `DEDUP_RULE`, `DEDUP_*_THRESHOLD` | 중복 제거 기준·규칙·임계값 (기본 `all` · 2개 이상) |
+| `LLM_TIMEOUT_SECONDS`, `EMBED_TIMEOUT_SECONDS` | LLM · 임베딩 요청 하나의 최대 대기 시간 (기본 15초, 최대 2번 재시도) |
 
 ### 실행 파일 — 용도마다 하나
 
 | 파일 | 대상 | 주요 명령 |
 | --- | --- | --- |
 | `web.py` | 서비스 (브라우저) | `python web.py [--host 0.0.0.0] [--port 8080]` |
-| `run.py` | 서비스 (터미널) | `python run.py 강남 30` · `--memory`(DB 없이 FAISS) · `--timing`(단계별 시간표) |
-| `admin.py` | 서비스 DB 관리 | `collect 검색어` · `collect-all` · `filter-all [--redo]` · `index-all` · `status` · `init-db` |
-| `evaluate.py` | 평가 | `exp-a` · `exp-b` · `sim` · `make-qa` (명령 없이 실행하면 번호 메뉴) |
+| `run.py` | 서비스 (터미널) | `python run.py 강남 30` (검색어 · 기간) · `--max N`(최대 기사 수, 기본 100) · `--memory`(DB 없이 FAISS) · `--timing`(단계별 시간표) |
+| `admin.py` | 서비스 DB 관리 | `collect 검색어` · `collect-all` · `filter-all [--redo]` · `index-all [--no-images]` · `status` · `init-db` (`--target 검색어`로 한 대상만, `--days` 기본 30) |
+| `evaluate.py` | 평가 | `exp-a` · `exp-b [--faiss]` · `sim` · `make-qa [--suggest]` · `label` (명령 없이 실행하면 번호 메뉴) |
+| `experiments/exp_b_hyde_hybrid.py` | 평가 | HyDE · Hybrid 비교 (최종 검색 방식 결정에 쓴 실험) |
 | `evalset/build_labeled_set.py` | 정답 라벨링 | 검색어마다 의미 선택 → 대표 기사 150건에 관련/무관 라벨 → JSON 누적 |
 
 모든 일괄 명령은 **아직 처리하지 않은 것만** 처리합니다. 중간에 끊겨도 다시 실행하면 이어서 하고, LLM 비용이 두 번 들지 않습니다.
@@ -174,7 +181,7 @@ python tests/check_db.py                            # DB 점검 (LLM·API 호출
 ### 테스트
 
 ```bash
-python tests/run_offline.py   # 단계별 오프라인 테스트 18묶음 — API 크레딧 0, DB 없이도 실행 (DB는 가짜 Firestore)
+python tests/run_offline.py   # 단계별 오프라인 테스트 19묶음 — API 크레딧 0, DB 없이도 실행 (DB는 가짜 Firestore)
 ```
 
 ---
@@ -197,10 +204,10 @@ python tests/run_offline.py   # 단계별 오프라인 테스트 18묶음 — AP
 │   ├── hot.py              많이 보도된 기사 Top 5 + 한 줄 요약 (LLM 없음)
 │   ├── pipeline.py         단계 묶음, 할 일 없는 단계 건너뛰기
 │   ├── db.py · schemas.py · llm.py · config.py
-│   └── ocr.py · concurrency.py · timing.py
-├── web/                    웹 화면 (index.html · app.js · style.css)
+│   └── ocr.py · concurrency.py · timing.py · cli.py
+├── web/                    웹 화면 (index.html · app.js · style.css · 로고 · 아이콘)
 ├── evalset/                정답 JSON 평가셋 + 실험 A
-├── experiments/            실험 B, 골든셋(qa_set.csv), 중복 제거 확인 도구
+├── experiments/            실험 B(exp_b_retrieval · exp_b_hyde_hybrid), 골든셋(qa_set*.csv), 중복 제거 확인 도구
 ├── tests/                  오프라인 테스트, DB 점검
 ├── old/                    이전 버전 평가 스크립트 (현재 구조에 맞게 수정)
 └── docs/
