@@ -7,15 +7,15 @@
 
 ## 지금 상태 (2026-11-27)
 
-| 영역 | 상태 |
-| --- | --- |
+| 영역 | 상태                                                                                         |
+| --- |--------------------------------------------------------------------------------------------|
 | 파이프라인 | ① 의미 구분 → ② 수집 → ③ 중복 제거 · 규칙/LLM 판정 → ④ 청크 · OCR · 임베딩 → ⑤ 이슈 Top 5 → ⑥ Hybrid 검색 + 근거 답변 |
-| LLM | 학교 팩트챗 Gateway, 채팅 `gemini-3.5-flash-lite`, 임베딩 `text-embedding-3-small`(1536차원) |
-| DB | Google Cloud Firestore (GCP `qupict`, 서울 `asia-northeast3`) + 벡터 검색 |
-| 검색 | Hybrid (벡터 + BM25, RRF). HyDE · Multi-Query · Reranker는 실험 비교용 |
-| 웹 | `python web.py`, Cloud Run 배포 (main merge 시 자동), 최소 0 · 최대 1 인스턴스 |
-| 평가 | 실험 A(필터링, 라벨 988건), 실험 B(검색, 골든셋 87문항) |
-| 테스트 | `python tests/run_offline.py` 19묶음 |
+| LLM | 학교 팩트챗 Gateway, 채팅 `gemini-3.5-flash-lite`, 임베딩 `text-embedding-3-small`(1536차원)           |
+| DB | Google Cloud Firestore (GCP `qupict`, 서울 리전 `asia-northeast3`) + 벡터 검색                     |
+| 검색 | Hybrid (벡터 + BM25, RRF) 사용. HyDE · Multi-Query · Reranker는 실험 비교용                          |
+| 웹 | `python web.py`, Cloud Run 배포 (main merge 시 자동), 최소 0 · 최대 1 인스턴스                          |
+| 평가 | 실험 A(필터링, 라벨 988건), 실험 B(검색, 골든셋 87문항)                                                     |
+| 테스트 | `python tests/run_offline.py` 19묶음                                                         |
 
 ### 남은 일
 
